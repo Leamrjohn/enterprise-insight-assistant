@@ -1,9 +1,9 @@
 """测试四个核心 Agent"""
-from app.services.agent_protocol import AgentInput
-from app.services.knowledge_agent import KnowledgeAgent
-from app.services.data_agent import DataAgent
-from app.services.planner_agent import PlannerAgent
-from app.services.reviewer_agent import ReviewerAgent
+from app.agents.protocol import AgentInput
+from app.agents.knowledge import KnowledgeAgent
+from app.agents.data import DataAgent
+from app.agents.planner import PlannerAgent
+from app.agents.reviewer import ReviewerAgent
 
 
 def test_knowledge_agent_interface():

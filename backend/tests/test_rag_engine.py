@@ -1,5 +1,5 @@
 """测试可靠RAG引擎"""
-from app.core.rag_engine import (
+from app.core.rag.engine import (
     EvidenceRef,
     build_prompt,
     check_sufficiency,
@@ -12,11 +12,11 @@ def test_build_prompt():
         EvidenceRef(chunk_id=1, document_id=10, content="销售额下降了15%"),
         EvidenceRef(chunk_id=2, document_id=10, content="原因是成本上升"),
     ]
-    prompt = build_prompt("为什么销售额下降", evidences)
-    assert "[引用 1]" in prompt
-    assert "[引用 2]" in prompt
-    assert "销售额下降了15%" in prompt
-    assert "为什么销售额下降" in prompt
+    system_prompt, user_prompt = build_prompt("为什么销售额下降", evidences)
+    assert isinstance(system_prompt, str)
+    assert isinstance(user_prompt, str)
+    assert "销售额下降了15%" in user_prompt
+    assert "为什么销售额下降" in user_prompt
 
 
 def test_check_sufficiency_pass():

@@ -7,7 +7,7 @@
 
 import time
 import logging
-from app.core.model_gateway import ModelGateway, ModelCallRecord
+from app.core.gateway.base import ModelGateway, ModelCallRecord
 
 logger = logging.getLogger(__name__)
 

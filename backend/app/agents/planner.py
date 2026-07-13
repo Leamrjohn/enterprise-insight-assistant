@@ -1,7 +1,7 @@
 """Planner Agent —— 分析问题，拆解任务，决定调用哪些 Agent"""
 
-from app.services.agent_protocol import Agent, AgentInput, AgentOutput
-from app.services.tool_protocol import Tool
+from app.agents.protocol import Agent, AgentInput, AgentOutput
+from app.tools.protocol import Tool
 
 
 class PlannerAgent(Agent):

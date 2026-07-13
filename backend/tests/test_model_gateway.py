@@ -1,7 +1,7 @@
 """测试 Model Gateway"""
 
 import pytest
-from app.core.model_gateway_local import LocalModelGateway
+from app.core.gateway.local import LocalModelGateway
 
 
 def test_local_gateway_returns_string():

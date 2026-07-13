@@ -1,7 +1,7 @@
 """Reviewer Agent —— 检查数据一致性和建议合理性，不替代确定性校验器"""
 
-from app.services.agent_protocol import Agent, AgentInput, AgentOutput
-from app.services.tool_protocol import Tool
+from app.agents.protocol import Agent, AgentInput, AgentOutput
+from app.tools.protocol import Tool
 
 
 class ReviewerAgent(Agent):
@@ -33,7 +33,6 @@ class ReviewerAgent(Agent):
         conflicts = []
 
         # 简单检查：如果两份都有数据，看看关键指标是否出入
-        # 实际生产中这里会调用 LLM 做语义理解
         if data_result and knowledge_result:
             conflicts.append("已收到 SQL 结果和文档证据，请人工确认一致性")
 

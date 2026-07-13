@@ -1,6 +1,6 @@
 """测试 SQL 安全校验器"""
 import pytest
-from app.services.sql_validator import validate_sql
+from app.tools.validator import validate_sql
 
 # 定义白名单（和业务库中的表一致）
 ALLOWED_TABLES = {"customers", "products", "orders", "order_items", "complaints"}

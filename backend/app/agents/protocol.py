@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any
 
-from app.services.tool_protocol import Tool, ToolInput, ToolOutput
+from app.tools.protocol import Tool, ToolInput, ToolOutput
 
 
 @dataclass

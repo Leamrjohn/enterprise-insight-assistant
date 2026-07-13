@@ -1,8 +1,8 @@
 """Data Agent —— 基于经营数据回答问题的 Agent"""
 
-from app.services.agent_protocol import Agent, AgentInput, AgentOutput
-from app.services.tool_protocol import Tool, ToolInput
-from app.services.sql_tool import SQLTool
+from app.agents.protocol import Agent, AgentInput, AgentOutput
+from app.tools.protocol import Tool, ToolInput
+from app.tools.sql import SQLTool
 
 
 class DataAgent(Agent):

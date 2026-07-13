@@ -4,7 +4,7 @@ import logging
 import re
 
 import psycopg
-from app.services.sql_validator import validate_sql
+from app.tools.validator import validate_sql
 
 logger = logging.getLogger(__name__)
 

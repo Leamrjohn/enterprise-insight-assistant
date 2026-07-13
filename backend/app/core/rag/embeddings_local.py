@@ -5,7 +5,7 @@
 """
 
 import logging
-from app.core.embeddings import EmbeddingProvider
+from app.core.rag.embeddings import EmbeddingProvider
 
 logger = logging.getLogger(__name__)
 

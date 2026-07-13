@@ -1,8 +1,8 @@
 """Knowledge Agent —— 基于文档知识回答问题的 Agent"""
 
-from app.services.agent_protocol import Agent, AgentInput, AgentOutput
-from app.services.tool_protocol import Tool, ToolInput
-from app.services.rag_tool import RAGTool
+from app.agents.protocol import Agent, AgentInput, AgentOutput
+from app.tools.protocol import Tool, ToolInput
+from app.tools.rag import RAGTool
 
 
 class KnowledgeAgent(Agent):

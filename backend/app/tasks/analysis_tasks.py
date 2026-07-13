@@ -7,13 +7,13 @@ from app.models.analysis_task import AnalysisTask
 from app.models.user import User  # noqa: F401
 from app.models.documents import Documents  # noqa: F401
 from app.models.document_chunk import DocumentChunk  # noqa: F401
-from app.core.model_gateway_local import LocalModelGateway
-from app.core.rag_engine import (
+from app.core.gateway.local import LocalModelGateway
+from app.core.rag.engine import (
     EvidenceRef,
     build_prompt,
     check_sufficiency,
 )
-from app.core.embeddings_local import LocalEmbeddingProvider
+from app.core.rag.embeddings_local import LocalEmbeddingProvider
 from app.repositories.vector_repository import search_similar_chunks
 
 logger = logging.getLogger(__name__)

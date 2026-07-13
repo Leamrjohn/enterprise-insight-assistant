@@ -1,4 +1,4 @@
-from app.services.sql_executor import execute_readonly_sql
+from app.tools.executor import execute_readonly_sql
 
 
 ALLOWED_TABLES = {"customers", "products", "orders", "order_items", "complaints"}

@@ -1,6 +1,6 @@
 """测试 Tool 协议和两个工具实现"""
-from app.services.tool_protocol import ToolInput
-from app.services.rag_tool import RAGTool
+from app.tools.protocol import ToolInput
+from app.tools.rag import RAGTool
 
 
 def test_rag_tool_name_and_description():
@@ -18,7 +18,7 @@ def test_rag_tool_missing_parameters():
 
 
 def test_sql_tool_name_and_description():
-    from app.services.sql_tool import SQLTool
+    from app.tools.sql import SQLTool
     tool = SQLTool()
     assert tool.name == "sql_query"
     assert isinstance(tool.description, str)
@@ -26,7 +26,7 @@ def test_sql_tool_name_and_description():
 
 
 def test_sql_tool_missing_parameters():
-    from app.services.sql_tool import SQLTool
+    from app.tools.sql import SQLTool
     tool = SQLTool()
     result = tool.execute(ToolInput(parameters={}))
     assert result.success is False
