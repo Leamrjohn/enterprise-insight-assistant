@@ -27,4 +27,4 @@ def get_chunks_by_document_id(
 )->list[DocumentChunk]:
     return db.query(DocumentChunk).filter(
          DocumentChunk.document_id == document_id,
-    ).order_by(DocumentChunk.document_id.chunk_index).all()
+    ).order_by(DocumentChunk.chunk_index).all()

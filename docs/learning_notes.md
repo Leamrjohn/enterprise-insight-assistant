@@ -24,17 +24,17 @@
 | 阶段 | 主题 | 状态 | 最近验证 | 主要遗留问题 |
 |---|---|---|---|---|
 | 0 | 工程基线、Git和现有调用链 | 已掌握 | 2026-07-05：独立识别ModuleNotFoundError | - |
-| 1 | HTTP契约、Schema和异常 | 已掌握 | 2026-07-07：12 passed，统一错误结构| 错误结构尚未统一 |
-| 2 | 用户身份、资源归属和最小RBAC | 未开始 | - | - |
-| 3 | 文件上传闭环 | 未开始 | - | - |
-| 4 | 文档解析、分块和生命周期 | 未开始 | - | - |
-| 5 | 本地基础设施与环境分层 | 未开始 | - | - |
-| 6 | 持久化任务模型和状态职责 | 未开始 | - | - |
-| 7 | Celery异步执行 | 未开始 | - | - |
-| 8 | pgvector和Embedding | 未开始 | - | - |
-| 9 | 检索与增量评测 | 未开始 | - | - |
-| 10 | Model Gateway和数据发送策略 | 未开始 | - | - |
-| 11 | 可靠RAG | 未开始 | - | - |
+| 1 | HTTP契约、Schema和异常 | 已掌握 | 2026-07-07：12 passed，统一错误结构 | - |
+| 2 | 用户身份、资源归属和最小RBAC | 已掌握（代码已完成） | 2026-07-09：API Key认证、用户隔离 | - |
+| 3 | 文件上传闭环 | 已掌握（代码已完成） | 2026-07-09：上传校验链、SHA256去重 | - |
+| 4 | 文档解析、分块和生命周期 | 已掌握（代码已完成） | 2026-07-09：chunk分块、CASCADE删除 | - |
+| 5 | 本地基础设施与环境分层 | 待补强 | 2026-07-10：Session/engine/连接池概念 | Docker Compose未实现 |
+| 6 | 持久化任务模型和状态职责 | 已掌握 | 2026-07-11：完整CRUD分层、Worker异步执行 | - |
+| 7 | Celery异步执行 | 已掌握 | 2026-07-11：端到端测试 queued→completed | - |
+| 8 | pgvector和Embedding | 已掌握 | 2026-07-11：5题掌握验证通过 | - |
+| 9 | 检索与增量评测 | 概念已讲 | 2026-07-11：Precision/Recall/Top-K/阈值 | 等待实操 |
+| 10 | Model Gateway和数据发送策略 | 学习中 | 2026-07-11：抽象类+本地实现+OpenAI实现 | - |
+| 11 | 可靠RAG | 学习中 | 2026-07-11：RAG流程+充分性判断+引用校验被证明无效 | validate_citations不可靠已删除 |
 | 12 | 独立经营数据源、KPI和标准场景 | 未开始 | - | - |
 | 13 | 安全只读SQL工具 | 未开始 | - | - |
 | 14 | Tool Registry | 未开始 | - | - |
@@ -740,3 +740,512 @@ content键存在
 3. 不跳过基础知识，不假设用户已经知道
 4. 用户有权随时要求对任意一行代码进行解释
 
+
+## 2026-07-08：阶段5 / 环境分层与启动流程
+
+### 本课目标
+
+- 理解 APP_ENV 三环境（dev/test/prod）
+- 理解 Settings 类加载配置的机制
+- 掌握本地启动流程（数据库→迁移→服务→测试）
+- 掌握 Swagger 页面用法
+
+### 当前掌握状态
+
+| 内容 | 掌握度 |
+|---|---|
+| Swagger 页面查看和测试接口 | ✅ 可用 |
+| .env 和 Settings 配置机制 | ❌ 不熟 |
+| Alembic 迁移命令 | ❌ 不熟 |
+| uvicorn 启动服务命令 | ❌ 不熟 |
+| 三环境概念 | ❌ 不熟 |
+
+### 遗留问题
+
+多次讲解后仍记不住启动流程命令。下次进入阶段5补强，从空终端开始独立启动项目。
+
+## 2026-07-08：阶段0~1 巩固 / 调用链、事务、Schema边界、Git状态
+
+### 本课目标
+
+- 巩固 python -m 与命令自身参数的区分
+- 巩固 API → Service → Repository → ORM → DB 完整调用链
+- 巩固数据库事务顺序：add → flush → refresh → commit
+- 巩固 Schema 与 ORM 边界（DocumentCreate / Documents / DocumentOut）
+- 巩固 Git 三层状态和 restore / diff 的使用场景
+
+### 覆盖知识点
+
+1. **python -m 与参数混淆**
+   - python -m pytest 的 -m 是 Python 的 module 参数
+   - pytest -m pytest 的 -m 是 pytest 的 marker 参数（筛选测试标签）
+   - 使用 python -m pytest 确保测试环境和项目环境一致
+
+2. **完整调用链顺序**
+   - 中间件（Request ID 等）→ FastAPI 路由匹配 → Pydantic 校验请求体（422 边界）→ API 路由函数 → Service（业务编排）→ Repository（数据访问）→ ORM → 数据库
+   - Pydantic 校验在进入 API 函数之前就完成了；失败直接返回 422
+   - Service 层不接触 HTTP，Repository 返回 ORM 对象或 None
+
+3. **事务安全顺序**
+   - `add`: 标记到 Session，未发 SQL
+   - `flush`: 发 SQL 到数据库（当前事务可见，其他连接不可见）
+   - `refresh`: 从数据库读回自动生成的字段（id、created_at 等）
+   - `commit`: 提交事务，其他连接才可见
+   - `flush` → `refresh` → `commit` 比 `add` → `commit` → `refresh` 更安全，因为 refresh 失败时事务未提交，可以 rollback
+
+4. **Schema 与 ORM 边界**
+   - DocumentCreate: 定义客户端必须提交什么字段（输入校验）
+   - Documents (ORM): 定义数据库表结构和列类型（持久化）
+   - DocumentOut: 定义服务端返回什么字段（输出裁剪）
+   - 三者互相独立，改 API 响应不需要改数据库
+
+5. **Git 三层状态与恢复**
+   - 工作区（未 add）↔ 暂存区（已 add）↔ HEAD（已提交）
+   - git restore file: 暂存区 → 工作区（撤销未 add 的修改）
+   - git restore --staged file: HEAD → 暂存区（撤销 add）
+   - git diff: 工作区 vs 暂存区
+   - git diff --cached: 暂存区 vs HEAD（提交前必用）
+   - git diff HEAD: 工作区 vs HEAD（看总改动量）
+   - --check: 检查空格格式，不是代码规范检查（那是 ruff 的事）
+
+### 当前掌握状态
+
+| 知识点 | 掌握度 |
+|---|---|
+| python -m 与退出码 | ✅ 理解 |
+| 调用链（中间件→Pydantic→API→Service→Repo→ORM→DB） | ✅ 理解 |
+| 事务顺序（add→flush→refresh→commit） | ✅ 理解 |
+| Schema 与 ORM 三层边界 | ✅ 理解 |
+| Git 三层状态、restore、diff | ✅ 理解 |
+
+### 遗留问题
+
+无。阶段 0~1 核心概念已巩固通关。
+
+## 2026-07-09：阶段2~5 巩固 / 用户认证、文件上传、分块查询、启动流程
+
+### 本课目标
+
+- 巩固 API Key 认证机制（get_current_user、Depends 注入）
+- 巩固用户隔离（API 层传 user_id=current_user.id，Repository 层过滤）
+- 巩固 401（认证失败）与 404（资源不存在）的语义区分
+- 巩固文件上传流程（UploadFile、校验链、SHA256 去重）
+- 巩固事务安全（commit 先于 refresh 的隐患、rollback + 文件删除）
+- 巩固分块查询（UniqueConstraint、CASCADE 外键删除）
+- 巩固完整启动流程（PostgreSQL → alembic → uvicorn → pytest）
+
+### 覆盖知识点
+
+1. **API Key 认证**
+   - Header(default=None, alias="X-API-Key") 从请求头读取 API Key
+   - Depends(get_current_user) 在每个路由前自动执行认证
+   - 认证失败统一返回 401，且错误消息一致防止穷举
+   - 401（认证）vs 404（资源不存在）vs 409（资源冲突）vs 422（请求本身问题）
+
+2. **用户隔离**
+   - API 层传 user_id=current_user.id 到 Service/Repository
+   - Repository 查询时加 Documents.user_id == user_id 过滤
+   - 分块查询先做文档归属检查（404），再按 document_id 查分块
+
+3. **文件上传**
+   - UploadFile = File(...) 接收 multipart/form-data 上传
+   - 校验链：文件名 → 文件后缀 → 文件大小 → 空文件检查 → 409 去重
+   - SHA256 去重两层：提交前查 + IntegrityError 兜底
+   - 文件先保存到磁盘，再写入数据库；失败时 rollback + 删除文件
+
+4. **分块查询**
+   - UniqueConstraint(document_id, chunk_index)：同文档内序号不重复
+   - ForeignKey(ondelete="CASCADE")：删文档时自动删分块
+
+5. **启动流程**
+   - PostgreSQL：后台服务，启动项目前必须先运行
+   - Alembic：数据库版本管理，lembic upgrade head 更新表结构
+   - uvicorn：python -m uvicorn app.main:app --reload
+   - pytest：python -m pytest -q
+
+### 当前掌握状态
+
+| 知识点 | 掌握度 |
+|---|---|
+| API Key 认证（Header、Depends、401） | ✅ 理解 |
+| 用户隔离（user_id 过滤、分块归属检查） | ✅ 理解 |
+| HTTP 状态码语义（401/404/409/422） | ✅ 理解 |
+| 文件上传校验链（名称/后缀/大小/空文件/SHA256） | ✅ 理解 |
+| 事务回滚 + 文件清理 | ✅ 理解 |
+| UniqueConstraint + CASCADE 删除 | ✅ 理解 |
+| 启动流程（PG → alembic → uvicorn → pytest） | ✅ 理解 |
+
+### 遗留问题
+
+- PostgreSQL 具体工作原理和使用方式尚未深入学习
+- 三环境（dev/test/prod）的差异化逻辑尚未在代码中实现
+
+## 2026-07-10：阶段5补强 / Session、engine、连接池概念补强
+
+### 本课目标
+
+- 理解 main.py 每行代码的作用（模块级代码、lifespan、中间件注册、异常处理器注册、路由挂载）
+- 理解 logging 日志系统的完整流程（Handler/Formatter/Logger 三层关系、日志向上传播）
+- 解决 Pylance 类型检查器对 add_exception_handler 的类型报错
+
+### 覆盖知识点
+
+1. **main.py 组装流程**
+   - 模块级代码（settings/configure_logging）在导入时执行
+   - lifespan：启动时创建目录+检测数据库，关闭时释放连接池
+   - 中间件嵌套顺序：后注册的先执行
+   - 异常处理器按类型精确度匹配，不是按注册顺序
+   - include_router 挂载所有子路由
+   - text(\"SELECT 1\") 测试数据库连接
+
+2. **Pylance 类型错误修复**
+   - add_exception_handler 期望 handler 第二个参数是 Exception
+   - 传具体子类时 Pylance 报类型不兼容
+   - 修复：加 # type: ignore[arg-type]
+
+3. **日志系统（logging）**
+   - LogRecord：Python 自动创建（logger.info/error/exception 都会），包含消息/级别/异常/时间
+   - Logger：不传参获取根日志器（所有日志器的父级），传名字获取子日志器（单例）
+   - Handler：输出到哪里。StreamHandler（控制台），RotatingFileHandler（文件，10MB 轮转）
+   - Formatter：输出成什么样子。setFormatter 绑定到 Handler
+   - logger.error vs logger.exception：exception 在 except 块中自动附带异常堆栈
+   - 日志向上传播：子日志器没 Handler 时传给父级直到根日志器
+   - global 声明函数内修改模块级全局变量，_logging_configured 防重复注册
+   - 控制台和文件可用不同 Formatter，同一 record 被两个 Handler 各自处理
+
+### 当前掌握状态
+
+| 知识点 | 掌握度 |
+|---|---|
+| main.py 各组件作用 | ✅ 理解 |
+| Pylance 类型错误及修复 | ✅ 理解 |
+| LogRecord/Logger/Handler/Formatter 三层关系 | ✅ 理解 |
+| 日志传播和根日志器 | ✅ 理解 |
+| error vs exception | ✅ 理解 |
+| global 和防重复注册 | ✅ 理解 |
+
+### 本课目标
+
+- 理解 engine 与 SessionLocal 的关系（连接池 vs 会话工厂）
+- 理解 pool_pre_ping=True 的作用
+- 理解 expire_on_commit=False 的作用
+- 理解 NAMING_CONVENTION 约束命名规则
+- 理解 rollback() 与 close() 的区别
+- 确认当前代码实际完成进度
+
+### 阅读与修改
+
+- 阅读文件：`backend/app/db/session.py`、`backend/app/db/base.py`、`backend/app/services/document_ingestion_service.py`、`backend/app/repositories/document_repository.py`
+- 修改文件：仅更新本学习记录
+
+### 覆盖知识点
+
+1. **engine 与 SessionLocal**
+   - engine 是连接池，模块级只创建一次
+   - SessionLocal 是 sessionmaker 工厂，也是模块级只创建一次
+   - 每次请求调 `SessionLocal()` 创建一个新的 Session，从连接池拿一个连接
+   - `get_db()` 的 `yield` 让 FastAPI 在路由函数执行完后回到 `finally` 执行 `db.close()`
+
+2. **pool_pre_ping=True**
+   - 从连接池取出连接前先发 SELECT 1 测试
+   - 防止连接失效（数据库重启/网络闪断）导致请求异常
+   - 不设的话，偶尔会出现 "connection is already closed" 错误
+
+3. **expire_on_commit=False**
+   - 默认 True：commit 后对象过期，下次读属性触发 SELECT 重新加载
+   - 设 False：commit 后对象不过期，读属性直接从内存读，不查数据库
+   - expire 不是 commit，两者是不同的概念
+   - 上传服务中 commit 后紧接 refresh()，设 False 可减少额外 SELECT
+
+4. **NAMING_CONVENTION**
+   - 数据库约束命名规范，让约束名稳定可读
+   - 不设的话由数据库随机生成，难以识别
+   - 模板示例：`fk_%(table_name)s_%(column_0_name)s_%(referred_table_name)s`
+   - Documents.user_id → users.id 生成：`fk_documents_user_id_users`
+   - 其他：`pk_documents`、`uq_documents_sha256`、`ck_documents_status_values`
+
+5. **rollback() vs close()**
+   - rollback()：撤销当前事务中未提交的 SQL，Session 仍然存活，可继续使用
+   - close()：归还连接给连接池，Session 不能再用了
+   - 文档编辑类比：rollback = Ctrl+Z 撤销，close = 关闭文档窗口
+   - 实际代码中 rollback 后通常跟 raise，异常传到 get_db() 的 finally 才执行 close()
+
+### 当前代码实际完成进度确认
+
+| 阶段 | 学习记录状态 | 代码实际状态 |
+|---|---|---|
+| 0 工程基线 | 已掌握 | ✅ 完成 |
+| 1 HTTP契约/Schema/异常 | 已掌握 | ✅ 完成 |
+| 2 用户身份/RBAC | 表格"未开始" | ✅ 代码已实现（API Key认证、User模型、test_auth.py） |
+| 3 文件上传闭环 | 表格"未开始" | ✅ 代码已实现（/upload路由、SHA256去重、校验链、test_document_upload.py） |
+| 4 文档解析分块 | 表格"未开始" | ✅ 代码已实现（chunk_text/chunk_file、DocumentChunk模型、GET /chunks、迁移） |
+| 5 环境分层 | 待补强 | ⚠️ 概念已讲解，Docker Compose 未实现 |
+| 6 持久化任务模型 | 未开始 | ❌ 未实现 |
+
+### 当前结论
+
+- 掌握状态：待补强 → 基础概念已掌握
+- 已经掌握：engine/SessionLocal 关系、pool_pre_ping、expire_on_commit、NAMING_CONVENTION、rollback vs close
+- 仍不理解：Docker Compose 实际操作不熟
+- 下一步补强：进入阶段6 持久化任务模型
+
+## 2026-07-11：阶段5补强 / Docker Compose、三环境、启动流程
+
+### 本课目标
+
+- 理解 Docker Compose 的作用（不用手写，会用就行）
+- 理解 Settings 配置机制（`extra="ignore"`、`.env` + `settings.py` 关系）
+- 掌握从零开始的完整启动流程
+- 区分三环境（development / test / production）配置差异
+
+### 创建文件
+
+- `docker-compose.yml`：包含 postgres:16 和 redis:7 两个服务，含 healthcheck
+
+### 掌握知识点
+
+1. **Docker Compose 结构**
+   - `services` 定义容器，`volumes` 定义持久化存储
+   - `ports: "5432:5432"` 左边宿主机端口，右边容器端口
+   - `healthcheck` 定时检查容器是否真正可用
+
+2. **Settings 配置机制**
+   - `extra="ignore"`：.env 里未在 Settings 声明的变量静默忽略
+   - `extra="forbid"`：未声明的变量导致报错
+   - `extra="allow"`：未声明的变量存入 `__pydantic_extra__`
+   - 新增配置项需要改 `settings.py`（声明字段）+ `.env.example`（模板）+ `.env`（本地）
+   - `@lru_cache` 确保 Settings 只加载一次（单例）
+
+3. **完整启动流程（4步）**
+   - 第1步：启动 PostgreSQL → `docker compose up -d`（或确认已运行）
+   - 第2步：创建表结构 → `alembic upgrade head`
+   - 第3步：验证 → `pytest -q`
+   - 第4步：启动服务 → `uvicorn app.main:app --reload`
+   - 日常开发通常只需要第3步和第4步
+
+4. **三环境配置差异**
+
+   | 配置项 | development | production |
+   |---|---|---|
+   | APP_ENV | development | production |
+   | APP_DEBUG | true/false | false（不暴露错误信息） |
+   | LOG_LEVEL | INFO | WARNING 或 ERROR |
+   | DATABASE_HOST | 127.0.0.1 | 正式数据库 IP |
+   | DATABASE_PASSWORD | 开发密码 | 高强度密码 |
+   | CORS_ORIGINS | localhost:3000 | 实际前端域名 |
+
+### 掌握验证
+
+| 验证项 | 结果 |
+|---|---|
+| 能说出 Settings 配置新增需要改哪些文件 | ✅ 通过 |
+| 能区分 extra 三种模式的作用 | ✅ 通过 |
+| 能排出从零启动的4步顺序 | ⚠️ 需要巩固（初始排错：先启动服务再跑迁移） |
+
+### 当前结论
+
+- 掌握状态：已掌握
+- 已经掌握：Settings 配置机制、三环境概念、启动流程4步顺序
+- 仍不理解：无
+- 下一步：进入阶段6 持久化任务模型
+
+## 2026-07-11（晚）：阶段6 / 持久化任务模型
+
+### 本课目标
+
+- 创建 analysis_tasks 表（ORM 模型 + Alembic 迁移）
+- 添加 CheckConstraint 状态约束
+- 完整 CRUD 分层（Schema → Repository → Service → API）
+- 掌握验证：5 道业务场景题全部答对
+
+### 创建的文件
+
+| 文件 | 层 | 作用 |
+|---|---|---|
+| `app/models/analysis_task.py` | Model | 定义 analysis_tasks 表，含 status CheckConstraint |
+| `app/schemas/task.py` | Schema | TaskCreate（输入）+ TaskOut（输出） |
+| `app/repositories/task_repository.py` | Repository | create_task、get_task_by_id、get_tasks |
+| `app/services/task_service.py` | Service | 业务编排，调用 Repository |
+| `app/api/tasks.py` | API | POST/GET /tasks、GET /tasks/{id} |
+| 2 个迁移文件 | 迁移 | 创建表 + 添加约束 |
+
+### 修改的文件
+
+- `migrations/env.py`：添加 User 和 AnalysisTask 的导入
+- `app/api/router.py`：注册 tasks_router
+
+### 新增 API
+
+| 方法 | 路径 | 说明 |
+|---|---|---|
+| POST /tasks | 创建任务 | 传入 `{"question": "..."}` |
+| GET /tasks | 任务列表 | 当前用户的所有任务 |
+| GET /tasks/{id} | 任务详情 | 按 ID 查询 |
+
+### 掌握验证结果
+
+| 题号 | 问题 | 结果 |
+|---|---|---|
+| 1 | 生产环境改密码要改哪些文件 | ✅ 只改 .env，重启生效 |
+| 2 | 拉取同事新代码后的操作顺序 | ✅ alembic → pytest |
+| 3 | 加 priority 字段要改哪些文件 | ✅ 模型 + 迁移 + Schema |
+| 4 | 改 created_at 格式改哪层 | ✅ Schema 层 |
+| 5 | 用户隔离问题检查哪个文件 | ✅ Repository 的 filter |
+
+### 当前结论
+
+- 掌握状态：已掌握
+- 已经掌握：完整分层架构、ORM 模型、迁移、CheckConstraint、Schema/Repository/Service/API 分工
+- 下一步：阶段7 Celery 异步执行（Redis 已安装，Celery 已配置）
+
+## 2026-07-11（晚）：阶段8 / pgvector + Embedding
+
+### 本课目标
+
+- 理解 Embedding（向量化）的原理：文字 → 数字 → 相似度计算
+- 理解 pgvector 的作用：在 PostgreSQL 中存向量、算距离、做搜索
+- 掌握 ABC 抽象类的作用和用法
+- 掌握 global 关键字和懒加载模式
+- 掌握余弦距离 `<=>` 运算符
+- 掌握参数绑定 vs 拼字符串的区别
+- 掌握 `execute().fetchall()` 的作用
+
+### 创建的文件
+
+| 文件 | 作用 |
+|---|---|
+| `app/core/embeddings.py` | EmbeddingProvider 抽象类（定标准） |
+| `app/core/embeddings_local.py` | 本地模型实现（sentence-transformers） |
+| `app/repositories/vector_repository.py` | 向量搜索（search_similar_chunks） |
+| `scripts/demo_cosine.py` | 余弦相似度演示脚本 |
+| `scripts/demo_embedding.py` | Embedding 演示脚本（因网络未运行） |
+| `explain_phase8.md` | 完整讲解文档 |
+
+### 修改的文件
+
+| 文件 | 修改内容 |
+|---|---|
+| `app/models/document_chunk.py` | 新增 `embedding: Vector(384)` 字段 |
+
+### 掌握验证（5题全对）
+
+| 题号 | 知识点 | 结果 |
+|---|---|---|
+| 1 | ABC 和 abstractmethod | ✅ |
+| 2 | global 关键字 | ✅ |
+| 3 | 余弦相似度 | ✅ |
+| 4 | nullable 和迁移 | ✅ |
+| 5 | 参数绑定防 SQL 注入 | ✅ |
+
+### 当前结论
+
+- 掌握状态：已掌握
+- 已经掌握：Embedding 原理、余弦相似度、ABC 抽象类、global 关键字、参数绑定
+- 仍不理解：无
+- 下一步：待定
+
+## 2026-07-11（深夜）：阶段10 / Model Gateway + 阶段11 / 可靠RAG
+
+### 本课目标
+
+- 理解 Model Gateway 的作用：统一模型调用接口、记录Token和成本
+- 掌握 @dataclass 和 field(default_factory) 的用法
+- 理解延迟导入（lazy import）的作用
+- 理解 RAG 完整流程：检索 → 充分性判断 → Prompt组装 → 调用模型
+- 理解 validate_citations 为什么防不住AI编造（真实ID配假内容）
+- 掌握 RAG 可靠性靠检索质量而非下游校验的原则
+
+### 创建/修改的文件
+
+| 文件 | 作用 |
+|---|---|
+| `app/core/model_gateway.py` | ModelGateway 抽象类 + ModelCallRecord 数据类 |
+| `app/core/model_gateway_local.py` | 本地模拟实现（不需要API Key） |
+| `app/core/model_gateway_openai.py` | OpenAI真实调用实现 |
+| `tests/test_model_gateway.py` | Gateway测试（2个） |
+| `app/core/rag_engine.py` | 可靠RAG引擎（EvidenceRef、build_prompt、check_sufficiency） |
+| `tests/test_rag_engine.py` | RAG引擎测试（build_prompt + check_sufficiency） |
+| `app/tasks/analysis_tasks.py`（修改） | Worker改为完整RAG流程：检索→充分性→Prompt→模型→保存 |
+
+### 学习过程中的关键修正
+
+| 次数 | 问题 | 发现者 | 修正 |
+|---|---|---|---|
+| 1 | check_sufficiency只数数量不看质量 | 学习者提出 | 增加 `min_avg_score` 平均分判断 |
+| 2 | validate_citations字符集合比较不可靠 | 学习者指出 | 删除内容匹配逻辑 |
+| 3 | validate_citations ID校验防不住"真实ID配假内容" | 学习者指出 | 删除整个 validate_citations 函数 |
+| 4 | RAG可靠性靠什么保证 | 学习者总结 | 靠上游检索质量而非下游AI引用校验 |
+
+### 掌握验证
+
+| 知识点 | 状态 |
+|---|---|
+| @dataclass 自动生成 __init__ | ✅ 已理解 |
+| f-string 变量插入 | ✅ 已理解 |
+| "\n\n".join(列表) 连接字符串 | ✅ 已理解 |
+| re.findall 正则提取 | ✅ 已理解 |
+| set 集合 vs list 列表 | ✅ 已理解 |
+| not in 判断元素是否存在 | ✅ 已理解 |
+| check_sufficiency 平均分判断 | ✅ 已理解 |
+| validate_citations的局限性 | ✅ 已理解并删除 |
+| RAG可靠性靠检索质量 | ✅ 已理解 |
+
+### 当前结论
+
+- 掌握状态：阶段10学习中、阶段11学习中
+- 测试基线：24 passed
+- 遗留问题：pgvector未安装、Docker引擎未启动
+- 下一步：待定
+
+
+### 已完成
+
+- 安装 Redis for Windows（端口 6379，已验证监听）
+- 安装 Celery 5.6.3
+- 创建 `app/core/celery_app.py`：Celery 应用配置（broker=redis）
+- 创建 `app/tasks/__init__.py`：任务模块目录
+- 创建 `app/tasks/analysis_tasks.py`：异步分析任务（模拟处理，含状态流转和重试）
+- 修改 `app/api/tasks.py`：POST /tasks 创建任务后调用 `process_analysis_task.delay()` 异步执行
+- Celery 发送任务验证通过（Task sent OK）
+- redis-py 降级到 4.x 兼容旧版 Redis 3.0.504
+- 19 个测试全部通过
+
+### 关键代码解释
+
+`process_analysis_task` 异步任务流程：
+1. 自己创建 `SessionLocal()`（Worker 独立于 API 运行）
+2. `queued → running`：标记任务开始处理
+3. 模拟处理（实际项目中调用 RAG 或 Agent）
+4. `running → completed`：保存结果
+5. 异常时 `→ failed`：保存错误信息，自动重试最多 3 次
+6. `finally: db.close()` 确保 Session 关闭
+
+API 调用 Celery：
+```python
+# API 创建任务后，不等待直接返回
+record = create_task_service(...)
+process_analysis_task.delay(task_id=record.id, user_id=current_user.id)
+return record
+```
+
+### 端到端测试结果（2026-07-11 下午）
+
+1. POST /tasks 创建任务（status=queued）
+2. Celery Worker 自动拉取消息
+3. Worker 执行：修改记录 status=running → 模拟处理 → status=completed
+4. GET /tasks/{id} 查询 → status=completed, result_summary 有内容 ✅
+
+**数据流验证：**
+```
+POST /tasks → 数据库写入(status=queued)
+  → process_analysis_task.delay()
+  → Celery Worker 收到消息
+  → queued → running（模拟处理）→ completed
+  → 结果存入 result_summary
+  → 客户端 GET 查询可见完整结果
+```
+
+**遇到的故障与修复：**
+1. 缺少 `db.commit()` 导致 Worker 查不到记录 → API 层加 commit
+2. Worker `[tasks]` 下无任务 → celery_app.py 加 `imports` 配置
+3. Worker commit 时报 `NoReferencedTableError` → tasks/analysis_tasks.py 加 model 导入

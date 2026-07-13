@@ -1,0 +1,86 @@
+services:
+  postgres:
+    image: pgvector/pgvector:0.8.0-pg16
+    container_name: agent-platform-postgres
+    environment:
+      POSTGRES_USER: agent_app
+      POSTGRES_PASSWORD: changeme_in_production
+      POSTGRES_DB: agent_platform
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/scripts/bootstrap_postgres.sql:/docker-entrypoint-initdb.d/bootstrap.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agent_app"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    deploy:
+      replicas: 1
+      update_config:
+        parallelism: 1
+        delay: 10s
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+
+  redis:
+    image: redis:7
+    container_name: agent-platform-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    deploy:
+      replicas: 1
+      update_config:
+        parallelism: 1
+        delay: 10s
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+
+  business_db:
+    image: pgvector/pgvector:0.8.0-pg16
+    container_name: agent-platform-business-db
+    environment:
+      POSTGRES_USER: business_app
+      POSTGRES_PASSWORD: business_password
+      POSTGRES_DB: business_data
+    ports:
+      - "5434:5432"
+    volumes:
+      - business_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U business_app"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  postgres_data:
+  business_data:
+
+networks:
+  default:
+    driver: bridge

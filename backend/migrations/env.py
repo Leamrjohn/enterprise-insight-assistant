@@ -3,10 +3,11 @@ from logging.config import fileConfig
 from alembic import context
 from app.db.base import Base
 from app.db.session import database_url, engine
+from app.models.user import User  # noqa: F401
 from app.models.chat_record import ChatRecord  # noqa: F401
 from app.models.documents import Documents  # noqa: F401
-
 from app.models.document_chunk import DocumentChunk  # noqa: F401
+from app.models.analysis_task import AnalysisTask  # noqa: F401
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

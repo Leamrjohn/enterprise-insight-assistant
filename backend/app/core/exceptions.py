@@ -4,6 +4,7 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from fastapi.exceptions import RequestValidationError
 
+
 class DocumentUploadError(Exception):
     pass
 
@@ -47,30 +48,31 @@ async def unhandled_exception_handler(
         headers={"X-Request-ID": request_id},
     )
 
+
 async def http_exception_handler(
-        request :Request,
-        exc : StarletteHTTPException,
+    request: Request,
+    exc: StarletteHTTPException,
 ) -> JSONResponse:
     request_id = getattr(
         request.state,
         "request_id",
         uuid4().hex,
     )
-    code_by_status ={
-        404:"not_found",
-        503:"service_unavailable",
+    code_by_status = {
+        404: "not_found",
+        503: "service_unavailable",
     }
     headers = dict(exc.headers or {})
-    headers ["X-Request-ID"] = request_id
+    headers["X-Request-ID"] = request_id
 
     return JSONResponse(
-        status_code= exc.status_code,
+        status_code=exc.status_code,
         content={
-            "code": code_by_status.get(exc.status_code,"http_error"),
-            "message" : str(exc.detail),
+            "code": code_by_status.get(exc.status_code, "http_error"),
+            "message": str(exc.detail),
             "details": [],
         },
-        headers = headers,
+        headers=headers,
     )
 
 

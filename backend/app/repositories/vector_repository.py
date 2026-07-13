@@ -1,0 +1,76 @@
+"""向量搜索 Repository
+
+提供基于 pgvector 的语义搜索功能。
+需要 PostgreSQL 安装了 pgvector 扩展才能运行。
+"""
+
+from sqlalchemy.orm import Session
+from sqlalchemy import text
+from app.models.document_chunk import DocumentChunk
+
+
+def search_similar_chunks(
+    db: Session,
+    embedding: list[float],
+    user_id: int,
+    top_k: int = 5,
+    min_score: float = 0.5,
+) -> list[dict]:
+    """搜索与给定向量最相似的文档分块
+
+    参数：
+        db: 数据库会话
+        embedding: 查询向量（384 维）
+        user_id: 用户 ID（用于权限过滤）
+        top_k: 返回前几条结果
+        min_score: 最低相似度阈值
+
+    返回：
+        [{chunk_id, document_id, content, page_number, score}, ...]
+    """
+    embedding_str = "[" + ",".join(str(v) for v in embedding) + "]"
+
+    sql = text("""
+        SELECT
+            dc.id AS chunk_id,
+            dc.document_id,
+            dc.content,
+            dc.page_number,
+            1 - (dc.embedding <=> :embedding) AS score
+        FROM document_chunks dc
+        JOIN documents d ON d.id = dc.document_id
+        WHERE
+            d.user_id = :user_id
+            AND 1 - (dc.embedding <=> :embedding) > :min_score
+        ORDER BY dc.embedding <=> :embedding
+        LIMIT :top_k
+    """)
+
+    rows = db.execute(
+        sql,
+        {
+            "embedding": embedding_str,
+            "user_id": user_id,
+            "min_score": min_score,
+            "top_k": top_k,
+        },
+    ).fetchall()
+
+    return [
+        {
+            "chunk_id": row.chunk_id,
+            "document_id": row.document_id,
+            "content": row.content,
+            "page_number": row.page_number,
+            "score": round(float(row.score), 4),
+        }
+        for row in rows
+    ]
+
+
+def delete_embeddings_by_document(db: Session, document_id: int) -> None:
+    """删除文档的所有向量（删除文档时同步调用）"""
+    db.query(DocumentChunk).filter(
+        DocumentChunk.document_id == document_id
+    ).update({DocumentChunk.embedding: None})
+    db.commit()

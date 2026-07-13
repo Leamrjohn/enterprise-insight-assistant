@@ -1,7 +1,8 @@
-from sqlalchemy import Text, func, DateTime, ForeignKey, Integer, UniqueConstraint
+from sqlalchemy import Text, func, DateTime, ForeignKey, Integer, UniqueConstraint, Float
 from app.db.base import Base
 from sqlalchemy.orm import Mapped, mapped_column
 from datetime import datetime
+from pgvector.sqlalchemy import Vector
 
 
 class DocumentChunk(Base):
@@ -26,6 +27,9 @@ class DocumentChunk(Base):
     page_number: Mapped[int | None] = mapped_column(Integer, nullable=True)
     token_count: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0, server_default="0"
+    )
+    embedding: Mapped[list[float] | None] = mapped_column(
+        Vector(384), nullable=True
     )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
