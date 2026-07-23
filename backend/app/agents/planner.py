@@ -1,11 +1,24 @@
-"""Planner Agent —— 分析问题，拆解任务，决定调用哪些 Agent"""
+"""Planner Agent —— 调用 LLM 生成受校验的工作流决策。"""
+
+import logging
 
 from app.agents.protocol import Agent, AgentInput, AgentOutput
+from app.core.exceptions import (
+    PermanentModelError,
+    RetryableModelError,
+    StructuredOutputError,
+)
+from app.services.planning import PlanningService
 from app.tools.protocol import Tool
+
+logger = logging.getLogger(__name__)
 
 
 class PlannerAgent(Agent):
-    """拆解用户问题，生成执行计划，但不直接生成最终结论"""
+    """调用 LLM 生成工作流决策，但不生成最终业务结论。"""
+
+    def __init__(self, planning_service: PlanningService | None = None) -> None:
+        self._planning_service = planning_service
 
     @property
     def name(self) -> str:
@@ -13,50 +26,57 @@ class PlannerAgent(Agent):
 
     @property
     def description(self) -> str:
-        return "分析用户问题，拆解为子任务，决定需要调用哪些 Agent"
+        return "调用 LLM 分析用户问题并决定工作流动作和业务 Agent 路由"
 
     @property
     def allowed_tools(self) -> list[Tool]:
-        return []  # Planner 不调任何工具
+        return []  # Gateway 是模型适配层，不是业务 Tool
 
     def run(self, input: AgentInput) -> AgentOutput:
-        question = input.question
+        if self._planning_service is None:
+            self._planning_service = PlanningService()
 
-        # 简单规则：根据关键词决定需要哪些 Agent
-        data_keywords = [
-            "销售额", "订单", "客诉", "毛利", "收入", "成本",
-            "多少", "统计", "占比", "趋势", "对比", "数据",
-        ]
-        doc_keywords = [
-            "文档", "报告", "资料", "季度", "年度", "总结",
-            "原因", "分析", "建议", "方案", "根据资料",
-        ]
-
-        need_data = any(kw in question for kw in data_keywords)
-        need_knowledge = any(kw in question for kw in doc_keywords)
-
-        if not need_data and not need_knowledge:
+        try:
+            decision = self._planning_service.decide(
+                input.question,
+                conversation_context=input.context.get("conversation_context"),
+            )
+        except RetryableModelError as error:
+            logger.warning("Planner model retryable failure exhausted")
             return AgentOutput(
                 success=False,
-                error="无法判断需要哪种 Agent，请提供更具体的业务问题",
+                attempts={"model_attempts": self._planning_service.model_attempts},
+                error=f"无法生成 Planner 决策: {error}",
+                error_code="planner_model_retryable_error",
+                retryable=True,
+            )
+        except PermanentModelError as error:
+            logger.error("Planner model permanent failure")
+            return AgentOutput(
+                success=False,
+                attempts={"model_attempts": self._planning_service.model_attempts},
+                error=f"无法生成 Planner 决策: {error}",
+                error_code="planner_model_permanent_error",
+            )
+        except StructuredOutputError as error:
+            logger.error("Planner structured-output validation failure")
+            return AgentOutput(
+                success=False,
+                attempts={"model_attempts": self._planning_service.model_attempts},
+                error=f"无法生成 Planner 决策: {error}",
+                error_code="planner_invalid_output",
+            )
+        except Exception:
+            logger.exception("Planner failed with an unexpected gateway error")
+            return AgentOutput(
+                success=False,
+                attempts={"model_attempts": self._planning_service.model_attempts},
+                error="Planner 服务发生未分类错误",
+                error_code="planner_unexpected_error",
             )
 
         return AgentOutput(
             success=True,
-            answer=None,
-            evidence=[{
-                "plan": {
-                    "need_data": need_data,
-                    "need_knowledge": need_knowledge,
-                    "steps": self._build_steps(need_data, need_knowledge),
-                }
-            }],
+            plan=decision.model_dump(),
+            attempts={"model_attempts": self._planning_service.model_attempts},
         )
-
-    def _build_steps(self, need_data: bool, need_knowledge: bool) -> list[str]:
-        steps = []
-        if need_data:
-            steps.append("调用 DataAgent 查询经营数据")
-        if need_knowledge:
-            steps.append("调用 KnowledgeAgent 检索文档")
-        return steps

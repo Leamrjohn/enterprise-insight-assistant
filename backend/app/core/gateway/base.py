@@ -15,6 +15,7 @@ from datetime import datetime
 @dataclass
 class ModelCallRecord:
     """一次模型调用的完整记录"""
+
     model_name: str
     prompt: str
     response: str | None
@@ -31,8 +32,14 @@ class ModelGateway(ABC):
     """模型网关抽象类 - 所有模型提供者都要实现这个接口"""
 
     @abstractmethod
-    def chat(self, prompt: str, system_prompt: str | None = None) -> str:
-        """发送对话请求给模型，返回文本回复"""
+    def chat(
+        self,
+        prompt: str,
+        system_prompt: str | None = None,
+        *,
+        json_mode: bool = False,
+    ) -> str:
+        """发送对话请求；json_mode 要求模型返回一个 JSON 对象。"""
         ...
 
     @abstractmethod

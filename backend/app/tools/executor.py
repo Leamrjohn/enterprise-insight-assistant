@@ -5,16 +5,8 @@ import re
 
 import psycopg
 from app.tools.validator import validate_sql
-
+from app.core.settings import get_settings
 logger = logging.getLogger(__name__)
-
-READONLY_CONFIG = {
-    "host": "127.0.0.1",
-    "port": 5434,
-    "user": "business_readonly",
-    "password": "readonly_password_123",
-    "dbname": "business_data",
-}
 
 
 def execute_readonly_sql(
@@ -25,14 +17,20 @@ def execute_readonly_sql(
 ):
     """校验并执行只读SQL，返回 (列名列表, 行数据列表)"""
     # 1. 先校验SQL（复用你之前写的函数）
-    validate_sql(sql, allowed_tables, set())
-
+    validate_sql(sql, allowed_tables)
+    settings = get_settings()
     # 2. 如果用户没加LIMIT，自动补一个
     if "LIMIT" not in sql.upper():
         sql = f"{sql.strip()} LIMIT {max_rows}"
 
     # 3. 连接数据库
-    conn = psycopg.connect(**READONLY_CONFIG)
+    conn = psycopg.connect(
+        host=settings.business_database_host,
+        port=settings.business_database_port,
+        dbname=settings.business_database_name,
+        user =settings.business_database_user,
+        password = settings.business_database_password.get_secret_value()
+    )
     cur = conn.cursor()
 
     try:

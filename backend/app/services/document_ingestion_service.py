@@ -1,10 +1,8 @@
-from pathlib import Path
 from app.repositories.chunk_repository import add_chunk
 from app.utils.document_chunk import chunk_file
 from typing import BinaryIO
 from sqlalchemy.orm import Session
 from app.core.settings import Settings
-from app.core.exceptions import DuplicateDocumentError
 from app.models.documents import Documents
 from app.repositories.document_repository import (
     add_uploaded_document,
@@ -12,7 +10,8 @@ from app.repositories.document_repository import (
 )
 from app.services.file_storage_service import save_document_file
 from sqlalchemy.exc import IntegrityError
-
+from app.core.rag.embeddings_local import LocalEmbeddingProvider
+from app.core.exceptions import DuplicateDocumentError, EmptyDocumentError
 
 def upload_document_service(
     db: Session,
@@ -61,23 +60,49 @@ def process_document_chunks(
     document: Documents,
     settings:  Settings,
 ) -> Documents:
-    assert document.file_path is not None
-    absolute_path = settings.storage_dir / document.file_path
-    chunk_texts = chunk_file(absolute_path)
+
+    document_id = document.id
 
     document.status = "processing"
-    db.flush()
-
-    for i, text in enumerate(chunk_texts):
-        add_chunk(
-            db=db,
-            document_id=document.id,
-            chunk_index=i,
-            content=text,
-            token_count=len(text.split()),
-        )
-    document.status = "completed"
-    document.content = "\n\n".join(chunk_texts)
+    document.error_message = None
     db.commit()
-    db.refresh(document)
-    return document
+    try:
+        if document.file_path is None:
+            raise ValueError("Document file path is missing")
+        absolute_path = settings.storage_dir / document.file_path
+        chunk_texts = chunk_file(absolute_path)
+        if not chunk_texts:
+            raise EmptyDocumentError("Document has no extractable text")
+
+        embeddings = LocalEmbeddingProvider().embed_batch(chunk_texts)
+
+        if len(embeddings) != len(chunk_texts):
+            raise RuntimeError(
+                "Embedding count does not match document chunk count"
+            )
+        for index, (chunk_text, embedding) in enumerate(
+            zip(chunk_texts, embeddings)
+        ):
+            add_chunk(
+                db=db,
+                document_id=document_id,
+                chunk_index=index,
+                content=chunk_text,
+                token_count=len(chunk_text.split()),
+                embedding=embedding,
+            )
+        document.status = "completed"
+        document.content = "\n\n".join(chunk_texts)
+        db.commit()
+        db.refresh(document)
+        return document
+    except Exception as exc:
+        db.rollback()
+
+        failed_document = db.get(Documents, document_id)
+        if failed_document is not None:
+            failed_document.status = "failed"
+            failed_document.error_message = str(exc)
+            db.commit()
+
+        raise

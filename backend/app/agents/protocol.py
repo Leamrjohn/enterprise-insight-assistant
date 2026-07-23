@@ -4,12 +4,13 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any
 
-from app.tools.protocol import Tool, ToolInput, ToolOutput
+from app.tools.protocol import Tool
 
 
 @dataclass
 class AgentInput:
     """一次 Agent 调用的输入"""
+
     question: str
     user_id: int
     context: dict[str, Any] = field(default_factory=dict)
@@ -18,10 +19,15 @@ class AgentInput:
 @dataclass
 class AgentOutput:
     """一次 Agent 调用的输出"""
+
     success: bool
     answer: str | None = None
+    plan: dict[str, Any] | None = None
     evidence: list[dict[str, Any]] = field(default_factory=list)
+    attempts: dict[str, int] = field(default_factory=dict)
     error: str | None = None
+    error_code: str | None = None
+    retryable: bool = False
 
 
 class Agent(ABC):

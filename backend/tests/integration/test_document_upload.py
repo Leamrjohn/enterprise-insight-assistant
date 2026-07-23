@@ -1,4 +1,3 @@
-import io
 from fastapi.testclient import TestClient
 
 

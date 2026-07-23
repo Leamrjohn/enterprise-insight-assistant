@@ -5,6 +5,34 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from fastapi.exceptions import RequestValidationError
 
 
+class RetrievalError(RuntimeError):
+    """RAG 检索过程失败。"""
+
+
+class EmbeddingError(RetrievalError):
+    """生成查询向量失败。"""
+
+
+class VectorSearchError(RetrievalError):
+    """向量数据库检索失败。"""
+
+
+class RerankingError(RetrievalError):
+    """候选文档重排失败。"""
+
+
+class RetryableModelError(Exception):
+    pass
+
+
+class PermanentModelError(Exception):
+    pass
+
+
+class StructuredOutputError(ValueError):
+    """模型输出无法解析为约定的结构化结果。"""
+
+
 class DocumentUploadError(Exception):
     pass
 
@@ -26,6 +54,18 @@ class InvalidDocumentNameError(DocumentUploadError):
 
 
 class DuplicateDocumentError(DocumentUploadError):
+    pass
+
+
+class DuplicateLabelError(Exception):
+    pass
+
+
+class DuplicatePromptTemplateError(Exception):
+    pass
+
+
+class TaskCannotBeCancelledError(Exception):
     pass
 
 

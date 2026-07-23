@@ -28,13 +28,33 @@ class JsonFormatter(logging.Formatter):
             ),
         }
 
-        for field in ("method", "path", "status_code", "duration_ms"):
+        for field in (
+            "method",
+            "path",
+            "status_code",
+            "duration_ms",
+            "attempt",
+            "max_attempts",
+            "next_attempt",
+            "delay_seconds",
+            "error_type",
+            "is_graph_repair",
+            "error_code",
+        ):
             value = getattr(record, field, None)
             if value is not None:
                 payload[field] = value
 
         if record.exc_info:
             payload["exception"] = self.formatException(record.exc_info)
+
+        # ── 敏感信息脱敏 ──────────────────────
+        for key, value in payload.items():
+            if isinstance(value, str):
+                if value.startswith("sk-"):
+                    payload[key] = "***"
+                elif key == "sql" and len(value) > 200:
+                    payload[key] = value[:200] + "..."
 
         return json.dumps(payload, ensure_ascii=False)
 
@@ -52,9 +72,7 @@ def configure_logging(settings: Settings) -> None:
 
     console_handler = logging.StreamHandler()
     console_handler.setFormatter(
-        logging.Formatter(
-            "%(asctime)s | %(levelname)s | %(name)s | %(message)s"
-        )
+        logging.Formatter("%(asctime)s | %(levelname)s | %(name)s | %(message)s")
     )
 
     file_handler = RotatingFileHandler(

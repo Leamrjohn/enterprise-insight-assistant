@@ -1,3 +1,12 @@
+x-backend-environment: &backend-environment
+  APP_ENV: development
+  DATABASE_HOST: postgres
+  DATABASE_PORT: 5432
+  DATABASE_NAME: agent_platform
+  DATABASE_USER: agent_app
+  DATABASE_PASSWORD: changeme_in_production
+  REDIS_URL: redis://redis:6379/0
+
 services:
   postgres:
     image: pgvector/pgvector:0.8.0-pg16
@@ -37,7 +46,7 @@ services:
     image: redis:7
     container_name: agent-platform-redis
     ports:
-      - "6379:6379"
+      - "6380:6379"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
@@ -59,6 +68,121 @@ services:
         reservations:
           cpus: '0.1'
           memory: 128M
+
+  migrate:
+    build:
+      context: ./backend
+    command: ["python", "-m", "alembic", "upgrade", "head"]
+    env_file:
+      - ./backend/.env
+    environment: *backend-environment
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    build:
+      context: ./backend
+    env_file:
+      - ./backend/.env
+    environment: *backend-environment
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend/logs:/app/logs
+      - ./backend/storage:/app/storage
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: ./backend
+    command:
+      [
+        "celery",
+        "-A",
+        "app.core.celery_app:celery_app",
+        "worker",
+        "--loglevel=INFO",
+      ]
+    env_file:
+      - ./backend/.env
+    environment:
+      <<: *backend-environment
+    gpus: all
+    volumes:
+      - ./backend/logs:/app/logs
+      - ./backend/storage:/app/storage
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  worker-test:
+    profiles: ["test"]
+    build:
+      context: ./backend
+    command:
+      [
+        "celery",
+        "-A",
+        "app.core.celery_app:celery_app",
+        "worker",
+        "--loglevel=INFO",
+        "--queues=test",
+        "--concurrency=1",
+        "--hostname=worker-test@%h",
+      ]
+    env_file:
+      - ./backend/.env
+    environment:
+      <<: *backend-environment
+      APP_ENV: test
+      DATABASE_NAME: agent_platform_test
+      LOG_LEVEL: WARNING
+    volumes:
+      - ./backend/logs:/app/logs
+      - ./backend/storage:/app/storage
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+
+  report-worker:
+    build:
+      context: ./backend
+    command:
+      [
+        "celery",
+        "-A",
+        "app.core.celery_app:celery_app",
+        "worker",
+        "--loglevel=INFO",
+        "--queues=reports",
+        "--hostname=report-worker@%h",
+      ]
+    env_file:
+      - ./backend/.env
+    environment: *backend-environment
+    gpus: all
+    volumes:
+      - ./backend/logs:/app/logs
+      - ./backend/storage:/app/storage
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
 
   business_db:
     image: pgvector/pgvector:0.8.0-pg16

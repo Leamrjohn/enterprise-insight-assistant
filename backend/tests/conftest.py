@@ -25,12 +25,10 @@ from app.models.user import User
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 
 
-@pytest.fixture(scope="session", autouse=True)
+@pytest.fixture(scope="session")
 def migrated_test_database() -> None:
     if engine.url.database != "agent_platform_test":
-        raise RuntimeError(
-            "Tests must run against agent_platform_test"
-        )
+        raise RuntimeError("Tests must run against agent_platform_test")
 
     alembic_config = Config(BACKEND_DIR / "alembic.ini")
     command.upgrade(alembic_config, "head")

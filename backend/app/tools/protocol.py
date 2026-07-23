@@ -8,15 +8,19 @@ from typing import Any
 @dataclass
 class ToolInput:
     """一次工具调用的输入"""
+
     parameters: dict[str, Any]
 
 
 @dataclass
 class ToolOutput:
     """一次工具调用的输出"""
+
     success: bool
     data: Any = None
     error: str | None = None
+    error_code: str | None = None
+    repairable: bool = False
 
 
 class Tool(ABC):

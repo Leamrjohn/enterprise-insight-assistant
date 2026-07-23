@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 
 from sqlalchemy.orm import Session
 
@@ -8,10 +8,12 @@ from app.services.task_service import (
     create_task_service,
     get_task_service,
     get_tasks_service,
+    cancel_task_service,
 )
 from app.core.auth import get_current_user
 from app.models.user import User
 from app.tasks.analysis_tasks import process_analysis_task
+from app.core.exceptions import TaskCannotBeCancelledError
 
 router = APIRouter()
 
@@ -27,12 +29,9 @@ def create_task(
         db=db, user_id=current_user.id, question=request_model.question
     )
 
-    # 先提交事务，确保 Worker 能查到记录
-    db.commit()
-    db.refresh(record)
 
     # 发送异步任务给 Celery Worker
-    process_analysis_task.delay(task_id=record.id, user_id=current_user.id)
+    process_analysis_task.delay(task_id=record.id)
 
     return record
 
@@ -56,5 +55,21 @@ def get_task(
     record = get_task_service(db=db, task_id=task_id, user_id=current_user.id)
     if record is None:
         from fastapi import HTTPException
+
         raise HTTPException(status_code=404, detail="task not found")
     return record
+
+
+@router.post("/tasks/{task_id}/cancel", response_model=TaskOut)
+def cancel_task(
+    task_id: int,
+    current_user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    try:
+        record = cancel_task_service(db, task_id, current_user.id)
+        if record is None:
+            raise HTTPException(status_code=404, detail="task not found")
+        return record
+    except TaskCannotBeCancelledError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))

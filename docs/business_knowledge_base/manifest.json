@@ -1,0 +1,670 @@
+{
+  "version": "1.0",
+  "seed": 20260718,
+  "artifact_count": 30,
+  "artifacts": [
+    {
+      "path": "events/2025-05-06-quality-review.md",
+      "sha256": "27e1db2f1e388e66ab1f7baed6c447696a2fdaddb94074723aa8009cb6730582",
+      "kind": "scenario",
+      "source_tables": [
+        "service_tickets",
+        "returns",
+        "sales_order_items",
+        "products",
+        "suppliers",
+        "business_documents"
+      ]
+    },
+    {
+      "path": "events/2025-08-east-sales-review.md",
+      "sha256": "b81016c831b861937c78890e3603c8850cd64f33d4a500a09297606827318041",
+      "kind": "scenario",
+      "source_tables": [
+        "sales_orders",
+        "customers",
+        "crm_notes",
+        "business_documents"
+      ]
+    },
+    {
+      "path": "events/2025-q4-transmission-margin-review.md",
+      "sha256": "6ab7b07d88a40fe5c3c6814c121f4f8e5be22de8c062ba7578f2ce1e45d52550",
+      "kind": "scenario",
+      "source_tables": [
+        "sales_order_items",
+        "sales_orders",
+        "products",
+        "purchase_order_items",
+        "purchase_orders",
+        "business_documents"
+      ]
+    },
+    {
+      "path": "events/2025-q4-west-receivable-risk.md",
+      "sha256": "20757f6f3cda8ee3e7b244a5c8e193710c140f39523b51b667c91a507f7f6bb3",
+      "kind": "scenario",
+      "source_tables": [
+        "customers",
+        "invoices",
+        "payments",
+        "crm_notes",
+        "business_documents"
+      ]
+    },
+    {
+      "path": "monthly/2024-01.md",
+      "sha256": "7917747e6d2d0aba3a0a51e495dec00e7b006a283d65a69927cf37a3f540fc8c",
+      "kind": "monthly",
+      "source_tables": [
+        "sales_orders",
+        "sales_order_items",
+        "customers",
+        "invoices",
+        "payments",
+        "purchase_orders",
+        "purchase_order_items",
+        "shipments",
+        "inventory_movements",
+        "service_tickets",
+        "returns",
+        "expense_entries",
+        "monthly_budgets",
+        "crm_notes",
+        "product_categories"
+      ]
+    },
+    {
+      "path": "monthly/2024-02.md",
+      "sha256": "94e5ee2de0f790ef76155d3bc1bd4b1de149d4ab20546f40395ac68b8c0bad69",
+      "kind": "monthly",
+      "source_tables": [
+        "sales_orders",
+        "sales_order_items",
+        "customers",
+        "invoices",
+        "payments",
+        "purchase_orders",
+        "purchase_order_items",
+        "shipments",
+        "inventory_movements",
+        "service_tickets",
+        "returns",
+        "expense_entries",
+        "monthly_budgets",
+        "crm_notes",
+        "product_categories"
+      ]
+    },
+    {
+      "path": "monthly/2024-03.md",
+      "sha256": "78204a208333ecdc337c0b27f7b0d0e4186d71f120ae3847d27afeeefd0d3b2d",
+      "kind": "monthly",
+      "source_tables": [
+        "sales_orders",
+        "sales_order_items",
+        "customers",
+        "invoices",
+        "payments",
+        "purchase_orders",
+        "purchase_order_items",
+        "shipments",
+        "inventory_movements",
+        "service_tickets",
+        "returns",
+        "expense_entries",
+        "monthly_budgets",
+        "crm_notes",
+        "product_categories"
+      ]
+    },
+    {
+      "path": "monthly/2024-04.md",
+      "sha256": "0d6450e1b55c461bb4f49a2d1feefe8b0eef0bec76ea668ec352939ba21f5c15",
+      "kind": "monthly",
+      "source_tables": [
+        "sales_orders",
+        "sales_order_items",
+        "customers",
+        "invoices",
+        "payments",
+        "purchase_orders",
+        "purchase_order_items",
+        "shipments",
+        "inventory_movements",
+        "service_tickets",
+        "returns",
+        "expense_entries",
+        "monthly_budgets",
+        "crm_notes",
+        "product_categories"
+      ]
+    },
+    {
+      "path": "monthly/2024-05.md",
+      "sha256": "97ea49ccb0ba21f4cf5e0b8e05e13f47b318b304184085c10712ad5e509b5aad",
+      "kind": "monthly",
+      "source_tables": [
+        "sales_orders",
+        "sales_order_items",
+        "customers",
+        "invoices",
+        "payments",
+        "purchase_orders",
+        "purchase_order_items",
+        "shipments",
+        "inventory_movements",
+        "service_tickets",
+        "returns",
+        "expense_entries",
+        "monthly_budgets",
+        "crm_notes",
+        "product_categories"
+      ]
+    },
+    {
+      "path": "monthly/2024-06.md",
+      "sha256": "bd9f602b149b81ea5d5f15538edf2583215d8668f342f859804be37046846787",
+      "kind": "monthly",
+      "source_tables": [
+        "sales_orders",
+        "sales_order_items",
+        "customers",
+        "invoices",
+        "payments",
+        "purchase_orders",
+        "purchase_order_items",
+        "shipments",
+        "inventory_movements",
+        "service_tickets",
+        "returns",
+        "expense_entries",
+        "monthly_budgets",
+        "crm_notes",
+        "product_categories"
+      ]
+    },
+    {
+      "path": "monthly/2024-07.md",
+      "sha256": "085edba815205d83f772c40693ea82cffe3af8a627ebaa2ee1b8086261a117a9",
+      "kind": "monthly",
+      "source_tables": [
+        "sales_orders",
+        "sales_order_items",
+        "customers",
+        "invoices",
+        "payments",
+        "purchase_orders",
+        "purchase_order_items",
+        "shipments",
+        "inventory_movements",
+        "service_tickets",
+        "returns",
+        "expense_entries",
+        "monthly_budgets",
+        "crm_notes",
+        "product_categories"
+      ]
+    },
+    {
+      "path": "monthly/2024-08.md",
+      "sha256": "2fb1d93296eb6477c56bc47ced2fd28da116fa7c1a2e53cb2ae84090926922de",
+      "kind": "monthly",
+      "source_tables": [
+        "sales_orders",
+        "sales_order_items",
+        "customers",
+        "invoices",
+        "payments",
+        "purchase_orders",
+        "purchase_order_items",
+        "shipments",
+        "inventory_movements",
+        "service_tickets",
+        "returns",
+        "expense_entries",
+        "monthly_budgets",
+        "crm_notes",
+        "product_categories"
+      ]
+    },
+    {
+      "path": "monthly/2024-09.md",
+      "sha256": "43af93f8d208161035ea5207c10f688036c57b99fc8b9ea9b8c7c327cb4f7d5a",
+      "kind": "monthly",
+      "source_tables": [
+        "sales_orders",
+        "sales_order_items",
+        "customers",
+        "invoices",
+        "payments",
+        "purchase_orders",
+        "purchase_order_items",
+        "shipments",
+        "inventory_movements",
+        "service_tickets",
+        "returns",
+        "expense_entries",
+        "monthly_budgets",
+        "crm_notes",
+        "product_categories"
+      ]
+    },
+    {
+      "path": "monthly/2024-10.md",
+      "sha256": "5364177f5a23b7afa5f2c2f2db9573e170e970c85decf1ccd54f4be9c1f24cb0",
+      "kind": "monthly",
+      "source_tables": [
+        "sales_orders",
+        "sales_order_items",
+        "customers",
+        "invoices",
+        "payments",
+        "purchase_orders",
+        "purchase_order_items",
+        "shipments",
+        "inventory_movements",
+        "service_tickets",
+        "returns",
+        "expense_entries",
+        "monthly_budgets",
+        "crm_notes",
+        "product_categories"
+      ]
+    },
+    {
+      "path": "monthly/2024-11.md",
+      "sha256": "e424f37419a32db8738d4cebd707880b9bb8b68289ecb8183ddba416be0deb7b",
+      "kind": "monthly",
+      "source_tables": [
+        "sales_orders",
+        "sales_order_items",
+        "customers",
+        "invoices",
+        "payments",
+        "purchase_orders",
+        "purchase_order_items",
+        "shipments",
+        "inventory_movements",
+        "service_tickets",
+        "returns",
+        "expense_entries",
+        "monthly_budgets",
+        "crm_notes",
+        "product_categories"
+      ]
+    },
+    {
+      "path": "monthly/2024-12.md",
+      "sha256": "700fc66fdc2e69722c26127c7bf1275a9be171d0e9d38f6235f7bf4475b90fc5",
+      "kind": "monthly",
+      "source_tables": [
+        "sales_orders",
+        "sales_order_items",
+        "customers",
+        "invoices",
+        "payments",
+        "purchase_orders",
+        "purchase_order_items",
+        "shipments",
+        "inventory_movements",
+        "service_tickets",
+        "returns",
+        "expense_entries",
+        "monthly_budgets",
+        "crm_notes",
+        "product_categories"
+      ]
+    },
+    {
+      "path": "monthly/2025-01.md",
+      "sha256": "dab8c5b8ab2c624ce0f8008fd9eac3d6a474cf43f1db71a5d6456fbf82100f7f",
+      "kind": "monthly",
+      "source_tables": [
+        "sales_orders",
+        "sales_order_items",
+        "customers",
+        "invoices",
+        "payments",
+        "purchase_orders",
+        "purchase_order_items",
+        "shipments",
+        "inventory_movements",
+        "service_tickets",
+        "returns",
+        "expense_entries",
+        "monthly_budgets",
+        "crm_notes",
+        "product_categories"
+      ]
+    },
+    {
+      "path": "monthly/2025-02.md",
+      "sha256": "6cf35391f3c0108679031941ce402ff25ddb6c65a23b112f6a83b45313580f53",
+      "kind": "monthly",
+      "source_tables": [
+        "sales_orders",
+        "sales_order_items",
+        "customers",
+        "invoices",
+        "payments",
+        "purchase_orders",
+        "purchase_order_items",
+        "shipments",
+        "inventory_movements",
+        "service_tickets",
+        "returns",
+        "expense_entries",
+        "monthly_budgets",
+        "crm_notes",
+        "product_categories"
+      ]
+    },
+    {
+      "path": "monthly/2025-03.md",
+      "sha256": "be315ef6c1452b4eaee3db112fc2684ecbdaca844aa3f96a03294e4a59840db5",
+      "kind": "monthly",
+      "source_tables": [
+        "sales_orders",
+        "sales_order_items",
+        "customers",
+        "invoices",
+        "payments",
+        "purchase_orders",
+        "purchase_order_items",
+        "shipments",
+        "inventory_movements",
+        "service_tickets",
+        "returns",
+        "expense_entries",
+        "monthly_budgets",
+        "crm_notes",
+        "product_categories"
+      ]
+    },
+    {
+      "path": "monthly/2025-04.md",
+      "sha256": "d2704de3fcb67644326ee81cd2fc9f2d33a9c98a0f36570ddc9f5f06a96fc6e7",
+      "kind": "monthly",
+      "source_tables": [
+        "sales_orders",
+        "sales_order_items",
+        "customers",
+        "invoices",
+        "payments",
+        "purchase_orders",
+        "purchase_order_items",
+        "shipments",
+        "inventory_movements",
+        "service_tickets",
+        "returns",
+        "expense_entries",
+        "monthly_budgets",
+        "crm_notes",
+        "product_categories"
+      ]
+    },
+    {
+      "path": "monthly/2025-05.md",
+      "sha256": "951c1030cbc4f1abfa49da253cc9ec7af4c5c9904b0b61b28354b908c8233220",
+      "kind": "monthly",
+      "source_tables": [
+        "sales_orders",
+        "sales_order_items",
+        "customers",
+        "invoices",
+        "payments",
+        "purchase_orders",
+        "purchase_order_items",
+        "shipments",
+        "inventory_movements",
+        "service_tickets",
+        "returns",
+        "expense_entries",
+        "monthly_budgets",
+        "crm_notes",
+        "product_categories"
+      ]
+    },
+    {
+      "path": "monthly/2025-06.md",
+      "sha256": "6fda358c9536a5ebfec5cb192c3c0b45324aa3b54719ff798de6014fc0c539e2",
+      "kind": "monthly",
+      "source_tables": [
+        "sales_orders",
+        "sales_order_items",
+        "customers",
+        "invoices",
+        "payments",
+        "purchase_orders",
+        "purchase_order_items",
+        "shipments",
+        "inventory_movements",
+        "service_tickets",
+        "returns",
+        "expense_entries",
+        "monthly_budgets",
+        "crm_notes",
+        "product_categories"
+      ]
+    },
+    {
+      "path": "monthly/2025-07.md",
+      "sha256": "a09ff4529ce14a3333a6d005f8d3e62fe1eb70a2d65d20cf31078551d85b51fb",
+      "kind": "monthly",
+      "source_tables": [
+        "sales_orders",
+        "sales_order_items",
+        "customers",
+        "invoices",
+        "payments",
+        "purchase_orders",
+        "purchase_order_items",
+        "shipments",
+        "inventory_movements",
+        "service_tickets",
+        "returns",
+        "expense_entries",
+        "monthly_budgets",
+        "crm_notes",
+        "product_categories"
+      ]
+    },
+    {
+      "path": "monthly/2025-08.md",
+      "sha256": "e2dc0e0b3580843d420c1f0a734cd25a3136f92e6f1886d49c66888b1fd2bad1",
+      "kind": "monthly",
+      "source_tables": [
+        "sales_orders",
+        "sales_order_items",
+        "customers",
+        "invoices",
+        "payments",
+        "purchase_orders",
+        "purchase_order_items",
+        "shipments",
+        "inventory_movements",
+        "service_tickets",
+        "returns",
+        "expense_entries",
+        "monthly_budgets",
+        "crm_notes",
+        "product_categories"
+      ]
+    },
+    {
+      "path": "monthly/2025-09.md",
+      "sha256": "92dd5b2bf3ba430559defe93a9b9d7b4beff074c03c45cab697f974926efb061",
+      "kind": "monthly",
+      "source_tables": [
+        "sales_orders",
+        "sales_order_items",
+        "customers",
+        "invoices",
+        "payments",
+        "purchase_orders",
+        "purchase_order_items",
+        "shipments",
+        "inventory_movements",
+        "service_tickets",
+        "returns",
+        "expense_entries",
+        "monthly_budgets",
+        "crm_notes",
+        "product_categories"
+      ]
+    },
+    {
+      "path": "monthly/2025-10.md",
+      "sha256": "78902c4ebd6b0bf2cd81e96f04f371700aee8cc90e65947a7c4257bd0ce7dd6d",
+      "kind": "monthly",
+      "source_tables": [
+        "sales_orders",
+        "sales_order_items",
+        "customers",
+        "invoices",
+        "payments",
+        "purchase_orders",
+        "purchase_order_items",
+        "shipments",
+        "inventory_movements",
+        "service_tickets",
+        "returns",
+        "expense_entries",
+        "monthly_budgets",
+        "crm_notes",
+        "product_categories"
+      ]
+    },
+    {
+      "path": "monthly/2025-11.md",
+      "sha256": "cb6b8187e17963da99783fd45bd928d1c69158ebc95e821c2bcee750f8c42573",
+      "kind": "monthly",
+      "source_tables": [
+        "sales_orders",
+        "sales_order_items",
+        "customers",
+        "invoices",
+        "payments",
+        "purchase_orders",
+        "purchase_order_items",
+        "shipments",
+        "inventory_movements",
+        "service_tickets",
+        "returns",
+        "expense_entries",
+        "monthly_budgets",
+        "crm_notes",
+        "product_categories"
+      ]
+    },
+    {
+      "path": "monthly/2025-12.md",
+      "sha256": "f2f5a94082cbacd839316a2fb7eb8d1f9c43c2e1dfc7ba7e14fe6f03b062cff2",
+      "kind": "monthly",
+      "source_tables": [
+        "sales_orders",
+        "sales_order_items",
+        "customers",
+        "invoices",
+        "payments",
+        "purchase_orders",
+        "purchase_order_items",
+        "shipments",
+        "inventory_movements",
+        "service_tickets",
+        "returns",
+        "expense_entries",
+        "monthly_budgets",
+        "crm_notes",
+        "product_categories"
+      ]
+    },
+    {
+      "path": "reference/master_data_catalog.md",
+      "sha256": "8abe04033c12c55568a524758377e092e1db1a16f4d5ced8679224b7bcaaea85",
+      "kind": "reference",
+      "source_tables": [
+        "regions",
+        "customers",
+        "employees",
+        "products",
+        "suppliers",
+        "cost_centers",
+        "product_categories"
+      ]
+    },
+    {
+      "path": "reference/metric_dictionary.md",
+      "sha256": "955c033a54b3971df7474dd9ec79b1322fbd3d89f1a2edcd3f408513840b8e98",
+      "kind": "reference",
+      "source_tables": [
+        "sales_orders",
+        "sales_order_items",
+        "invoices",
+        "payments",
+        "service_tickets",
+        "returns",
+        "purchase_orders",
+        "purchase_order_items"
+      ]
+    }
+  ],
+  "test_profiles": {
+    "unit_minimal": [
+      "reference/metric_dictionary.md"
+    ],
+    "sales_decline": [
+      "monthly/2025-07.md",
+      "monthly/2025-08.md",
+      "events/2025-08-east-sales-review.md"
+    ],
+    "quality_spike": [
+      "monthly/2025-05.md",
+      "monthly/2025-06.md",
+      "events/2025-05-06-quality-review.md"
+    ],
+    "margin_pressure": [
+      "monthly/2025-09.md",
+      "monthly/2025-10.md",
+      "events/2025-q4-transmission-margin-review.md"
+    ],
+    "receivable_risk": [
+      "monthly/2025-10.md",
+      "monthly/2025-11.md",
+      "events/2025-q4-west-receivable-risk.md"
+    ],
+    "full_regression": [
+      "events/2025-05-06-quality-review.md",
+      "events/2025-08-east-sales-review.md",
+      "events/2025-q4-transmission-margin-review.md",
+      "events/2025-q4-west-receivable-risk.md",
+      "monthly/2024-01.md",
+      "monthly/2024-02.md",
+      "monthly/2024-03.md",
+      "monthly/2024-04.md",
+      "monthly/2024-05.md",
+      "monthly/2024-06.md",
+      "monthly/2024-07.md",
+      "monthly/2024-08.md",
+      "monthly/2024-09.md",
+      "monthly/2024-10.md",
+      "monthly/2024-11.md",
+      "monthly/2024-12.md",
+      "monthly/2025-01.md",
+      "monthly/2025-02.md",
+      "monthly/2025-03.md",
+      "monthly/2025-04.md",
+      "monthly/2025-05.md",
+      "monthly/2025-06.md",
+      "monthly/2025-07.md",
+      "monthly/2025-08.md",
+      "monthly/2025-09.md",
+      "monthly/2025-10.md",
+      "monthly/2025-11.md",
+      "monthly/2025-12.md",
+      "reference/master_data_catalog.md",
+      "reference/metric_dictionary.md"
+    ]
+  }
+}

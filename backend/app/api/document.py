@@ -1,5 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
-
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
@@ -14,8 +13,8 @@ from app.services.document_service import (
 from app.core.auth import get_current_user
 from app.models.user import User
 
-from fastapi import UploadFile, File
-from app.services.document_ingestion_service import upload_document_service,process_document_chunks
+from app.services.document_ingestion_service import upload_document_service
+from app.tasks.document_tasks import process_document_task
 from app.core.settings import get_settings
 from app.core.exceptions import (
     DuplicateDocumentError,
@@ -101,7 +100,11 @@ def update_document_by_id(
     return record
 
 
-@router.post("/documents/upload", response_model=DocumentOut)
+@router.post(
+    "/documents/upload",
+    response_model=DocumentOut,
+    status_code=status.HTTP_202_ACCEPTED,
+)
 async def upload_document(
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_user),
@@ -116,10 +119,9 @@ async def upload_document(
             original_name=file.filename,
             settings=settings,
         )
-        record = process_document_chunks(
-            db=db, document=record, settings=settings
-        )
+        process_document_task.delay(document_id=record.id)
         return record
+
     except DuplicateDocumentError:
         raise HTTPException(status_code=409, detail="document already exists")
     except (

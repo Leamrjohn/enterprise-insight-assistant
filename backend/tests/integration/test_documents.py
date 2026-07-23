@@ -1,5 +1,8 @@
 from fastapi.testclient import TestClient
 import pytest
+from app.core.auth import get_current_user
+from app.main import app
+from app.models.user import User
 
 
 def test_document_lifecycle(
@@ -44,6 +47,7 @@ def test_document_lifecycle(
         "message": "document not found",
         "details": [],
     }
+
 
 def test_create_document_rejects_missing_content(client: TestClient) -> None:
     response = client.post(
@@ -118,3 +122,26 @@ def test_update_document_rejects_blank_content(
     get_response = client.get(f"/documents/{document_id}")
     assert get_response.status_code == 200
     assert get_response.json()["content"] == created["content"]
+
+
+def test_user_cannot_access_another_users_document(
+    db_session,
+    client: TestClient,
+) -> None:
+    create_response = client.post(
+        "/documents",
+        json={"name": "yuequanceshi", "content": "此次为越权测试", "source": "ceshi"},
+    )
+    assert create_response.status_code == 200
+    created = create_response.json()
+    document_id = created["id"]
+    other_user = User(name="ceshiyuequan", api_key="123456")
+    db_session.add(other_user)
+    db_session.flush()
+
+    def return_other_user():
+        return other_user
+
+    app.dependency_overrides[get_current_user] = return_other_user
+    get_response = client.get(f"/documents/{document_id}")
+    assert get_response.status_code == 404

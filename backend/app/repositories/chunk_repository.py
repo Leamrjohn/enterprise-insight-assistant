@@ -8,6 +8,7 @@ def add_chunk(
     chunk_index: int,
     content: str,
     token_count: int,
+    embedding: list[float],
     page_number: int | None = None,
 )-> DocumentChunk:
     chunk=DocumentChunk(
@@ -15,6 +16,7 @@ def add_chunk(
         chunk_index=chunk_index,
         content=content,
         token_count=token_count,
+        embedding=embedding,
         page_number=page_number,
     )
     db.add(chunk)

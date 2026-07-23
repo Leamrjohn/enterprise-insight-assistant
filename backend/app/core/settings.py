@@ -31,6 +31,7 @@ class Settings(BaseSettings):
     max_upload_size_mb: int = 20
     allowed_document_extensions: list[str] = [".txt", ".pdf", ".md", ".markdown"]
     upload_chunk_size_bytes: int = 1048576
+    redis_url: str = "redis://127.0.0.1:6379/0"
 
 
     database_host: str = "127.0.0.1"
@@ -41,11 +42,32 @@ class Settings(BaseSettings):
     database_echo: bool = False
     database_pool_size: int = 5
     database_max_overflow: int = 10
+    business_database_host: str = "business_db"
+    business_database_port: int = 5432
+    business_database_name: str = "business_data"
+    business_database_user: str = "business_readonly"
+    business_database_password: SecretStr = SecretStr("")
+    llm_provider: Literal["local", "openai", "deepseek"] = "deepseek"
+    llm_model: str = "deepseek-chat"
+    openai_api_key : SecretStr |None =None
+    llm_timeout_seconds :int =30
+    llm_temperature :float = 0.2
+    llm_max_output_tokens : int =1024
+    deepseek_api_key: SecretStr | None = None
+    deepseek_base_url: str = "https://api.deepseek.com"
+    reranker_model: str = "BAAI/bge-reranker-base"
+    rag_retrieval_top_k: int = 10
+    rag_retrieval_min_score: float = 0.1
+    rag_rerank_top_k: int = 3
+    rag_rerank_min_score: float = 0.5
 
     @model_validator(mode="after")
     def validate_database_password(self) -> Self:
         if not self.database_password.get_secret_value():
             raise ValueError("DATABASE_PASSWORD must not be empty")
+
+        if not self.business_database_password.get_secret_value():
+            raise ValueError("BUSINESS_DATABASE_PASSWORD must not be empty")
         return self
 
     @field_validator("log_dir", "storage_dir", mode="before")
@@ -56,11 +78,23 @@ class Settings(BaseSettings):
             return path
         return (BACKEND_DIR / path).resolve()
 
-    @field_validator("max_upload_size_mb", "upload_chunk_size_bytes")
+    @field_validator(
+        "max_upload_size_mb",
+        "upload_chunk_size_bytes",
+        "rag_retrieval_top_k",
+        "rag_rerank_top_k",
+    )
     @classmethod
     def validate_positive_int(cls, value: int) -> int:
         if value <= 0:
             raise ValueError("Value must be a positive integer")
+        return value
+
+    @field_validator("rag_retrieval_min_score", "rag_rerank_min_score")
+    @classmethod
+    def validate_score(cls, value: float) -> float:
+        if not 0 <= value <= 1:
+            raise ValueError("Score must be between 0 and 1")
         return value
 
     @property
