@@ -8,8 +8,42 @@ import app.services.conversation_service as conversation_service
 from app.core.auth import get_current_user
 from app.main import app
 from app.models.analysis_task import AnalysisTask
+from app.models.company import (
+    BusinessDataSource,
+    Company,
+    CompanyMember,
+    SchemaSnapshot,
+)
 from app.models.conversation import ConversationMessage
+from app.models.outbox import AnalysisTaskOutboxEvent
 from app.models.user import User
+
+
+def _setup_company_data_source(
+    client: TestClient, db_session: Session, test_user: User
+) -> int:
+    company = client.post("/companies", json={"name": "Acme"})
+    assert company.status_code == 201
+    source = BusinessDataSource(
+        company_id=company.json()["id"],
+        name="business-db",
+        connection_config={"host": "db", "database": "business", "user": "readonly"},
+        credential_env_var="BUSINESS_DATABASE_PASSWORD",
+    )
+    db_session.add(source)
+    db_session.flush()
+    snapshot = SchemaSnapshot(
+        data_source_id=source.id,
+        fingerprint="a" * 64,
+        catalog={"tables": {}},
+        discovered_by_user_id=test_user.id,
+    )
+    db_session.add(snapshot)
+    db_session.flush()
+    source.active_schema_snapshot_id = snapshot.id
+    source.status = "ready"
+    db_session.flush()
+    return source.id
 
 
 def test_recent_context_messages_are_scoped_filtered_and_ordered(
@@ -84,9 +118,16 @@ def test_recent_context_messages_are_scoped_filtered_and_ordered(
     ]
 
 
-def test_create_list_and_get_conversation(client: TestClient) -> None:
-    first = client.post("/conversations", json={"title": "第一个会话"})
-    second = client.post("/conversations", json={"title": "第二个会话"})
+def test_create_list_and_get_conversation(
+    client: TestClient, db_session: Session, test_user: User
+) -> None:
+    source_id = _setup_company_data_source(client, db_session, test_user)
+    first = client.post(
+        "/conversations", json={"title": "第一个会话", "data_source_id": source_id}
+    )
+    second = client.post(
+        "/conversations", json={"title": "第二个会话", "data_source_id": source_id}
+    )
 
     assert first.status_code == 201
     assert second.status_code == 201
@@ -109,20 +150,26 @@ def test_create_list_and_get_conversation(client: TestClient) -> None:
 def test_send_message_creates_messages_and_task_after_commit(
     client: TestClient,
     db_session: Session,
+    test_user: User,
     monkeypatch,
 ) -> None:
+    source_id = _setup_company_data_source(client, db_session, test_user)
     conversation_id = client.post(
-        "/conversations", json={"title": "华东区销售下降分析"}
+        "/conversations",
+        json={"title": "华东区销售下降分析", "data_source_id": source_id},
     ).json()["id"]
-    delayed_task_ids: list[int] = []
+    published_task_ids: list[int] = []
 
-    def fake_delay(*, task_id: int) -> None:
-        stored = db_session.get(AnalysisTask, task_id)
+    def fake_publish(db: Session, *, event_id: int) -> bool:
+        event = db.get(AnalysisTaskOutboxEvent, event_id)
+        assert event is not None
+        stored = db_session.get(AnalysisTask, event.task_id)
         assert stored is not None
         assert stored.input_message_id is not None
-        delayed_task_ids.append(task_id)
+        published_task_ids.append(event.task_id)
+        return True
 
-    monkeypatch.setattr(conversations_api.process_analysis_task, "delay", fake_delay)
+    monkeypatch.setattr(conversations_api, "publish_analysis_task_event", fake_publish)
 
     response = client.post(
         f"/conversations/{conversation_id}/messages",
@@ -131,7 +178,7 @@ def test_send_message_creates_messages_and_task_after_commit(
 
     assert response.status_code == 202
     payload = response.json()
-    assert delayed_task_ids == [payload["task_id"]]
+    assert published_task_ids == [payload["task_id"]]
     assert payload["status"] == "queued"
     assert payload["user_message"]["role"] == "user"
     assert payload["user_message"]["status"] == "completed"
@@ -158,6 +205,40 @@ def test_send_message_creates_messages_and_task_after_commit(
         payload["assistant_message"]["id"],
     ]
 
+    task_response = client.get(
+        f"/conversations/{conversation_id}/tasks/{payload['task_id']}"
+    )
+    assert task_response.status_code == 200
+    assert (
+        task_response.json()["assistant_message_id"]
+        == payload["assistant_message"]["id"]
+    )
+    assert task_response.json()["assistant_content"] is None
+    assert "result_data" not in task_response.json()
+
+
+def test_conversation_requires_a_ready_data_source(
+    client: TestClient, db_session: Session, test_user: User
+) -> None:
+    company = client.post("/companies", json={"name": "Acme"})
+    assert company.status_code == 201
+    company_id = company.json()["id"]
+    source = BusinessDataSource(
+        company_id=company_id,
+        name="not-ready-db",
+        connection_config={"host": "db", "database": "business", "user": "readonly"},
+        credential_env_var="BUSINESS_DATABASE_PASSWORD",
+        status="pending",
+    )
+    db_session.add(source)
+    db_session.flush()
+
+    response = client.post(
+        "/conversations", json={"title": "不应创建", "data_source_id": source.id}
+    )
+    assert response.status_code == 409
+    assert "尚未准备好" in response.json()["message"]
+
 
 def test_send_message_persists_only_the_recent_context_window(
     client: TestClient,
@@ -165,8 +246,9 @@ def test_send_message_persists_only_the_recent_context_window(
     test_user: User,
     monkeypatch,
 ) -> None:
+    source_id = _setup_company_data_source(client, db_session, test_user)
     conversation_id = client.post(
-        "/conversations", json={"title": "上下文窗口"}
+        "/conversations", json={"title": "上下文窗口", "data_source_id": source_id}
     ).json()["id"]
     previous_messages = []
     for index in range(9):
@@ -181,9 +263,9 @@ def test_send_message_persists_only_the_recent_context_window(
         )
 
     monkeypatch.setattr(
-        conversations_api.process_analysis_task,
-        "delay",
-        lambda *, task_id: None,
+        conversations_api,
+        "publish_analysis_task_event",
+        lambda db, *, event_id: True,
     )
 
     response = client.post(
@@ -214,11 +296,22 @@ def test_conversation_resources_are_hidden_from_another_user(
     db_session: Session,
     test_user: User,
 ) -> None:
-    conversation_id = client.post("/conversations", json={"title": "private"}).json()[
-        "id"
-    ]
+    source_id = _setup_company_data_source(client, db_session, test_user)
+    conversation_id = client.post(
+        "/conversations", json={"title": "private", "data_source_id": source_id}
+    ).json()["id"]
     other_user = User(name="conversation-other", api_key="conversation-other-key")
-    db_session.add(other_user)
+    other_company = Company(name="Other")
+    db_session.add_all([other_user, other_company])
+    db_session.flush()
+    db_session.add(
+        CompanyMember(
+            company_id=other_company.id,
+            user_id=other_user.id,
+            role="owner",
+            status="approved",
+        )
+    )
     db_session.flush()
 
     app.dependency_overrides[get_current_user] = lambda: other_user
@@ -238,24 +331,33 @@ def test_conversation_resources_are_hidden_from_another_user(
         app.dependency_overrides[get_current_user] = lambda: test_user
 
 
-def test_enqueue_failure_compensates_task_and_assistant_message(
+def test_enqueue_failure_leaves_durable_pending_outbox_event(
     client: TestClient,
     db_session: Session,
+    test_user: User,
     monkeypatch,
 ) -> None:
-    conversation_id = client.post("/conversations", json={"title": None}).json()["id"]
+    source_id = _setup_company_data_source(client, db_session, test_user)
+    conversation_id = client.post(
+        "/conversations", json={"title": None, "data_source_id": source_id}
+    ).json()["id"]
 
-    def fail_delay(*, task_id: int) -> None:
-        raise ConnectionError(f"broker unavailable for task {task_id}")
+    def fail_publish(db: Session, *, event_id: int) -> bool:
+        event = db.get(AnalysisTaskOutboxEvent, event_id)
+        assert event is not None
+        event.publish_attempt_count += 1
+        event.last_error = "ConnectionError: broker unavailable"
+        db.commit()
+        return False
 
-    monkeypatch.setattr(conversations_api.process_analysis_task, "delay", fail_delay)
+    monkeypatch.setattr(conversations_api, "publish_analysis_task_event", fail_publish)
 
     response = client.post(
         f"/conversations/{conversation_id}/messages",
         json={"content": "请分析销售额"},
     )
 
-    assert response.status_code == 503
+    assert response.status_code == 202
     task = (
         db_session.query(AnalysisTask)
         .filter(AnalysisTask.conversation_id == conversation_id)
@@ -266,24 +368,29 @@ def test_enqueue_failure_compensates_task_and_assistant_message(
         .filter(ConversationMessage.analysis_task_id == task.id)
         .one()
     )
-    assert task.status == "failed"
+    assert task.status == "queued"
     assert task.stage == "queued"
-    assert task.error_message == "任务暂未成功提交，请稍后重试。"
-    assert assistant.status == "failed"
-    assert assistant.content == "任务暂未成功提交，请稍后重试。"
+    assert task.error_message is None
+    assert assistant.status == "queued"
+    assert assistant.content is None
+    event = db_session.query(AnalysisTaskOutboxEvent).filter_by(task_id=task.id).one()
+    assert event.status == "pending"
+    assert event.last_error == "ConnectionError: broker unavailable"
 
 
 def test_message_bundle_rolls_back_and_does_not_enqueue_when_insert_fails(
     client: TestClient,
     db_session: Session,
+    test_user: User,
     monkeypatch,
 ) -> None:
-    conversation_id = client.post("/conversations", json={"title": "rollback"}).json()[
-        "id"
-    ]
+    source_id = _setup_company_data_source(client, db_session, test_user)
+    conversation_id = client.post(
+        "/conversations", json={"title": "rollback", "data_source_id": source_id}
+    ).json()["id"]
     original_create_message = conversation_service.create_message
     create_calls = 0
-    delayed_task_ids: list[int] = []
+    published_event_ids: list[int] = []
 
     def fail_second_message(*args, **kwargs):
         nonlocal create_calls
@@ -294,9 +401,9 @@ def test_message_bundle_rolls_back_and_does_not_enqueue_when_insert_fails(
 
     monkeypatch.setattr(conversation_service, "create_message", fail_second_message)
     monkeypatch.setattr(
-        conversations_api.process_analysis_task,
-        "delay",
-        lambda *, task_id: delayed_task_ids.append(task_id),
+        conversations_api,
+        "publish_analysis_task_event",
+        lambda db, *, event_id: published_event_ids.append(event_id) or True,
     )
 
     with pytest.raises(RuntimeError, match="assistant insert failed"):
@@ -317,4 +424,4 @@ def test_message_bundle_rolls_back_and_does_not_enqueue_when_insert_fails(
         .count()
         == 0
     )
-    assert delayed_task_ids == []
+    assert published_event_ids == []

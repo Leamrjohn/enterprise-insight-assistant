@@ -1,8 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from app.core.auth import get_current_user
+from app.core.company_auth import CurrentCompanyContext, get_current_company_context
 from app.db.session import get_db
-from app.models.user import User
 from app.services.label_service import (
     create_label_service,
     list_labels_service,
@@ -25,11 +24,11 @@ router = APIRouter()
 def create_label(
     request_model: LabelCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    context: CurrentCompanyContext = Depends(get_current_company_context),
 ):
     try:
         return create_label_service(
-            db, current_user.id, request_model.name, request_model.color
+            db, context.user.id, request_model.name, request_model.color
         )
     except DuplicateLabelError:
         raise HTTPException(status_code=409, detail="label name already exists")
@@ -39,9 +38,9 @@ def create_label(
 def get_label(
     label_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    context: CurrentCompanyContext = Depends(get_current_company_context),
 ):
-    record = get_label_by_id_service(db, label_id, current_user.id)
+    record = get_label_by_id_service(db, label_id, context.user.id)
     if record is None:
         raise HTTPException(status_code=404, detail="this label not found")
     else:
@@ -51,11 +50,11 @@ def get_label(
 @router.get("/labels", response_model=list[LabelOut])
 def list_labels(
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    context: CurrentCompanyContext = Depends(get_current_company_context),
 ):
     return list_labels_service(
         db=db,
-        user_id=current_user.id,
+        user_id=context.user.id,
     )
 
 
@@ -64,7 +63,7 @@ def update_label(
     label_id: int,
     request_model: LabelUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    context: CurrentCompanyContext = Depends(get_current_company_context),
 ):
     updates = request_model.model_dump(exclude_unset=True)
     if not updates:
@@ -73,7 +72,7 @@ def update_label(
             detail="at least one field must have updates",
         )
     try:
-        record = update_label_service(db, label_id, current_user.id, updates)
+        record = update_label_service(db, label_id, context.user.id, updates)
     except DuplicateLabelError:
         raise HTTPException(status_code=409, detail="label name already exists")
     if record is None:
@@ -85,8 +84,8 @@ def update_label(
 def delete_label(
     label_id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    context: CurrentCompanyContext = Depends(get_current_company_context),
 ):
-    record = delete_label_service(db, label_id, current_user.id)
+    record = delete_label_service(db, label_id, context.user.id)
     if record is None:
         raise HTTPException(status_code=404, detail="this label not found")

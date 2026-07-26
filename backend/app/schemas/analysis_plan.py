@@ -33,11 +33,6 @@ class AnalysisPlan(BaseModel):
         }
         expected_data, expected_knowledge = expected_sources[self.route]
 
-        if (
-            self.need_data != expected_data
-            or self.need_knowledge != expected_knowledge
-        ):
-            raise ValueError(
-                "route must match need_data and need_knowledge"
-            )
+        if self.need_data != expected_data or self.need_knowledge != expected_knowledge:
+            raise ValueError("route must match need_data and need_knowledge")
         return self

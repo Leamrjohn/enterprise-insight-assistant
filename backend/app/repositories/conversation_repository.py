@@ -1,7 +1,6 @@
 """Database operations for conversations and their display messages."""
 
-
-from sqlalchemy import  func
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models.conversation import Conversation, ConversationMessage
@@ -12,8 +11,15 @@ def create_conversation(
     *,
     user_id: int,
     title: str | None,
+    company_id: int | None = None,
+    data_source_id: int | None = None,
 ) -> Conversation:
-    conversation = Conversation(user_id=user_id, title=title)
+    conversation = Conversation(
+        user_id=user_id,
+        title=title,
+        company_id=company_id,
+        data_source_id=data_source_id,
+    )
     db.add(conversation)
     db.flush()
     return conversation
@@ -24,21 +30,25 @@ def get_conversation_by_id(
     *,
     conversation_id: int,
     user_id: int,
+    company_id: int | None = None,
 ) -> Conversation | None:
     return (
         db.query(Conversation)
         .filter(
             Conversation.id == conversation_id,
             Conversation.user_id == user_id,
+            Conversation.company_id == company_id,
         )
         .first()
     )
 
 
-def get_conversations(db: Session, *, user_id: int) -> list[Conversation]:
+def get_conversations(
+    db: Session, *, user_id: int, company_id: int | None = None
+) -> list[Conversation]:
     return (
         db.query(Conversation)
-        .filter(Conversation.user_id == user_id)
+        .filter(Conversation.user_id == user_id, Conversation.company_id == company_id)
         .order_by(Conversation.updated_at.desc(), Conversation.id.desc())
         .all()
     )

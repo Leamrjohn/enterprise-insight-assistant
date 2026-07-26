@@ -1,6 +1,7 @@
 from datetime import datetime, timezone
 
 import app.tasks.analysis_tasks as analysis_tasks
+from app.schemas.final_analysis import FinalAnalysisReport
 from app.schemas.task import TaskOut
 
 
@@ -30,6 +31,12 @@ class FakeTaskRecord:
         self.created_at = datetime.now(timezone.utc)
         self.updated_at = datetime.now(timezone.utc)
 
+    @property
+    def report(self):
+        if not isinstance(self.result_data, dict):
+            return None
+        return self.result_data.get("report")
+
 
 def test_worker_saves_langgraph_terminal_result() -> None:
     db = FakeDb()
@@ -52,6 +59,7 @@ def test_worker_saves_langgraph_terminal_result() -> None:
         "data_result": None,
         "knowledge_result": None,
         "review_result": None,
+        "report": None,
     }
 
     analysis_tasks._save_workflow_result(db, record, workflow_result)
@@ -70,6 +78,7 @@ def test_worker_saves_langgraph_terminal_result() -> None:
         "data_result": None,
         "knowledge_result": None,
         "review_result": None,
+        "report": None,
     }
 
 
@@ -161,6 +170,66 @@ def test_task_response_schema_accepts_langgraph_result_data() -> None:
     payload = TaskOut.model_validate(record).model_dump(mode="json")
 
     assert payload["result_data"] == record.result_data
+    assert payload["report"] is None
+
+
+def test_worker_promotes_validated_report_to_task_response() -> None:
+    db = FakeDb()
+    record = FakeTaskRecord()
+    report = {
+        "schema_version": "1.0",
+        "status": "completed",
+        "executive_summary": "已确认经营数据事实；文档提供了待进一步核验的可能原因。",
+        "confirmed_facts": [
+            {
+                "fact_id": "fact-1",
+                "statement": "华东区销售额下降。",
+                "data_evidence_ids": ["data-1"],
+            }
+        ],
+        "hypotheses": [
+            {
+                "hypothesis_id": "hypothesis-1",
+                "statement": "可能原因（未证实）：客户下调采购计划。",
+                "related_fact_ids": ["fact-1"],
+                "citation_chunk_ids": [9],
+                "support_level": "low",
+            }
+        ],
+        "recommendations": [
+            {
+                "recommendation_id": "recommendation-1",
+                "priority": "medium",
+                "action": "核验订单和交付状态。",
+                "rationale": "基于已确认数据和文档线索。",
+                "basis_fact_ids": ["fact-1"],
+                "basis_hypothesis_ids": ["hypothesis-1"],
+            }
+        ],
+        "data_evidence": [
+            {
+                "evidence_id": "data-1",
+                "purpose": "月度销售额比较",
+                "columns": ["month", "total_sales"],
+                "rows": [["2025-08", "1847604.72"]],
+            }
+        ],
+        "document_citations": [
+            {"chunk_id": 9, "document_id": 4, "excerpt": "客户下调采购计划。"}
+        ],
+        "limitations": [],
+    }
+    workflow_result = {
+        "final_answer": "销售额下降，可能与客户下调采购计划有关。",
+        "review_result": {"review_status": "complete", "report": report},
+    }
+
+    analysis_tasks._save_workflow_result(db, record, workflow_result)
+
+    payload = TaskOut.model_validate(record).model_dump(mode="json")
+    expected_report = FinalAnalysisReport.model_validate(report).model_dump(mode="json")
+    assert record.result_data["report"] == expected_report
+    assert payload["report"] == expected_report
 
 
 def test_worker_marks_retryable_planner_failure_as_failed() -> None:
@@ -184,3 +253,25 @@ def test_worker_marks_retryable_planner_failure_as_failed() -> None:
 
     assert record.status == "failed"
     assert record.stage == "completed"
+
+
+def test_worker_serializes_datetime_values_before_persisting_result_data() -> None:
+    db = FakeDb()
+    record = FakeTaskRecord()
+    workflow_result = {
+        "plan": {"action": "analyze", "route": "data_only"},
+        "terminal_result": None,
+        "final_answer": "已完成。",
+        "data_result": {
+            "status": "ready",
+            "evidence": [{"rows": [[datetime(2025, 8, 1, tzinfo=timezone.utc)]]}],
+        },
+        "knowledge_result": None,
+        "review_result": {"review_status": "completed"},
+    }
+
+    analysis_tasks._save_workflow_result(db, record, workflow_result)
+
+    assert record.result_data["data_result"]["evidence"][0]["rows"][0][0] == (
+        "2025-08-01T00:00:00+00:00"
+    )

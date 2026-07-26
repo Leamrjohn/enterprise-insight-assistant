@@ -1,5 +1,5 @@
 from sqlalchemy.orm import Session
-from app.models.analysis_task import AnalysisTask
+from app.models.analysis_task import AnalysisTask, AnalysisTaskDocument
 
 
 def create_task(
@@ -10,6 +10,10 @@ def create_task(
     conversation_id: int | None = None,
     input_message_id: int | None = None,
     context_snapshot: dict | None = None,
+    company_id: int | None = None,
+    data_source_id: int | None = None,
+    schema_snapshot_id: int | None = None,
+    document_ids: list[int] | None = None,
 ) -> AnalysisTask:
     record = AnalysisTask(
         user_id=user_id,
@@ -18,9 +22,14 @@ def create_task(
         conversation_id=conversation_id,
         input_message_id=input_message_id,
         context_snapshot=context_snapshot,
+        company_id=company_id,
+        data_source_id=data_source_id,
+        schema_snapshot_id=schema_snapshot_id,
     )
     db.add(record)
     db.flush()
+    for document_id in document_ids or []:
+        db.add(AnalysisTaskDocument(task_id=record.id, document_id=document_id))
     db.refresh(record)
     return record
 

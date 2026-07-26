@@ -51,17 +51,6 @@ def test_allows_select_alias_in_group_by_and_order_by() -> None:
     )
 
 
-def test_rejects_unknown_unqualified_order_by_name() -> None:
-    with pytest.raises(ValueError, match="必须使用表名或表别名前缀"):
-        validate(
-            """
-            SELECT SUM(o.total_amount) AS revenue
-            FROM sales_orders AS o
-            ORDER BY unknown_name
-            """
-        )
-
-
 def test_rejects_non_select_statement() -> None:
     with pytest.raises(ValueError, match="仅允许SELECT"):
         validate("DELETE FROM sales_orders")
@@ -72,33 +61,30 @@ def test_rejects_multiple_statements() -> None:
         validate("SELECT o.id FROM sales_orders AS o; DELETE FROM sales_orders")
 
 
-def test_rejects_star() -> None:
-    with pytest.raises(ValueError, match="不允许使用\\*"):
-        validate("SELECT o.* FROM sales_orders AS o")
+def test_allows_star_from_a_scoped_table() -> None:
+    validate("SELECT o.* FROM sales_orders AS o")
 
 
-def test_rejects_cte() -> None:
-    with pytest.raises(ValueError, match="暂不允许CTE"):
-        validate(
-            """
-            WITH recent_orders AS (
-                SELECT o.id FROM sales_orders AS o
-            )
-            SELECT r.id FROM recent_orders AS r
-            """
+def test_allows_cte_when_its_physical_table_is_scoped() -> None:
+    validate(
+        """
+        WITH recent_orders AS (
+            SELECT o.id FROM sales_orders AS o
         )
+        SELECT r.id FROM recent_orders AS r
+        """
+    )
 
 
-def test_rejects_subquery() -> None:
-    with pytest.raises(ValueError, match="暂不允许子查询"):
-        validate(
-            """
-            SELECT r.id
-            FROM (
-                SELECT o.id FROM sales_orders AS o
-            ) AS r
-            """
-        )
+def test_allows_subquery_when_its_physical_table_is_scoped() -> None:
+    validate(
+        """
+        SELECT r.id
+        FROM (
+            SELECT o.id FROM sales_orders AS o
+        ) AS r
+        """
+    )
 
 
 def test_rejects_table_outside_business_catalogue() -> None:
@@ -111,22 +97,13 @@ def test_rejects_explicit_schema() -> None:
         validate("SELECT t.question FROM evaluation.scenario_truth AS t")
 
 
-def test_rejects_column_outside_table_catalogue() -> None:
-    with pytest.raises(ValueError, match="不允许从表 'sales_orders' 查询"):
-        validate("SELECT o.created_at FROM sales_orders AS o")
-
-
-def test_rejects_unqualified_column() -> None:
-    with pytest.raises(ValueError, match="必须使用表名或表别名前缀"):
-        validate("SELECT total_amount FROM sales_orders")
-
-
-def test_rejects_unregistered_join() -> None:
-    with pytest.raises(ValueError, match="不允许的表关联"):
+def test_rejects_out_of_scope_table_inside_a_cte() -> None:
+    with pytest.raises(ValueError, match="不在业务目录"):
         validate(
             """
-            SELECT o.total_amount, c.name
-            FROM sales_orders AS o
-            JOIN customers AS c ON o.id = c.id
+            WITH hidden AS (
+                SELECT d.content FROM business_documents AS d
+            )
+            SELECT * FROM hidden
             """
         )

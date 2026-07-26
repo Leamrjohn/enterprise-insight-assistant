@@ -1,7 +1,26 @@
 from app.core.auth import get_current_user
 from app.main import app
+from app.models.company import Company, CompanyMember
 from app.models.user import User
 from fastapi.testclient import TestClient
+import pytest
+
+
+@pytest.fixture(autouse=True)
+def approved_company_member(db_session, test_user: User) -> Company:
+    company = Company(name="prompt-template-test-company")
+    db_session.add(company)
+    db_session.flush()
+    db_session.add(
+        CompanyMember(
+            company_id=company.id,
+            user_id=test_user.id,
+            role="owner",
+            status="approved",
+        )
+    )
+    db_session.flush()
+    return company
 
 
 def test_prompt_template_1(client: TestClient, test_user: User):
@@ -120,6 +139,18 @@ def test_prompt_template4(client: TestClient, test_user: User, db_session):
 
     usera = User(name="1", api_key="123")
     db_session.add(usera)
+    db_session.flush()
+    other_company = Company(name="other-prompt-template-company")
+    db_session.add(other_company)
+    db_session.flush()
+    db_session.add(
+        CompanyMember(
+            company_id=other_company.id,
+            user_id=usera.id,
+            role="owner",
+            status="approved",
+        )
+    )
     db_session.flush()
 
     def return_usera():

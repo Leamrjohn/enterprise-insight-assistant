@@ -4,8 +4,24 @@ from uuid import uuid4
 
 from app.api import document as document_api
 from app.main import app
+from app.models.company import Company, CompanyMember
 from app.models.user import User
 from app.db.session import get_db
+
+
+def _add_company_membership(db_session, user: User) -> None:
+    company = Company(name="error-test-company")
+    db_session.add(company)
+    db_session.flush()
+    db_session.add(
+        CompanyMember(
+            company_id=company.id,
+            user_id=user.id,
+            role="analyst",
+            status="approved",
+        )
+    )
+    db_session.flush()
 
 
 def test_unhandled_exception_returns_safe_500(
@@ -16,6 +32,7 @@ def test_unhandled_exception_returns_safe_500(
     user = User(name="test-errors", api_key=api_key)
     db_session.add(user)
     db_session.flush()
+    _add_company_membership(db_session, user)
 
     def raise_runtime_error(*args, **kwargs):
         raise RuntimeError("sensitive internal detail")
@@ -44,7 +61,7 @@ def test_unhandled_exception_returns_safe_500(
     assert response.headers.get("X-Request-ID")
     assert response.json() == {
         "code": "internal_error",
-        "message": "internal server error",
+        "message": "服务器内部错误，请稍后重试。",
         "details": [],
     }
     assert "sensitive internal detail" not in response.text
@@ -58,6 +75,7 @@ def test_unhandled_exception_preserves_incoming_request_id(
     user = User(name="test-errors", api_key=api_key)
     db_session.add(user)
     db_session.flush()
+    _add_company_membership(db_session, user)
 
     def raise_runtime_error(*args, **kwargs):
         raise RuntimeError("sensitive internal detail")

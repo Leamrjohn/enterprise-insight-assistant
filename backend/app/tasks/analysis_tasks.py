@@ -1,17 +1,22 @@
 """Celery 任务入口：读取已提交任务，执行 LangGraph，并保存图的结果。"""
 
 import logging
+from datetime import datetime, timezone
 from typing import Any
+
+from fastapi.encoders import jsonable_encoder
 
 from app.core.celery_app import celery_app
 
 from app.db.session import SessionLocal
-from app.models.analysis_task import AnalysisTask
+from app.models.analysis_task import AnalysisTask, AnalysisTaskDocument
+from app.models.company import BusinessDataSource, SchemaSnapshot
 from app.repositories.conversation_repository import (
     get_assistant_message_by_task_id,
     touch_conversation,
 )
 from app.services.workflow_graph import run_analysis
+from app.schemas.final_analysis import FinalAnalysisReport
 
 # 导入所有模型确保 SQLAlchemy 能解析外键
 from app.models.document_chunk import DocumentChunk  # noqa: F401
@@ -22,6 +27,25 @@ from app.models.user import User  # noqa: F401
 logger = logging.getLogger(__name__)
 TERMINAL_TASK_STATUSES = {"completed", "partial", "failed", "cancelled"}
 GENERIC_WORKER_FAILURE_MESSAGE = "分析任务执行失败，请稍后重试。"
+RETRYING_WORKER_MESSAGE = "分析服务暂时不可用，正在自动重试。"
+
+
+class RetryableAnalysisTaskError(Exception):
+    """A dependency failed transiently and the whole analysis can be retried."""
+
+
+def _is_retryable_exception(exc: Exception) -> bool:
+    return isinstance(exc, (ConnectionError, TimeoutError, OSError))
+
+
+def _duration_ms(record: AnalysisTask) -> int | None:
+    started_at = getattr(record, "started_at", None)
+    if started_at is None:
+        return None
+    return max(
+        0,
+        round((datetime.now(timezone.utc) - started_at).total_seconds() * 1000),
+    )
 
 
 def _sync_assistant_message(
@@ -38,7 +62,8 @@ def _sync_assistant_message(
         return
     assistant_message.status = status
     assistant_message.content = content
-    touch_conversation(db, conversation_id=record.conversation_id)
+    if record.conversation_id is not None:
+        touch_conversation(db, conversation_id=record.conversation_id)
 
 
 def _stop_if_cancelled(db, record: AnalysisTask) -> bool:
@@ -47,6 +72,7 @@ def _stop_if_cancelled(db, record: AnalysisTask) -> bool:
     if record.status != "cancelled":
         return False
 
+    record.completed_at = datetime.now(timezone.utc)
     _sync_assistant_message(
         db,
         record,
@@ -68,6 +94,41 @@ def _stop_if_cancelled(db, record: AnalysisTask) -> bool:
     return True
 
 
+def _update_stage(db, record: AnalysisTask, stage: str) -> None:
+    """Persist a frontend-visible workflow stage before entering that node."""
+    db.refresh(record)
+    if record.status == "cancelled":
+        return
+    record.stage = stage
+    db.commit()
+
+
+def _claim_task(db, *, task_id: int, celery_task_id: str | None) -> AnalysisTask | None:
+    """Atomically move only queued/retrying work into the running state."""
+    now = datetime.now(timezone.utc)
+    claimed = (
+        db.query(AnalysisTask)
+        .filter(
+            AnalysisTask.id == task_id,
+            AnalysisTask.status.in_(("queued", "retrying")),
+        )
+        .update(
+            {
+                AnalysisTask.status: "running",
+                AnalysisTask.stage: "planning",
+                AnalysisTask.started_at: now,
+                AnalysisTask.celery_task_id: celery_task_id,
+                AnalysisTask.error_message: None,
+                AnalysisTask.error_type: None,
+                AnalysisTask.attempt_count: AnalysisTask.attempt_count + 1,
+            },
+            synchronize_session=False,
+        )
+    )
+    db.commit()
+    return db.get(AnalysisTask, task_id) if claimed else None
+
+
 def _save_workflow_result(
     db, record: AnalysisTask, workflow_result: dict[str, Any]
 ) -> None:
@@ -81,26 +142,48 @@ def _save_workflow_result(
     terminal_result = workflow_result.get("terminal_result")
     is_failed = (terminal_result or {}).get("outcome") == "failed"
     review_result = workflow_result.get("review_result") or {}
-    is_partial = review_result.get("review_status") == "partial"
+    raw_report = review_result.get("report")
+    report = (
+        FinalAnalysisReport.model_validate(raw_report)
+        if isinstance(raw_report, dict)
+        else None
+    )
+    report_status = report.status if report is not None else None
+    is_failed = is_failed or report_status == "failed"
+    is_partial = (
+        review_result.get("review_status") == "partial" or report_status == "partial"
+    )
 
-    record.stage = "save_result"
+    record.stage = "saving_result"
     db.commit()
     if _stop_if_cancelled(db, record):
         return
 
     record.result_summary = final_answer
-    record.result_data = {
-        "type": "langgraph_workflow",
-        "answer": final_answer,
-        "plan": workflow_result.get("plan"),
-        "planner_result": workflow_result.get("planner_result"),
-        "terminal_result": terminal_result,
-        "data_result": workflow_result.get("data_result"),
-        "knowledge_result": workflow_result.get("knowledge_result"),
-        "review_result": workflow_result.get("review_result"),
-    }
+    record.result_data = jsonable_encoder(
+        {
+            "type": "langgraph_workflow",
+            "answer": final_answer,
+            "plan": workflow_result.get("plan"),
+            "planner_result": workflow_result.get("planner_result"),
+            "terminal_result": terminal_result,
+            "data_result": workflow_result.get("data_result"),
+            "knowledge_result": workflow_result.get("knowledge_result"),
+            "review_result": workflow_result.get("review_result"),
+            "report": report.model_dump(mode="json") if report is not None else None,
+        }
+    )
 
-    if is_failed or not final_answer:
+    # ── needs_clarification ─────────────────────────────────
+    is_clarification = (terminal_result or {}).get("outcome") == "needs_clarification"
+    if is_clarification:
+        record.status = "needs_clarification"
+        record.clarification_status = "waiting"
+        record.clarification_missing_fields = (terminal_result or {}).get(
+            "missing_fields"
+        )
+        record.error_message = None
+    elif is_failed or not final_answer:
         record.status = "failed"
         record.error_message = "分析工作流未能生成可返回的结果。"
     elif is_partial:
@@ -109,6 +192,11 @@ def _save_workflow_result(
     else:
         record.status = "completed"
         record.error_message = None
+
+    # 进入终态时设置 completed_at
+    if record.status in TERMINAL_TASK_STATUSES:
+        record.completed_at = datetime.now(timezone.utc)
+        record.duration_ms = _duration_ms(record)
 
     _sync_assistant_message(
         db,
@@ -120,41 +208,72 @@ def _save_workflow_result(
     db.commit()
 
 
-@celery_app.task
-def process_analysis_task(task_id: int):
+@celery_app.task(bind=True, max_retries=3)
+def process_analysis_task(self, task_id: int):
     """用独立数据库 Session 执行一次 LangGraph 分析工作流。"""
     db = SessionLocal()
     try:
-        record = db.query(AnalysisTask).filter(AnalysisTask.id == task_id).first()
+        record = _claim_task(
+            db,
+            task_id=task_id,
+            celery_task_id=getattr(self.request, "id", None),
+        )
         if record is None:
-            logger.error("Task %s not found", task_id)
+            logger.info("Task %s was already claimed, terminal, or missing", task_id)
             return
-        if record.status in TERMINAL_TASK_STATUSES:
-            logger.info(
-                "Task %s already terminal with status %s", task_id, record.status
-            )
-            return
-
-        record.attempt_count += 1
-        record.status = "running"
         _sync_assistant_message(
             db,
             record,
             status="running",
             content=None,
         )
-        # 旧表尚无 planning；这里表示 Worker 已进入包含 Planner 的工作流。
-        record.stage = "call_model"
         db.commit()
 
         if _stop_if_cancelled(db, record):
             return
 
+        document_ids = [
+            row.document_id
+            for row in db.query(AnalysisTaskDocument)
+            .filter(AnalysisTaskDocument.task_id == record.id)
+            .all()
+        ]
+        workflow_kwargs = {"conversation_context": record.context_snapshot}
+        if document_ids:
+            workflow_kwargs["document_ids"] = document_ids
+        if record.data_source_id is not None and record.schema_snapshot_id is not None:
+            source = (
+                db.query(BusinessDataSource)
+                .filter(BusinessDataSource.id == record.data_source_id)
+                .first()
+            )
+            snapshot = (
+                db.query(SchemaSnapshot)
+                .filter(SchemaSnapshot.id == record.schema_snapshot_id)
+                .first()
+            )
+            if (
+                source is None
+                or snapshot is None
+                or snapshot.data_source_id != source.id
+                or source.company_id != record.company_id
+            ):
+                raise RuntimeError("Analysis task has an invalid company data context")
+            workflow_kwargs["business_data_source"] = source
+            workflow_kwargs["schema_catalog"] = snapshot.catalog
         workflow_result = run_analysis(
             record.question,
             record.user_id,
-            conversation_context=record.context_snapshot,
+            company_id=record.company_id,
+            stage_callback=lambda stage: _update_stage(db, record, stage),
+            **workflow_kwargs,
         )
+
+        terminal_result = workflow_result.get("terminal_result") or {}
+        if terminal_result.get("retryable"):
+            raise RetryableAnalysisTaskError(
+                terminal_result.get("error_code") or "retryable_workflow_failure"
+            )
 
         if _stop_if_cancelled(db, record):
             return
@@ -163,7 +282,62 @@ def process_analysis_task(task_id: int):
         db.refresh(record)
         logger.info("Task %s completed through LangGraph", task_id)
 
-    except Exception:
+    except RetryableAnalysisTaskError as exc:
+        db.rollback()
+        db.expire_all()
+        record = db.get(AnalysisTask, task_id)
+        if record is None or record.status == "cancelled":
+            return
+        record.error_type = type(exc).__name__
+        record.error_message = "分析服务暂时不可用。"
+        record.duration_ms = _duration_ms(record)
+        if self.request.retries >= self.max_retries:
+            record.status = "failed"
+            record.completed_at = datetime.now(timezone.utc)
+            _sync_assistant_message(
+                db,
+                record,
+                status="failed",
+                content=GENERIC_WORKER_FAILURE_MESSAGE,
+            )
+            db.commit()
+            raise
+
+        record.status = "retrying"
+        record.stage = "retrying"
+        _sync_assistant_message(
+            db,
+            record,
+            status="running",
+            content=RETRYING_WORKER_MESSAGE,
+        )
+        db.commit()
+        raise self.retry(exc=exc, countdown=2 ** (self.request.retries + 1))
+    except Exception as exc:
+        if _is_retryable_exception(exc):
+            db.rollback()
+            db.expire_all()
+            record = db.get(AnalysisTask, task_id)
+            if record is None or record.status == "cancelled":
+                return
+            retry_error = RetryableAnalysisTaskError(str(exc))
+            record.error_type = type(exc).__name__
+            record.error_message = "分析服务暂时不可用。"
+            record.duration_ms = _duration_ms(record)
+            if self.request.retries < self.max_retries:
+                record.status = "retrying"
+                record.stage = "retrying"
+                _sync_assistant_message(
+                    db,
+                    record,
+                    status="running",
+                    content=RETRYING_WORKER_MESSAGE,
+                )
+                db.commit()
+                raise self.retry(
+                    exc=retry_error, countdown=2 ** (self.request.retries + 1)
+                )
+
         db.rollback()
         db.expire_all()
         logger.exception("Task %s failed without retry", task_id)
@@ -177,6 +351,9 @@ def process_analysis_task(task_id: int):
             return
 
         record.status = "failed"
+        record.completed_at = datetime.now(timezone.utc)
+        record.duration_ms = _duration_ms(record)
+        record.error_type = type(exc).__name__
         record.error_message = "分析任务执行失败。"
         _sync_assistant_message(
             db,

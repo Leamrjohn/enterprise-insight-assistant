@@ -2,6 +2,8 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
 
+from app.schemas.query_contract import ClarificationSpec, QuestionIntent
+
 
 PlanAction = Literal[
     "analyze",
@@ -53,14 +55,22 @@ class PlannerDecision(BaseModel):
         ),
     )
     resolved_question: str | None = Field(
-    ...,
-    min_length=1,
-    max_length=1000,
-    description=(
-        "仅 analyze 使用的独立完整问题；"
-        "Data、Knowledge 和 Reviewer 后续使用它，不直接读取会话历史。"
-    ),
-)
+        ...,
+        min_length=1,
+        max_length=1000,
+        description=(
+            "仅 analyze 使用的独立完整问题；"
+            "Data、Knowledge 和 Reviewer 后续使用它，不直接读取会话历史。"
+        ),
+    )
+    clarification: ClarificationSpec | None = Field(
+        default=None,
+        description="追问所缺的结构化条件；仅 needs_clarification 使用。",
+    )
+    intent: QuestionIntent | None = Field(
+        default=None,
+        description="分析问题需要哪些业务能力与条件；仅 analyze 使用。",
+    )
 
     @model_validator(mode="after")
     def validate_action_contract(self) -> "PlannerDecision":
@@ -70,14 +80,22 @@ class PlannerDecision(BaseModel):
         if self.action != "analyze" and self.route is not None:
             raise ValueError("only analyze action may include route")
 
-        if self.action == "analyze" and (self.resolved_question is None or not self.resolved_question.strip()):
-                    raise ValueError("analyze action ,resolved_question must is not none")
+        if self.action == "analyze" and (
+            self.resolved_question is None or not self.resolved_question.strip()
+        ):
+            raise ValueError("analyze action ,resolved_question must is not none")
 
         if self.action != "analyze" and self.resolved_question is not None:
-                    raise ValueError("not analyze action ,resolved_question must is none")
+            raise ValueError("not analyze action ,resolved_question must is none")
 
         if self.action == "needs_clarification" and not self.clarification_question:
             raise ValueError("needs_clarification requires clarification_question")
+
+        if self.action == "needs_clarification" and self.clarification is None:
+            raise ValueError("needs_clarification requires clarification")
+
+        if self.action != "needs_clarification" and self.clarification is not None:
+            raise ValueError("only needs_clarification may include clarification")
 
         if (
             self.action != "needs_clarification"
@@ -93,6 +111,9 @@ class PlannerDecision(BaseModel):
 
         if self.action == "analyze" and self.response_message is not None:
             raise ValueError("analyze action must not include response_message")
+
+        if self.action != "analyze" and self.intent is not None:
+            raise ValueError("only analyze may include intent")
 
         if self.action not in terminal_actions and self.response_message is not None:
             raise ValueError("only terminal actions may include response_message")

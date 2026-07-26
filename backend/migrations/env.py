@@ -7,11 +7,13 @@ from app.models.user import User  # noqa: F401
 from app.models.chat_record import ChatRecord  # noqa: F401
 from app.models.documents import Documents  # noqa: F401
 from app.models.document_chunk import DocumentChunk  # noqa: F401
-from app.models.analysis_task import AnalysisTask  # noqa: F401
+from app.models.analysis_task import AnalysisTask, AnalysisTaskDocument  # noqa: F401
 from app.models.conversation import Conversation, ConversationMessage  # noqa: F401
 from app.models.todo_items import TodoItem  # noqa: F401
 from app.models.labels import Label  # noqa: F401
 from app.models.prompt_templates import PromptTemplate  # noqa: F401
+from app.models import company  # noqa: F401
+from app.models.outbox import AnalysisTaskOutboxEvent  # noqa: F401
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

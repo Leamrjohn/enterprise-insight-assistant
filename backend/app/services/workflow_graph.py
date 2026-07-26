@@ -1,12 +1,15 @@
 """LangGraph 工作流图 —— 把 Agent 节点串成可执行的工作流"""
 
+from collections.abc import Callable
 from typing import Literal
 
 from langgraph.graph import StateGraph, START, END
 
 from app.services.workflow_state import WorkflowState
+from app.models.company import BusinessDataSource
 from app.services.workflow_nodes import (
     planner_node,
+    planner_semantic_review_node,
     planner_terminal_node,
     planning_failure_node,
     knowledge_node,
@@ -58,7 +61,7 @@ def build_workflow() -> StateGraph:
     构建工作流图：
 
     START
-      → planner_node ──action/route──→ data_node ──route──→ knowledge_node
+      → planner_node → planner_semantic_review_node ──action/route──→ data_node ──route──→ knowledge_node
                              │                                  │
                              ├──→ knowledge_node ───────────────┤
                              ├──→ planner_terminal_node ────────┤
@@ -68,6 +71,7 @@ def build_workflow() -> StateGraph:
 
     # 注册所有节点
     graph.add_node("planner_node", planner_node)
+    graph.add_node("planner_semantic_review_node", planner_semantic_review_node)
     graph.add_node("planner_terminal_node", planner_terminal_node)
     graph.add_node("planning_failure_node", planning_failure_node)
     graph.add_node("data_node", data_node)
@@ -77,9 +81,11 @@ def build_workflow() -> StateGraph:
     # 边：START → planner
     graph.add_edge(START, "planner_node")
 
-    # 条件边：Planner 决定分析路线，或安全地结束非分析请求。
+    graph.add_edge("planner_node", "planner_semantic_review_node")
+
+    # 条件边：经语义复核后的 Planner 决定分析路线，或安全地结束非分析请求。
     graph.add_conditional_edges(
-        "planner_node",
+        "planner_semantic_review_node",
         _route_after_planner,
         {
             "data_node": "data_node",
@@ -118,12 +124,19 @@ def run_analysis(
     question: str,
     user_id: int,
     *,
+    company_id: int | None = None,
     conversation_context: dict | None = None,
+    document_ids: list[int] | None = None,
+    business_data_source: BusinessDataSource | None = None,
+    schema_catalog: dict | None = None,
+    semantic_review_enabled: bool = True,
+    stage_callback: Callable[[str], None] | None = None,
 ) -> dict:
     """运行一次完整分析"""
     initial_state: WorkflowState = {
         "question": question,
         "user_id": user_id,
+        "company_id": company_id,
         "plan": None,
         "planner_result": None,
         "planner_failure": None,
@@ -134,5 +147,10 @@ def run_analysis(
         "final_answer": None,
         "error": None,
         "conversation_context": conversation_context,
+        "document_ids": document_ids,
+        "business_data_source": business_data_source,
+        "schema_catalog": schema_catalog,
+        "semantic_review_enabled": semantic_review_enabled,
+        "stage_callback": stage_callback,
     }
     return workflow.invoke(initial_state)

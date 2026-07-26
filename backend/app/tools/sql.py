@@ -3,6 +3,8 @@
 from app.tools.protocol import Tool, ToolInput, ToolOutput
 from app.tools.executor import execute_readonly_sql
 from app.tools.business_semantic_catalog import BUSINESS_TABLES
+from app.models.company import BusinessDataSource
+from app.tools.snapshot_catalog import SnapshotCatalog
 from psycopg.errors import GroupingError
 
 ALLOWED_TABLES = set(BUSINESS_TABLES)
@@ -10,6 +12,17 @@ ALLOWED_TABLES = set(BUSINESS_TABLES)
 
 class SQLTool(Tool):
     """基于只读SQL查询经营数据的工具"""
+
+    def __init__(
+        self,
+        *,
+        data_source: BusinessDataSource | None = None,
+        snapshot_catalog: SnapshotCatalog | None = None,
+    ) -> None:
+        if (data_source is None) != (snapshot_catalog is None):
+            raise ValueError("公司数据源和 schema snapshot 必须同时提供")
+        self._data_source = data_source
+        self._snapshot_catalog = snapshot_catalog
 
     @property
     def name(self) -> str:
@@ -29,7 +42,15 @@ class SQLTool(Tool):
                 repairable=False,
             )
         try:
-            columns, rows = execute_readonly_sql(sql, allowed_tables=ALLOWED_TABLES)
+            if self._snapshot_catalog is None:
+                columns, rows = execute_readonly_sql(sql, allowed_tables=ALLOWED_TABLES)
+            else:
+                columns, rows = execute_readonly_sql(
+                    sql,
+                    allowed_tables=set(self._snapshot_catalog.tables),
+                    catalog=self._snapshot_catalog,
+                    data_source=self._data_source,
+                )
             return ToolOutput(success=True, data={"columns": columns, "rows": rows})
         except ValueError as error:
             return ToolOutput(

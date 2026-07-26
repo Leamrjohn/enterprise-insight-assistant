@@ -12,16 +12,17 @@ from app.models.document_chunk import DocumentChunk
 def search_similar_chunks(
     db: Session,
     embedding: list[float],
-    user_id: int,
+    company_id: int,
     top_k: int = 5,
     min_score: float = 0.5,
+    document_ids: list[int] | None = None,
 ) -> list[dict]:
     """搜索与给定向量最相似的文档分块
 
     参数：
         db: 数据库会话
         embedding: 查询向量（384 维）
-        user_id: 用户 ID（用于权限过滤）
+        company_id: 公司 ID（用于租户过滤）
         top_k: 返回前几条结果
         min_score: 最低相似度阈值
 
@@ -30,7 +31,10 @@ def search_similar_chunks(
     """
     embedding_str = "[" + ",".join(str(v) for v in embedding) + "]"
 
-    sql = text("""
+    scope_filter = (
+        "AND dc.document_id = ANY(:document_ids)" if document_ids is not None else ""
+    )
+    sql = text(f"""
         SELECT
             dc.id AS chunk_id,
             dc.document_id,
@@ -40,8 +44,9 @@ def search_similar_chunks(
         FROM document_chunks dc
         JOIN documents d ON d.id = dc.document_id
         WHERE
-            d.user_id = :user_id
+            d.company_id = :company_id
             AND 1 - (dc.embedding <=> :embedding) > :min_score
+            {scope_filter}
         ORDER BY dc.embedding <=> :embedding
         LIMIT :top_k
     """)
@@ -50,9 +55,10 @@ def search_similar_chunks(
         sql,
         {
             "embedding": embedding_str,
-            "user_id": user_id,
+            "company_id": company_id,
             "min_score": min_score,
             "top_k": top_k,
+            "document_ids": document_ids,
         },
     ).fetchall()
 
@@ -70,7 +76,7 @@ def search_similar_chunks(
 
 def delete_embeddings_by_document(db: Session, document_id: int) -> None:
     """删除文档的所有向量（删除文档时同步调用）"""
-    db.query(DocumentChunk).filter(
-        DocumentChunk.document_id == document_id
-    ).update({DocumentChunk.embedding: None})
+    db.query(DocumentChunk).filter(DocumentChunk.document_id == document_id).update(
+        {DocumentChunk.embedding: None}
+    )
     db.commit()

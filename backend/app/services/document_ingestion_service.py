@@ -13,10 +13,12 @@ from sqlalchemy.exc import IntegrityError
 from app.core.rag.embeddings_local import LocalEmbeddingProvider
 from app.core.exceptions import DuplicateDocumentError, EmptyDocumentError
 
+
 def upload_document_service(
     db: Session,
     *,
-    user_id: int,
+    uploaded_by_user_id: int,
+    company_id: int | None,
     file_stream: BinaryIO,
     original_name: str | None,
     settings: Settings,
@@ -25,7 +27,9 @@ def upload_document_service(
         file_stream=file_stream, original_name=original_name, settings=settings
     )
     try:
-        existing_document = get_document_by_sha256(db, stored_file.sha256)
+        existing_document = get_document_by_sha256(
+            db, stored_file.sha256, company_id=company_id
+        )
         if existing_document is not None:
             raise DuplicateDocumentError(
                 f"Document with SHA256 {stored_file.sha256} already exists."
@@ -33,7 +37,8 @@ def upload_document_service(
 
         record = add_uploaded_document(
             db=db,
-            user_id=user_id,
+            uploaded_by_user_id=uploaded_by_user_id,
+            company_id=company_id,
             name=stored_file.original_name,
             file_path=stored_file.relative_path,
             sha256=stored_file.sha256,
@@ -58,7 +63,7 @@ def upload_document_service(
 def process_document_chunks(
     db: Session,
     document: Documents,
-    settings:  Settings,
+    settings: Settings,
 ) -> Documents:
 
     document_id = document.id
@@ -77,12 +82,8 @@ def process_document_chunks(
         embeddings = LocalEmbeddingProvider().embed_batch(chunk_texts)
 
         if len(embeddings) != len(chunk_texts):
-            raise RuntimeError(
-                "Embedding count does not match document chunk count"
-            )
-        for index, (chunk_text, embedding) in enumerate(
-            zip(chunk_texts, embeddings)
-        ):
+            raise RuntimeError("Embedding count does not match document chunk count")
+        for index, (chunk_text, embedding) in enumerate(zip(chunk_texts, embeddings)):
             add_chunk(
                 db=db,
                 document_id=document_id,

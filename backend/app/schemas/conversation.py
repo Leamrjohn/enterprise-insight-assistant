@@ -14,6 +14,7 @@ MessageStatus = Literal[
     "partial",
     "failed",
     "cancelled",
+    "needs_clarification",
 ]
 
 
@@ -21,12 +22,14 @@ class ConversationCreate(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
 
     title: str | None = Field(default=None, min_length=1, max_length=255)
+    data_source_id: int | None = Field(default=None, gt=0)
 
 
 class ConversationMessageCreate(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
 
     content: str = Field(min_length=1)
+    document_ids: list[int] | None = None
 
 
 class ConversationOut(BaseModel):
@@ -35,6 +38,8 @@ class ConversationOut(BaseModel):
     id: int
     user_id: int
     title: str | None
+    company_id: int | None
+    data_source_id: int | None
     created_at: datetime
     updated_at: datetime
 

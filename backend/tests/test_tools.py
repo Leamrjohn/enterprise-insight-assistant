@@ -5,6 +5,8 @@ from app.tools.rag import RAGTool
 from app.tools.business_semantic_catalog import BUSINESS_TABLES
 from app.tools.sql import SQLTool
 from app.core.rag.engine import EvidenceRef
+from app.models.company import BusinessDataSource
+from app.tools.snapshot_catalog import SnapshotCatalog
 from psycopg.errors import GroupingError
 
 
@@ -39,7 +41,9 @@ def test_rag_tool_returns_failure_when_embedding_initialization_fails(monkeypatc
         fail_if_database_session_is_created,
     )
 
-    result = RAGTool().execute(ToolInput(parameters={"question": "test", "user_id": 1}))
+    result = RAGTool().execute(
+        ToolInput(parameters={"question": "test", "company_id": 1})
+    )
 
     assert result.success is False
     assert result.error == "RAG retrieval failed"
@@ -79,7 +83,7 @@ def test_rag_tool_uses_reranked_evidence_for_prompt(monkeypatch):
     )
 
     result = RAGTool(reranker=FakeReranker([0.12, 0.91])).execute(
-        ToolInput(parameters={"question": "客户合同为何影响销售", "user_id": 1})
+        ToolInput(parameters={"question": "客户合同为何影响销售", "company_id": 1})
     )
 
     assert result.success is True
@@ -108,7 +112,7 @@ def test_rag_tool_rejects_high_vector_score_with_low_rerank_score(monkeypatch):
     )
 
     result = RAGTool(reranker=FakeReranker([0.12])).execute(
-        ToolInput(parameters={"question": "客户合同为何影响销售", "user_id": 1})
+        ToolInput(parameters={"question": "客户合同为何影响销售", "company_id": 1})
     )
 
     assert result.success is True
@@ -207,3 +211,60 @@ def test_sql_tool_returns_safe_failure_when_database_execution_raises(monkeypatc
     assert result.error == "经营数据查询暂时无法完成。"
     assert result.error_code == "business_db_execution_failed"
     assert result.repairable is False
+
+
+def test_sql_tool_passes_tenant_source_and_snapshot_catalog_to_executor(monkeypatch):
+    captured: dict[str, object] = {}
+    catalog = SnapshotCatalog.from_snapshot(
+        {
+            "tables": {"inventory": [{"name": "on_hand"}]},
+            "joins": [],
+        }
+    )
+    source = BusinessDataSource(
+        id=4,
+        company_id=9,
+        name="acme-db",
+        dialect="postgresql",
+        connection_config={
+            "host": "db",
+            "port": 5432,
+            "database": "acme",
+            "user": "readonly",
+            "schema": "public",
+        },
+        credential_env_var="ACME_PASSWORD",
+    )
+
+    def fake_execute_readonly_sql(
+        sql: str,
+        allowed_tables: set[str],
+        **kwargs: object,
+    ):
+        captured["sql"] = sql
+        captured["allowed_tables"] = allowed_tables
+        captured.update(kwargs)
+        return ["on_hand"], [(12,)]
+
+    monkeypatch.setattr("app.tools.sql.execute_readonly_sql", fake_execute_readonly_sql)
+
+    result = SQLTool(data_source=source, snapshot_catalog=catalog).execute(
+        ToolInput(parameters={"sql": "SELECT i.on_hand FROM inventory AS i"})
+    )
+
+    assert result.success is True
+    assert captured["allowed_tables"] == {"inventory"}
+    assert captured["catalog"] is catalog
+    assert captured["data_source"] is source
+
+
+def test_sql_tool_requires_source_and_snapshot_together() -> None:
+    catalog = SnapshotCatalog.from_snapshot(
+        {"tables": {"inventory": [{"name": "on_hand"}]}, "joins": []}
+    )
+
+    try:
+        SQLTool(snapshot_catalog=catalog)
+        assert False, "missing source should be rejected"
+    except ValueError as error:
+        assert "必须同时提供" in str(error)

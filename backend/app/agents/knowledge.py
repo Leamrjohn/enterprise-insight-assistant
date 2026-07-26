@@ -5,6 +5,7 @@ from app.core.gateway.base import ModelGateway
 from app.tools.protocol import Tool, ToolInput
 from app.tools.rag import RAGTool
 from app.core.gateway.factory import get_model_gateway
+from app.core.exceptions import StructuredOutputError
 from app.core.rag.result_parser import parse_analysis_result
 
 
@@ -33,12 +34,13 @@ class KnowledgeAgent(Agent):
 
     def run(self, input: AgentInput) -> AgentOutput:
         """执行知识检索"""
-        tool_input = ToolInput(
-            parameters={
-                "question": input.question,
-                "user_id": input.user_id,
-            }
-        )
+        parameters = {"question": input.question}
+        company_id = input.context.get("company_id")
+        if company_id is not None:
+            parameters["company_id"] = company_id
+        if input.context.get("document_ids") is not None:
+            parameters["document_ids"] = input.context["document_ids"]
+        tool_input = ToolInput(parameters=parameters)
         result = self._rag_tool.execute(tool_input)
         if not result.success:
             return AgentOutput(
@@ -66,10 +68,21 @@ class KnowledgeAgent(Agent):
             system_prompt=data["system_prompt"],
             json_mode=True,
         )
-        parsed_result = parse_analysis_result(
-            raw_output,
-            set(data["allowed_chunk_ids"]),
-        )
+        try:
+            parsed_result = parse_analysis_result(
+                raw_output,
+                set(data["allowed_chunk_ids"]),
+            )
+        except StructuredOutputError:
+            # A malformed model answer or an untrusted citation is not evidence.
+            # Preserve any independently verified data result by letting Reviewer
+            # produce a partial report instead of aborting the whole workflow.
+            return AgentOutput(
+                success=True,
+                answer="无法根据现有文档形成可引用的原因判断。",
+                evidence=[],
+                error_code="knowledge_invalid_output",
+            )
 
         retrieved_evidences = {
             evidence["chunk_id"]: evidence for evidence in data["evidences"]

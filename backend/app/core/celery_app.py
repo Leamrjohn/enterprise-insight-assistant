@@ -22,7 +22,14 @@ celery_app.conf.update(
     task_acks_late=True,
     worker_prefetch_multiplier=1,
     imports=[
-    "app.tasks.analysis_tasks",
-    "app.tasks.document_tasks",
-],
+        "app.tasks.analysis_tasks",
+        "app.tasks.document_tasks",
+        "app.tasks.outbox_tasks",
+    ],
+    beat_schedule={
+        "publish-pending-analysis-task-events": {
+            "task": "app.tasks.outbox_tasks.publish_pending_analysis_task_events",
+            "schedule": 5.0,
+        }
+    },
 )

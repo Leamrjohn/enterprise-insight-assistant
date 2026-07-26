@@ -29,7 +29,6 @@ def create_task(
         db=db, user_id=current_user.id, question=request_model.question
     )
 
-
     # 发送异步任务给 Celery Worker
     process_analysis_task.delay(task_id=record.id)
 

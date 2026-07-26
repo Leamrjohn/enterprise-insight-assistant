@@ -28,9 +28,7 @@ class DocumentChunk(Base):
     token_count: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0, server_default="0"
     )
-    embedding: Mapped[list[float] | None] = mapped_column(
-        Vector(384), nullable=True
-    )
+    embedding: Mapped[list[float] | None] = mapped_column(Vector(384), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

@@ -29,8 +29,9 @@ class RAGTool(Tool):
 
     def execute(self, input: ToolInput) -> ToolOutput:
         question = input.parameters.get("question")
-        user_id = input.parameters.get("user_id")
-        if not question or not user_id:
+        company_id = input.parameters.get("company_id")
+        document_ids = input.parameters.get("document_ids")
+        if not question or not company_id:
             return ToolOutput(success=False, error="缺少参数")
 
         db = None
@@ -40,10 +41,11 @@ class RAGTool(Tool):
             evidences = retrieve_evidence(
                 db=db,
                 question=question,
-                user_id=user_id,
+                company_id=company_id,
                 embedder=LocalEmbeddingProvider(),
                 top_k=settings.rag_retrieval_top_k,
                 min_score=settings.rag_retrieval_min_score,
+                document_ids=document_ids,
             )
             reranker = self._reranker or LocalCrossEncoderReranker(
                 settings.reranker_model
@@ -96,7 +98,7 @@ class RAGTool(Tool):
                 "RAG retrieval failed",
                 exc_info=True,
                 extra={
-                    "user_id": user_id,
+                    "company_id": company_id,
                     "error_type": type(exc).__name__,
                 },
             )
@@ -108,7 +110,7 @@ class RAGTool(Tool):
         except Exception:
             logger.exception(
                 "RAG tool execution failed",
-                extra={"user_id": user_id},
+                extra={"company_id": company_id},
             )
             return ToolOutput(
                 success=False,

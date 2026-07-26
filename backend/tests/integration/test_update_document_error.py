@@ -3,6 +3,7 @@ from fastapi.testclient import TestClient
 from app.main import app
 from app.api import document as document_api
 from app.models.user import User
+from app.models.company import Company, CompanyMember
 from uuid import uuid4
 from app.db.session import get_db
 
@@ -12,6 +13,18 @@ def test_unhandled_error_returns_safe_response(
     api_key = uuid4().hex
     user = User(name="test", api_key=api_key)
     db_session.add(user)
+    db_session.flush()
+    company = Company(name="document-error-company")
+    db_session.add(company)
+    db_session.flush()
+    db_session.add(
+        CompanyMember(
+            company_id=company.id,
+            user_id=user.id,
+            role="analyst",
+            status="approved",
+        )
+    )
     db_session.flush()
 
     def override_get_db():
@@ -39,7 +52,7 @@ def test_unhandled_error_returns_safe_response(
         assert response.headers.get("X-Request-ID")
         assert response.json() == {
             "code": "internal_error",
-            "message": "internal server error",
+            "message": "服务器内部错误，请稍后重试。",
             "details": [],
         }
         assert "sensitive internal detail" not in response.text

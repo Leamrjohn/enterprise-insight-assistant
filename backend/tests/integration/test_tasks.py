@@ -9,6 +9,7 @@ from app.core.auth import get_current_user
 from app.db.session import SessionLocal
 from app.main import app
 from app.models.analysis_task import AnalysisTask
+from app.models.company import Company, CompanyMember
 from app.models.conversation import Conversation, ConversationMessage
 from app.models.user import User
 from app.tasks.analysis_tasks import process_analysis_task
@@ -38,8 +39,14 @@ def create_conversation_analysis_task(
     *,
     question: str,
     status: str = "queued",
+    stage: str = "queued",
+    company_id: int | None = None,
 ) -> tuple[AnalysisTask, ConversationMessage]:
-    conversation = Conversation(user_id=user_id, title="worker conversation")
+    conversation = Conversation(
+        user_id=user_id,
+        company_id=company_id,
+        title="worker conversation",
+    )
     db.add(conversation)
     db.flush()
     user_message = ConversationMessage(
@@ -56,7 +63,8 @@ def create_conversation_analysis_task(
         input_message_id=user_message.id,
         question=question,
         status=status,
-        stage="queued",
+        stage=stage,
+        company_id=company_id,
     )
     db.add(task)
     db.flush()
@@ -72,14 +80,33 @@ def create_conversation_analysis_task(
     return task, assistant
 
 
+def create_company_context(db: Session, user_id: int) -> Company:
+    company = Company(name=f"task-company-{user_id}")
+    db.add(company)
+    db.flush()
+    db.add(
+        CompanyMember(
+            company_id=company.id,
+            user_id=user_id,
+            role="owner",
+            status="approved",
+        )
+    )
+    db.flush()
+    return company
+
+
 def test_cancel_queued_task(
     client: TestClient, db_session: Session, test_user: User
 ) -> None:
-    task = create_analysis_task(
-        db_session, test_user.id, status="queued", stage="queued"
+    company = create_company_context(db_session, test_user.id)
+    task, _ = create_conversation_analysis_task(
+        db_session, test_user.id, question="test question", company_id=company.id
     )
 
-    response = client.post(f"/tasks/{task.id}/cancel")
+    response = client.post(
+        f"/conversations/{task.conversation_id}/tasks/{task.id}/cancel"
+    )
 
     assert response.status_code == 200
     assert response.json()["status"] == "cancelled"
@@ -88,13 +115,17 @@ def test_cancel_queued_task(
 def test_cancel_task_updates_assistant_message(
     client: TestClient, db_session: Session, test_user: User
 ) -> None:
+    company = create_company_context(db_session, test_user.id)
     task, assistant = create_conversation_analysis_task(
         db_session,
         test_user.id,
         question="cancel this analysis",
+        company_id=company.id,
     )
 
-    response = client.post(f"/tasks/{task.id}/cancel")
+    response = client.post(
+        f"/conversations/{task.conversation_id}/tasks/{task.id}/cancel"
+    )
 
     assert response.status_code == 200
     db_session.refresh(assistant)
@@ -105,18 +136,35 @@ def test_cancel_task_updates_assistant_message(
 def test_cannot_cancel_completed_task(
     client: TestClient, db_session: Session, test_user: User
 ) -> None:
-    task = create_analysis_task(
-        db_session, test_user.id, status="completed", stage="completed"
+    company = create_company_context(db_session, test_user.id)
+    task, _ = create_conversation_analysis_task(
+        db_session,
+        test_user.id,
+        question="test question",
+        status="completed",
+        stage="completed",
+        company_id=company.id,
     )
 
-    assert client.post(f"/tasks/{task.id}/cancel").status_code == 409
+    assert (
+        client.post(
+            f"/conversations/{task.conversation_id}/tasks/{task.id}/cancel"
+        ).status_code
+        == 409
+    )
 
 
-def test_task_detail_returns_planner_model_attempts(
+def test_conversation_task_detail_hides_internal_planner_attempts(
     client: TestClient, db_session: Session, test_user: User
 ) -> None:
-    task = create_analysis_task(
-        db_session, test_user.id, status="completed", stage="completed"
+    company = create_company_context(db_session, test_user.id)
+    task, _ = create_conversation_analysis_task(
+        db_session,
+        test_user.id,
+        question="test question",
+        status="completed",
+        stage="completed",
+        company_id=company.id,
     )
     task.result_data = {
         "type": "langgraph_workflow",
@@ -127,24 +175,63 @@ def test_task_detail_returns_planner_model_attempts(
     }
     db_session.flush()
 
-    response = client.get(f"/tasks/{task.id}")
+    response = client.get(f"/conversations/{task.conversation_id}/tasks/{task.id}")
 
     assert response.status_code == 200
-    assert response.json()["result_data"]["planner_result"] == {
-        "status": "ready",
-        "attempts": {"model_attempts": 2},
+    assert response.json()["status"] == "completed"
+    assert "result_data" not in response.json()
+
+
+def test_task_detail_returns_stable_top_level_report(
+    client: TestClient, db_session: Session, test_user: User
+) -> None:
+    company = create_company_context(db_session, test_user.id)
+    task, _ = create_conversation_analysis_task(
+        db_session,
+        test_user.id,
+        question="test question",
+        status="completed",
+        stage="completed",
+        company_id=company.id,
+    )
+    task.result_data = {
+        "report": {
+            "schema_version": "1.0",
+            "status": "partial",
+            "executive_summary": "已确认数据事实，但资料不足。",
+            "confirmed_facts": [],
+            "hypotheses": [],
+            "recommendations": [],
+            "data_evidence": [],
+            "document_citations": [],
+            "limitations": [
+                {
+                    "code": "insufficient_documents",
+                    "message": "资料不足。",
+                    "next_step": "上传相关业务资料。",
+                }
+            ],
+        }
     }
+    db_session.flush()
+
+    response = client.get(f"/conversations/{task.conversation_id}/tasks/{task.id}")
+
+    assert response.status_code == 200
+    assert response.json()["report"] == task.result_data["report"]
 
 
 def test_other_user_cannot_cancel_task(
     client: TestClient, db_session: Session, test_user: User
 ) -> None:
-    task = create_analysis_task(
-        db_session, test_user.id, status="queued", stage="queued"
+    company = create_company_context(db_session, test_user.id)
+    task, _ = create_conversation_analysis_task(
+        db_session, test_user.id, question="test question", company_id=company.id
     )
     other_user = User(name="other-user", api_key="other-api-key")
     db_session.add(other_user)
     db_session.flush()
+    create_company_context(db_session, other_user.id)
 
     def override_other_user() -> User:
         return other_user
@@ -154,7 +241,12 @@ def test_other_user_cannot_cancel_task(
 
     app.dependency_overrides[get_current_user] = override_other_user
     try:
-        assert client.post(f"/tasks/{task.id}/cancel").status_code == 404
+        assert (
+            client.post(
+                f"/conversations/{task.conversation_id}/tasks/{task.id}/cancel"
+            ).status_code
+            == 404
+        )
     finally:
         app.dependency_overrides[get_current_user] = override_test_user
 
@@ -205,7 +297,9 @@ def test_worker_runs_langgraph_and_saves_terminal_planner_result(monkeypatch) ->
         question: str,
         user_id: int,
         *,
+        company_id: int | None = None,
         conversation_context: dict | None = None,
+        stage_callback=None,
     ) -> dict:
         calls.append((question, user_id, conversation_context))
         return {
@@ -284,7 +378,9 @@ def test_worker_syncs_running_and_completed_assistant_message(monkeypatch) -> No
             question: str,
             user_id: int,
             *,
+            company_id: int | None = None,
             conversation_context: dict | None = None,
+            stage_callback=None,
         ) -> dict:
             independent_db = SessionLocal()
             try:
@@ -320,6 +416,52 @@ def test_worker_syncs_running_and_completed_assistant_message(monkeypatch) -> No
         _delete_created_records(db, task_id, user_id)
 
 
+def test_worker_persists_node_stage_before_node_execution(monkeypatch) -> None:
+    db = SessionLocal()
+    task_id: int | None = None
+    user_id: int | None = None
+    try:
+        suffix = uuid4().hex
+        user = User(name=f"stage-user-{suffix}", api_key=f"stage-key-{suffix}")
+        db.add(user)
+        db.flush()
+        db.commit()
+        user_id = user.id
+        task = AnalysisTask(
+            user_id=user_id, question="销售额", status="queued", stage="queued"
+        )
+        db.add(task)
+        db.commit()
+        task_id = task.id
+
+        def fake_run_analysis(question, user_id, *, stage_callback=None, **kwargs):
+            assert stage_callback is not None
+            stage_callback("querying_data")
+            independent_db = SessionLocal()
+            try:
+                stored = independent_db.get(AnalysisTask, task_id)
+                assert stored is not None
+                assert stored.status == "running"
+                assert stored.stage == "querying_data"
+            finally:
+                independent_db.close()
+            return {
+                "plan": {"action": "direct_response", "route": None},
+                "terminal_result": {"outcome": "direct_response"},
+                "final_answer": "分析完成。",
+            }
+
+        monkeypatch.setattr(analysis_tasks, "run_analysis", fake_run_analysis)
+        process_analysis_task.run(task_id=task_id)
+
+        db.expire_all()
+        stored_task = db.get(AnalysisTask, task_id)
+        assert stored_task is not None
+        assert stored_task.stage == "completed"
+    finally:
+        _delete_created_records(db, task_id, user_id)
+
+
 def test_worker_syncs_partial_assistant_message(monkeypatch) -> None:
     db = SessionLocal()
     task_id: int | None = None
@@ -340,7 +482,7 @@ def test_worker_syncs_partial_assistant_message(monkeypatch) -> None:
         monkeypatch.setattr(
             analysis_tasks,
             "run_analysis",
-            lambda question, user_id, *, conversation_context=None: {
+            lambda question, user_id, *, company_id=None, conversation_context=None, stage_callback=None: {
                 "plan": {"action": "analyze", "route": "hybrid"},
                 "final_answer": "销售额已下降，但资料不足以确认原因。",
                 "review_result": {"review_status": "partial"},
@@ -381,9 +523,9 @@ def test_worker_syncs_unexpected_failure_and_skips_terminal_redelivery(
         monkeypatch.setattr(
             analysis_tasks,
             "run_analysis",
-            lambda question, user_id, *, conversation_context=None: (
-                _ for _ in ()
-            ).throw(RuntimeError("boom")),
+            lambda question, user_id, *, company_id=None, conversation_context=None, stage_callback=None: (
+                (_ for _ in ()).throw(RuntimeError("boom"))
+            ),
         )
         with pytest.raises(RuntimeError, match="boom"):
             process_analysis_task.run(task_id=task_id)
@@ -415,7 +557,7 @@ def test_worker_persists_partial_workflow_result(monkeypatch) -> None:
     monkeypatch.setattr(
         analysis_tasks,
         "run_analysis",
-        lambda question, user_id, *, conversation_context=None: {
+        lambda question, user_id, *, company_id=None, conversation_context=None, stage_callback=None: {
             "plan": {
                 "action": "analyze",
                 "route": "hybrid",
@@ -473,7 +615,7 @@ def test_worker_persists_retryable_planner_failure_as_failed(monkeypatch) -> Non
     monkeypatch.setattr(
         analysis_tasks,
         "run_analysis",
-        lambda question, user_id, *, conversation_context=None: {
+        lambda question, user_id, *, company_id=None, conversation_context=None, stage_callback=None: {
             "terminal_result": {
                 "outcome": "failed",
                 "stage": "planning",
@@ -499,15 +641,55 @@ def test_worker_persists_retryable_planner_failure_as_failed(monkeypatch) -> Non
         db.commit()
         task_id = task.id
 
-        process_analysis_task.run(task_id=task_id)
+        with pytest.raises(analysis_tasks.RetryableAnalysisTaskError):
+            process_analysis_task.run(task_id=task_id)
 
         db.expire_all()
         stored_task = db.get(AnalysisTask, task_id)
         assert stored_task is not None
-        assert stored_task.status == "failed"
-        assert stored_task.stage == "completed"
+        assert stored_task.status == "retrying"
+        assert stored_task.stage == "retrying"
         assert stored_task.attempt_count == 1
-        assert stored_task.result_data["terminal_result"]["retryable"] is True
+        assert stored_task.error_type == "RetryableAnalysisTaskError"
+    finally:
+        _delete_created_records(db, task_id, user_id)
+
+
+def test_worker_retries_transient_connection_error(monkeypatch) -> None:
+    monkeypatch.setattr(
+        analysis_tasks,
+        "run_analysis",
+        lambda *args, **kwargs: (_ for _ in ()).throw(ConnectionError("redis down")),
+    )
+    db = SessionLocal()
+    task_id: int | None = None
+    user_id: int | None = None
+    try:
+        suffix = uuid4().hex
+        user = User(
+            name=f"connection-user-{suffix}", api_key=f"connection-key-{suffix}"
+        )
+        db.add(user)
+        db.flush()
+        db.commit()
+        user_id = user.id
+        task = AnalysisTask(
+            user_id=user_id, question="销售额", status="queued", stage="queued"
+        )
+        db.add(task)
+        db.commit()
+        task_id = task.id
+
+        with pytest.raises(analysis_tasks.RetryableAnalysisTaskError):
+            process_analysis_task.run(task_id=task_id)
+
+        db.expire_all()
+        stored_task = db.get(AnalysisTask, task_id)
+        assert stored_task is not None
+        assert stored_task.status == "retrying"
+        assert stored_task.stage == "retrying"
+        assert stored_task.error_type == "ConnectionError"
+        assert stored_task.attempt_count == 1
     finally:
         _delete_created_records(db, task_id, user_id)
 

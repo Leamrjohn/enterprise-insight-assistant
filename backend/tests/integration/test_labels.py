@@ -1,8 +1,27 @@
 from fastapi.testclient import TestClient
+import pytest
 from app.main import app
 from app.core.auth import get_current_user
 
+from app.models.company import Company, CompanyMember
 from app.models.user import User
+
+
+@pytest.fixture(autouse=True)
+def approved_company_member(db_session, test_user: User) -> Company:
+    company = Company(name="label-test-company")
+    db_session.add(company)
+    db_session.flush()
+    db_session.add(
+        CompanyMember(
+            company_id=company.id,
+            user_id=test_user.id,
+            role="owner",
+            status="approved",
+        )
+    )
+    db_session.flush()
+    return company
 
 
 def test_create_label(client: TestClient, db_session, test_user: User):
@@ -82,6 +101,18 @@ def test_create_label(client: TestClient, db_session, test_user: User):
 
     other_user = User(name="other-user", api_key="other-api-key")
     db_session.add(other_user)
+    db_session.flush()
+    other_company = Company(name="other-label-company")
+    db_session.add(other_company)
+    db_session.flush()
+    db_session.add(
+        CompanyMember(
+            company_id=other_company.id,
+            user_id=other_user.id,
+            role="owner",
+            status="approved",
+        )
+    )
     db_session.flush()
 
     def override_current_user() -> User:

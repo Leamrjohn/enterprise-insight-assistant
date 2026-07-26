@@ -45,7 +45,7 @@ def validate_numbers(answer: str, data_result: dict | None) -> tuple[bool, list[
     for ans_val in answer_numbers:
         found = False
         for sql_val in sql_numbers:
-            denominator = abs(sql_val) if sql_val !=0 else 1e-9
+            denominator = abs(sql_val) if sql_val != 0 else 1e-9
             if abs(ans_val - sql_val) / denominator <= 0.1:
                 found = True
                 break

@@ -154,9 +154,7 @@ METRIC_DEFINITIONS = {
         "毛利 = SUM(sales_order_items.line_amount "
         "- sales_order_items.unit_cost * sales_order_items.quantity)。"
     ),
-    "open_receivable": (
-        "未回款余额 = 发票金额减去该发票已关联的回款金额。"
-    ),
+    "open_receivable": ("未回款余额 = 发票金额减去该发票已关联的回款金额。"),
     "ticket_count": "客诉数量 = COUNT(service_tickets.id)。",
 }
 FILTER_VALUE_DEFINITIONS = {

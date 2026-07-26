@@ -26,10 +26,10 @@ def chunk_text(content: str, max_tokens: int = 512) -> list[str]:
             start = 0
             while start < len(words):
                 end = start + max_tokens
-                chunk_words = words[start:end]          # ← 知识点1
-                chunks.append(" ".join(chunk_words))    # ← 知识点2
+                chunk_words = words[start:end]  # ← 知识点1
+                chunks.append(" ".join(chunk_words))  # ← 知识点2
                 start = end
-            continue                                     # ← 知识点3
+            continue  # ← 知识点3
 
         # ── 正常段落：累积到 buffer ──
         if token_count + word_count > max_tokens and buffer:

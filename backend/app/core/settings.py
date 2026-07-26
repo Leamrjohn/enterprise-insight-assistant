@@ -26,13 +26,17 @@ class Settings(BaseSettings):
     cors_origins: list[str] = [
         "http://localhost:3000",
         "http://127.0.0.1:3000",
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
     ]
     storage_dir: Path = BACKEND_DIR / "storage"
     max_upload_size_mb: int = 20
     allowed_document_extensions: list[str] = [".txt", ".pdf", ".md", ".markdown"]
     upload_chunk_size_bytes: int = 1048576
     redis_url: str = "redis://127.0.0.1:6379/0"
-
+    jwt_secret: SecretStr = SecretStr("development-only-change-before-production")
+    jwt_algorithm: str = "HS256"
+    jwt_access_token_minutes: int = 30
 
     database_host: str = "127.0.0.1"
     database_port: int = 5432
@@ -49,10 +53,10 @@ class Settings(BaseSettings):
     business_database_password: SecretStr = SecretStr("")
     llm_provider: Literal["local", "openai", "deepseek"] = "deepseek"
     llm_model: str = "deepseek-chat"
-    openai_api_key : SecretStr |None =None
-    llm_timeout_seconds :int =30
-    llm_temperature :float = 0.2
-    llm_max_output_tokens : int =1024
+    openai_api_key: SecretStr | None = None
+    llm_timeout_seconds: int = 30
+    llm_temperature: float = 0.2
+    llm_max_output_tokens: int = 1024
     deepseek_api_key: SecretStr | None = None
     deepseek_base_url: str = "https://api.deepseek.com"
     reranker_model: str = "BAAI/bge-reranker-base"
@@ -68,6 +72,12 @@ class Settings(BaseSettings):
 
         if not self.business_database_password.get_secret_value():
             raise ValueError("BUSINESS_DATABASE_PASSWORD must not be empty")
+        if (
+            self.app_env == "production"
+            and self.jwt_secret.get_secret_value()
+            == "development-only-change-before-production"
+        ):
+            raise ValueError("JWT_SECRET must be configured in production")
         return self
 
     @field_validator("log_dir", "storage_dir", mode="before")

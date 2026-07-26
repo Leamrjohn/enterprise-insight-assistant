@@ -1,6 +1,7 @@
 from sqlalchemy.orm import Session
 from app.models.document_chunk import DocumentChunk
 
+
 def add_chunk(
     db: Session,
     *,
@@ -10,8 +11,8 @@ def add_chunk(
     token_count: int,
     embedding: list[float],
     page_number: int | None = None,
-)-> DocumentChunk:
-    chunk=DocumentChunk(
+) -> DocumentChunk:
+    chunk = DocumentChunk(
         document_id=document_id,
         chunk_index=chunk_index,
         content=content,
@@ -23,10 +24,16 @@ def add_chunk(
     db.flush()
     return chunk
 
+
 def get_chunks_by_document_id(
-      db: Session,
+    db: Session,
     document_id: int,
-)->list[DocumentChunk]:
-    return db.query(DocumentChunk).filter(
-         DocumentChunk.document_id == document_id,
-    ).order_by(DocumentChunk.chunk_index).all()
+) -> list[DocumentChunk]:
+    return (
+        db.query(DocumentChunk)
+        .filter(
+            DocumentChunk.document_id == document_id,
+        )
+        .order_by(DocumentChunk.chunk_index)
+        .all()
+    )

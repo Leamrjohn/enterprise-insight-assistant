@@ -19,6 +19,12 @@ class Conversation(Base):
         nullable=False,
         index=True,
     )
+    company_id: Mapped[int | None] = mapped_column(
+        ForeignKey("companies.id", ondelete="SET NULL"), nullable=True, index=True
+    )
+    data_source_id: Mapped[int | None] = mapped_column(
+        ForeignKey("business_data_sources.id", ondelete="SET NULL"), nullable=True
+    )
     title: Mapped[str | None] = mapped_column(String(255), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
@@ -47,7 +53,8 @@ class ConversationMessage(Base):
         ),
         CheckConstraint(
             "status IN ("
-            "'queued', 'running', 'completed', 'partial', 'failed', 'cancelled'"
+            "'queued', 'running', 'completed', 'partial', 'failed', 'cancelled', "
+            "'needs_clarification'"
             ")",
             name="status_values",
         ),

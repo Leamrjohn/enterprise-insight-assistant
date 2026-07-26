@@ -1,7 +1,26 @@
 from fastapi.testclient import TestClient
+import pytest
+from app.models.company import Company, CompanyMember
 from app.models.user import User
 from app.core.auth import get_current_user
 from app.main import app
+
+
+@pytest.fixture(autouse=True)
+def approved_company_member(db_session, test_user: User) -> Company:
+    company = Company(name="todo-test-company")
+    db_session.add(company)
+    db_session.flush()
+    db_session.add(
+        CompanyMember(
+            company_id=company.id,
+            user_id=test_user.id,
+            role="owner",
+            status="approved",
+        )
+    )
+    db_session.flush()
+    return company
 
 
 def test_create_todo_item(client: TestClient, test_user: User) -> None:
@@ -62,6 +81,18 @@ def test_user_cannot_update_another_users_todo_item(
     item_id = created["id"]
     other_user = User(name="B", api_key="miyao")
     db_session.add(other_user)
+    db_session.flush()
+    other_company = Company(name="other-todo-company")
+    db_session.add(other_company)
+    db_session.flush()
+    db_session.add(
+        CompanyMember(
+            company_id=other_company.id,
+            user_id=other_user.id,
+            role="owner",
+            status="approved",
+        )
+    )
     db_session.flush()
 
     def overrides_return_oyther_user():

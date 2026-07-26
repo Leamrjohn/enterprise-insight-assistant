@@ -12,8 +12,8 @@ logger = logging.getLogger("app.request")
 
 # ── 限流 ──────────────────────────────────
 _rate_limit_store: dict[str, list[float]] = {}
-RATE_LIMIT_MAX = 100        # 每分钟最多 100 次请求
-RATE_LIMIT_WINDOW = 60      # 滑动窗口 60 秒
+RATE_LIMIT_MAX = 100  # 每分钟最多 100 次请求
+RATE_LIMIT_WINDOW = 60  # 滑动窗口 60 秒
 
 
 def _check_rate_limit(api_key: str) -> JSONResponse | None:
@@ -35,7 +35,11 @@ def _check_rate_limit(api_key: str) -> JSONResponse | None:
     if len(timestamps) >= RATE_LIMIT_MAX:
         return JSONResponse(
             status_code=429,
-            content={"detail": "请求过于频繁，请稍后重试"},
+            content={
+                "code": "rate_limited",
+                "message": "请求过于频繁，请稍后重试。",
+                "details": [],
+            },
         )
 
     timestamps.append(now)

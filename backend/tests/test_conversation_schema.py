@@ -37,6 +37,23 @@ def test_queued_assistant_message_allows_null_content() -> None:
     assert message.content is None
 
 
+def test_clarification_assistant_message_is_a_valid_terminal_message() -> None:
+    now = datetime.now(timezone.utc)
+
+    message = ConversationMessageOut(
+        id=1,
+        conversation_id=2,
+        role="assistant",
+        content="请补充时间范围。",
+        status="needs_clarification",
+        analysis_task_id=3,
+        created_at=now,
+        updated_at=now,
+    )
+
+    assert message.status == "needs_clarification"
+
+
 @pytest.mark.parametrize("field,value", [("role", "system"), ("status", "retrying")])
 def test_message_output_rejects_unknown_role_or_status(field: str, value: str) -> None:
     now = datetime.now(timezone.utc)

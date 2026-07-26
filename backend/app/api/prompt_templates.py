@@ -12,9 +12,8 @@ from app.services.prompt_template_service import (
     update_prompt_template_service,
     delete_prompt_template_service,
 )
-from app.core.auth import get_current_user
+from app.core.company_auth import CurrentCompanyContext, get_current_company_context
 from app.db.session import get_db
-from app.models.user import User
 from app.core.exceptions import DuplicatePromptTemplateError
 
 router = APIRouter()
@@ -28,12 +27,12 @@ router = APIRouter()
 def create_prompt_template(
     request_model: PromptTemplateCreate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    context: CurrentCompanyContext = Depends(get_current_company_context),
 ):
     try:
         return create_prompt_template_service(
             db,
-            current_user.id,
+            context.user.id,
             request_model.name,
             request_model.template,
             request_model.description,
@@ -49,11 +48,12 @@ def create_prompt_template(
     response_model=list[PromptTemplateOut],
 )
 def list_prompt_templates(
-    db: Session = Depends(get_db), current_user: User = Depends(get_current_user)
+    db: Session = Depends(get_db),
+    context: CurrentCompanyContext = Depends(get_current_company_context),
 ):
     return list_prompt_templates_service(
         db,
-        current_user.id,
+        context.user.id,
     )
 
 
@@ -64,9 +64,9 @@ def list_prompt_templates(
 def get_prompt_template(
     id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    context: CurrentCompanyContext = Depends(get_current_company_context),
 ):
-    record = get_prompt_template_by_id_service(db, current_user.id, id)
+    record = get_prompt_template_by_id_service(db, context.user.id, id)
     if record is None:
         raise HTTPException(status_code=404, detail="the prompt template is not found")
     return record
@@ -80,7 +80,7 @@ def update_prompt_template(
     id: int,
     request_model: PromptTemplateUpdate,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    context: CurrentCompanyContext = Depends(get_current_company_context),
 ):
     updates = request_model.model_dump(exclude_unset=True)
     if not updates:
@@ -88,7 +88,7 @@ def update_prompt_template(
             status_code=422, detail="at least one field must have updates"
         )
     try:
-        record = update_prompt_template_service(db, current_user.id, id, updates)
+        record = update_prompt_template_service(db, context.user.id, id, updates)
     except DuplicatePromptTemplateError:
         raise HTTPException(
             status_code=409, detail="prompt template name already exists"
@@ -105,8 +105,8 @@ def update_prompt_template(
 def delete_prompt_template(
     id: int,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    context: CurrentCompanyContext = Depends(get_current_company_context),
 ):
-    record = delete_prompt_template_service(db, current_user.id, id)
+    record = delete_prompt_template_service(db, context.user.id, id)
     if record is None:
         raise HTTPException(status_code=404, detail="the prompt template is not found")

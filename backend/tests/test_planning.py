@@ -119,11 +119,12 @@ def test_planning_service_repairs_missing_clarification_question() -> None:
         [
             '{"action":"needs_clarification","route":null,'
             '"reason":"缺少时间范围","clarification_question":null,'
-            '"response_message":null,"resolved_question":null}',
+            '"response_message":null,"resolved_question":null,"clarification":null}',
             '{"action":"needs_clarification","route":null,'
             '"reason":"缺少时间范围",'
             '"clarification_question":"请补充要比较的两个时间段。",'
-            '"response_message":null,"resolved_question":null}',
+            '"response_message":null,"resolved_question":null,'
+            '"clarification":{"missing_slots":["comparison_period"],"examples":[]}}',
         ]
     )
 

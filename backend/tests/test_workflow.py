@@ -1,6 +1,8 @@
 """工作流节点的数据流测试，不调用真实模型或数据库。"""
 
 from app.agents.protocol import AgentOutput
+from app.models.company import BusinessDataSource
+from app.schemas.plannerdecision import PlannerDecision
 from app.services import workflow_nodes
 from app.services import workflow_graph
 from app.services.workflow_graph import _route_after_planner, build_workflow
@@ -20,6 +22,26 @@ def test_effective_question_prefers_the_planner_resolution() -> None:
         )
         == "分析华南区 2025 年 8 月销售额变化。"
     )
+
+
+def test_planner_terminal_renders_structured_clarification_instead_of_free_text() -> (
+    None
+):
+    result = workflow_nodes.planner_terminal_node(
+        {
+            "plan": {
+                "action": "needs_clarification",
+                "reason": "缺少必要条件。",
+                "clarification_question": "无关的旧追问。",
+                "clarification": {
+                    "missing_slots": ["time_range", "region"],
+                    "examples": ["2026年6月", "华东区"],
+                },
+            }
+        }
+    )
+
+    assert result["final_answer"] == "请补充时间范围、区域，例如：2026年6月；华东区。"
     assert (
         workflow_nodes._effective_question({"question": "销售额是多少？", "plan": None})
         == "销售额是多少？"
@@ -57,6 +79,7 @@ def test_run_analysis_uses_planner_node_for_terminal_plan(monkeypatch) -> None:
         "写一首诗",
         user_id=7,
         conversation_context=context,
+        semantic_review_enabled=False,
     )
 
     assert result["plan"]["action"] == "scope_exit"
@@ -120,6 +143,113 @@ def test_planner_node_keeps_attempts_when_planner_failed(monkeypatch) -> None:
         "attempts": {"model_attempts": 2},
     }
     assert result["planner_failure"]["code"] == "planner_invalid_output"
+
+
+def test_planner_semantic_review_can_replace_an_unsafe_initial_plan(
+    monkeypatch,
+) -> None:
+    class FakeSemanticReviewService:
+        model_attempts = 1
+
+        def review_plan(self, **kwargs):
+            assert kwargs["question"] == "查询 Beta 公司的销售额。"
+            return PlannerDecision(
+                action="refuse",
+                route=None,
+                reason="明确请求其他公司数据。",
+                clarification_question=None,
+                response_message="我只能分析当前公司已授权的数据。",
+                resolved_question=None,
+            )
+
+    monkeypatch.setattr(
+        workflow_nodes,
+        "SemanticReviewService",
+        FakeSemanticReviewService,
+    )
+
+    result = workflow_nodes.planner_semantic_review_node(
+        {
+            "question": "查询 Beta 公司的销售额。",
+            "semantic_review_enabled": True,
+            "plan": {
+                "action": "needs_clarification",
+                "route": None,
+                "reason": "缺少时间范围。",
+                "clarification_question": "请补充时间范围。",
+                "response_message": None,
+                "resolved_question": None,
+            },
+            "planner_result": {"attempts": {"model_attempts": 1}},
+        }
+    )
+
+    assert result["plan"]["action"] == "refuse"
+    assert result["planner_result"]["attempts"] == {
+        "model_attempts": 1,
+        "semantic_review_attempts": 1,
+    }
+
+
+def test_planner_semantic_review_stops_analysis_without_structured_intent(
+    monkeypatch,
+) -> None:
+    class FakeSemanticReviewService:
+        model_attempts = 1
+
+        def review_plan(self, **kwargs):
+            return PlannerDecision(
+                action="analyze",
+                route="data_only",
+                reason="查询订单总数。",
+                clarification_question=None,
+                response_message=None,
+                resolved_question="当前订单总数是多少？",
+            )
+
+    monkeypatch.setattr(
+        workflow_nodes, "SemanticReviewService", FakeSemanticReviewService
+    )
+
+    result = workflow_nodes.planner_semantic_review_node(
+        {
+            "question": "当前订单总数是多少？",
+            "semantic_review_enabled": True,
+            "plan": {"action": "analyze", "route": "data_only"},
+            "planner_result": {"attempts": {"model_attempts": 1}},
+        }
+    )
+
+    assert result["plan"]["action"] == "needs_clarification"
+    assert result["planner_result"]["status"] == "intent_contract_missing"
+
+
+def test_data_node_maps_semantic_schema_gap_to_insufficient_evidence(
+    monkeypatch,
+) -> None:
+    class FakeDataAgent:
+        def run(self, input):
+            assert input.context["semantic_review_enabled"] is True
+            return AgentOutput(
+                success=False,
+                error="快照没有广告点击量。",
+                error_code="insufficient_schema",
+                evidence=[{"missing_requirements": ["广告点击量"]}],
+            )
+
+    monkeypatch.setattr(workflow_nodes, "DataAgent", FakeDataAgent)
+
+    result = workflow_nodes.data_node(
+        {
+            "question": "广告点击率是多少？",
+            "user_id": 1,
+            "semantic_review_enabled": True,
+            "plan": {"route": "data_only"},
+        }
+    )
+
+    assert result["data_result"]["status"] == "insufficient_evidence"
+    assert result["data_result"]["candidate"]["missing_requirements"] == ["广告点击量"]
 
 
 def test_planner_router_accepts_only_known_terminal_actions() -> None:
@@ -187,6 +317,51 @@ def test_data_node_records_agent_failure(monkeypatch) -> None:
         },
         "error": "模型输出不符合契约",
     }
+
+
+def test_data_node_builds_agent_with_company_source_and_snapshot(monkeypatch) -> None:
+    captured: dict[str, object] = {}
+    source = BusinessDataSource(
+        id=4,
+        company_id=9,
+        name="acme-db",
+        dialect="postgresql",
+        connection_config={
+            "host": "db",
+            "port": 5432,
+            "database": "acme",
+            "user": "readonly",
+            "schema": "public",
+        },
+        credential_env_var="ACME_PASSWORD",
+    )
+    snapshot = {
+        "tables": {"inventory": [{"name": "on_hand"}]},
+        "joins": [],
+    }
+
+    class FakeDataAgent:
+        def __init__(self, *, data_source, snapshot_catalog) -> None:
+            captured["data_source"] = data_source
+            captured["snapshot_catalog"] = snapshot_catalog
+
+        def run(self, input):
+            return AgentOutput(success=True, evidence=[])
+
+    monkeypatch.setattr(workflow_nodes, "DataAgent", FakeDataAgent)
+
+    result = workflow_nodes.data_node(
+        {
+            "question": "库存还有多少？",
+            "user_id": 1,
+            "business_data_source": source,
+            "schema_catalog": snapshot,
+        }
+    )
+
+    assert result["data_result"]["status"] == "ready"
+    assert captured["data_source"] is source
+    assert captured["snapshot_catalog"].tables == {"inventory": frozenset({"on_hand"})}
 
 
 def test_knowledge_node_keeps_answer_and_citations(monkeypatch) -> None:

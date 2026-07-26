@@ -9,6 +9,12 @@ from app.main import app
 from app.tasks.analysis_tasks import process_analysis_task
 from app.db.session import SessionLocal
 from app.models.analysis_task import AnalysisTask
+from app.models.company import (
+    BusinessDataSource,
+    Company,
+    CompanyMember,
+    SchemaSnapshot,
+)
 from app.models.conversation import Conversation
 from app.models.user import User
 
@@ -146,13 +152,53 @@ def test_conversation_api_commits_before_real_worker_and_returns_assistant_messa
     task_id: int | None = None
     conversation_id: int | None = None
     user_id: int | None = None
+    company_id: int | None = None
+    data_source_id: int | None = None
     try:
         suffix = uuid4().hex
         api_key = f"conversation-api-key-{suffix}"
         user = User(name=f"conversation-api-{suffix}", api_key=api_key)
         db.add(user)
-        db.commit()
+        db.flush()
         user_id = user.id
+        company = Company(name=f"conversation-e2e-company-{suffix}")
+        db.add(company)
+        db.flush()
+        company_id = company.id
+        db.add(
+            CompanyMember(
+                company_id=company.id,
+                user_id=user.id,
+                role="owner",
+                status="approved",
+            )
+        )
+        source = BusinessDataSource(
+            company_id=company.id,
+            name="e2e-direct-response-source",
+            connection_config={
+                "host": "unused-for-direct-response",
+                "port": 5432,
+                "database": "unused",
+                "user": "readonly",
+                "schema": "public",
+            },
+            credential_env_var="BUSINESS_DATABASE_PASSWORD",
+            status="ready",
+        )
+        db.add(source)
+        db.flush()
+        data_source_id = source.id
+        snapshot = SchemaSnapshot(
+            data_source_id=source.id,
+            fingerprint="e" * 64,
+            catalog={"tables": {}},
+            discovered_by_user_id=user.id,
+        )
+        db.add(snapshot)
+        db.flush()
+        source.active_schema_snapshot_id = snapshot.id
+        db.commit()
         headers = {"X-API-Key": api_key}
 
         app.dependency_overrides.clear()
@@ -160,7 +206,10 @@ def test_conversation_api_commits_before_real_worker_and_returns_assistant_messa
             conversation_response = client.post(
                 "/conversations",
                 headers=headers,
-                json={"title": "Planner E2E"},
+                json={
+                    "title": "Planner E2E",
+                    "data_source_id": data_source_id,
+                },
             )
             assert conversation_response.status_code == 201
             conversation_id = conversation_response.json()["id"]
@@ -222,6 +271,16 @@ def test_conversation_api_commits_before_real_worker_and_returns_assistant_messa
             conversation = db.get(Conversation, conversation_id)
             if conversation is not None:
                 db.delete(conversation)
+                db.flush()
+        if data_source_id is not None:
+            source = db.get(BusinessDataSource, data_source_id)
+            if source is not None:
+                db.delete(source)
+                db.flush()
+        if company_id is not None:
+            company = db.get(Company, company_id)
+            if company is not None:
+                db.delete(company)
                 db.flush()
         if user_id is not None:
             user = db.get(User, user_id)

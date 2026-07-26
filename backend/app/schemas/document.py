@@ -1,24 +1,28 @@
-from pydantic import BaseModel, StringConstraints
+from pydantic import BaseModel, Field, StringConstraints
 from typing import Annotated
 from datetime import datetime
 
 NonBlankStr = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
+DocumentMinViewRole = Annotated[str, Field(pattern="^(any|admin|owner)$")]
 
 
 class DocumentCreate(BaseModel):
     name: str
     content: NonBlankStr
     source: str
+    min_view_role: DocumentMinViewRole = "any"
 
 
 class DocumentUpdate(BaseModel):
     name: str
     content: NonBlankStr
     source: str
+    min_view_role: DocumentMinViewRole = "any"
 
 
 class DocumentOut(BaseModel):
     id: int
+    company_id: int | None = None
     name: str
     content: str | None = None
     source: str
@@ -26,6 +30,7 @@ class DocumentOut(BaseModel):
     file_size: int | None = None
     sha256: str | None = None
     status: str = "completed"
+    min_view_role: DocumentMinViewRole = "any"
     created_at: datetime | None = None
     updated_at: datetime | None = None
 

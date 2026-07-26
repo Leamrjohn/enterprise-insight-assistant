@@ -170,7 +170,7 @@ def test_document_worker_indexes_and_retrieves_real_text_file(
         evidences = retrieve_evidence(
             db=db,
             question=stored_document.content,
-            user_id=user_id,
+            company_id=stored_document.company_id,
             embedder=LocalEmbeddingProvider(),
         )
         assert [evidence.chunk_id for evidence in evidences] == [chunks[0].id]
@@ -180,7 +180,7 @@ def test_document_worker_indexes_and_retrieves_real_text_file(
         other_user_evidences = retrieve_evidence(
             db=db,
             question=stored_document.content,
-            user_id=other_user_id,
+            company_id=-1,
             embedder=LocalEmbeddingProvider(),
         )
         assert other_user_evidences == []

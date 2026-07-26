@@ -6,6 +6,7 @@ from app.services.sql_generation import (
     SQLGenerationService,
     build_sql_generation_system_prompt,
 )
+from app.tools.snapshot_catalog import SnapshotCatalog
 
 
 class FakeGateway(ModelGateway):
@@ -85,3 +86,22 @@ def test_builds_safe_repair_prompt_for_sql_semantic_error() -> None:
     assert previous_sql in gateway.prompt
     assert "上一次 SQL 的聚合、字段或关联语义不正确。" in gateway.prompt
     assert "sql_semantic_error" not in gateway.prompt
+
+
+def test_builds_prompt_from_company_snapshot_without_static_tables() -> None:
+    catalog = SnapshotCatalog.from_snapshot(
+        {
+            "tables": {"inventory": [{"name": "on_hand"}, {"name": "sku"}]},
+            "joins": [],
+        }
+    )
+
+    prompt = build_sql_generation_system_prompt(catalog)
+
+    assert "inventory" in prompt
+    assert "on_hand" in prompt
+    assert "sales_orders" not in prompt
+    assert "无；禁止 JOIN" in prompt
+    assert "当前契约快照是唯一可用的数据字典" in prompt
+    assert "每个会展示给用户的 SELECT 表达式都必须用中文业务别名" in prompt
+    assert "purpose 也必须是面向业务用户的简短中文说明" in prompt

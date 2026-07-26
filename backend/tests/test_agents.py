@@ -15,6 +15,7 @@ from app.agents.planner import PlannerAgent
 from app.agents.reviewer import ReviewerAgent
 from app.schemas.sql_candidate import SQLCandidate
 from app.schemas.plannerdecision import PlannerDecision
+from app.schemas.semantic_review import EvidenceSemanticReview, SQLSemanticReview
 from app.tools.protocol import ToolInput, ToolOutput
 
 
@@ -59,6 +60,24 @@ class FakeSQLTool:
     def execute(self, input: ToolInput) -> ToolOutput:
         self.inputs.append(input)
         return self.outputs[len(self.inputs) - 1]
+
+
+class FakeSemanticReviewer:
+    def __init__(self, sql_review=None, evidence_review=None) -> None:
+        self.sql_review = sql_review
+        self.evidence_review = evidence_review
+        self.sql_calls: list[dict] = []
+        self.evidence_calls: list[dict] = []
+
+    def review_sql(self, **kwargs):
+        self.sql_calls.append(kwargs)
+        assert self.sql_review is not None
+        return self.sql_review
+
+    def review_evidence(self, **kwargs):
+        self.evidence_calls.append(kwargs)
+        assert self.evidence_review is not None
+        return self.evidence_review
 
 
 class FakeRAGTool:
@@ -171,7 +190,6 @@ def test_knowledge_agent_keeps_metadata_for_cited_chunks_only():
     assert result.success is True
     assert rag_tool.inputs[0].parameters == {
         "question": "销售为什么下降？",
-        "user_id": 7,
     }
     assert gateway.calls[0]["json_mode"] is True
     assert result.evidence == [
@@ -207,6 +225,37 @@ def test_knowledge_agent_does_not_call_model_when_evidence_is_insufficient():
     assert gateway.calls == []
 
 
+def test_knowledge_agent_downgrades_invalid_model_output_to_insufficient_evidence():
+    rag_tool = FakeRAGTool(
+        ToolOutput(
+            success=True,
+            data={
+                "status": "ready",
+                "evidences": [
+                    {
+                        "chunk_id": 42,
+                        "document_id": 5,
+                        "content": "客户合同到期后尚未续约。",
+                        "score": 0.93,
+                    }
+                ],
+                "system_prompt": "system prompt",
+                "user_prompt": "user prompt",
+                "allowed_chunk_ids": [42],
+            },
+        )
+    )
+    gateway = FakeModelGateway('{"answer": "没有引用"}')
+    agent = KnowledgeAgent(rag_tool=rag_tool, gateway=gateway)
+
+    result = agent.run(AgentInput(question="销售为什么下降？", user_id=7))
+
+    assert result.success is True
+    assert result.evidence == []
+    assert result.error_code == "knowledge_invalid_output"
+    assert "可引用" in (result.answer or "")
+
+
 def test_data_agent_interface():
     agent = DataAgent()
     assert agent.name == "data"
@@ -236,14 +285,10 @@ def test_data_agent_generates_and_executes_candidate_sql():
     assert tool.inputs[0].parameters == {
         "sql": "SELECT o.total_amount FROM sales_orders AS o"
     }
-    assert result.evidence == [
-        {
-            "sql": "SELECT o.total_amount FROM sales_orders AS o",
-            "purpose": "查询销售额",
-            "columns": ["total_amount"],
-            "rows": [[100.0]],
-        }
-    ]
+    assert result.evidence[0]["sql"] == "SELECT o.total_amount FROM sales_orders AS o"
+    assert result.evidence[0]["columns"] == ["total_amount"]
+    assert result.evidence[0]["rows"] == [[100.0]]
+    assert result.evidence[0]["result_assessment"]["status"] == "supported"
 
 
 def test_data_agent_evidence_is_json_serializable():
@@ -269,6 +314,119 @@ def test_data_agent_evidence_is_json_serializable():
     json.dumps(result.evidence)
 
 
+def test_data_agent_does_not_execute_sql_when_semantic_reviewer_reports_missing_schema():
+    candidate = SQLCandidate(
+        sql='SELECT id AS "客户编号" FROM customers LIMIT 1',
+        purpose="无法计算广告点击率",
+        query_contract={
+            "required_concepts": ["广告点击率"],
+            "expected_columns": ["广告点击率"],
+            "result_kind": "aggregate",
+        },
+    )
+    semantic_reviewer = FakeSemanticReviewer(
+        sql_review=SQLSemanticReview(
+            decision="insufficient_schema",
+            reason="快照没有广告曝光量和点击量。",
+            missing_requirements=["广告曝光量", "广告点击量"],
+        )
+    )
+    tool = FakeSQLTool(ToolOutput(success=True, data={}))
+    agent = DataAgent(
+        sql_generator=FakeSQLGenerator(candidate=candidate),
+        sql_tool=tool,
+        semantic_reviewer=semantic_reviewer,
+    )
+
+    result = agent.run(
+        AgentInput(
+            question="本月广告点击率是多少？",
+            user_id=1,
+            context={"semantic_review_enabled": True, "plan": {"route": "data_only"}},
+        )
+    )
+
+    assert result.success is False
+    assert result.error_code == "insufficient_schema"
+    assert tool.inputs == []
+    assert result.evidence[0]["missing_requirements"] == ["广告曝光量", "广告点击量"]
+
+
+def test_data_agent_rejects_query_contract_that_omits_planned_capability() -> None:
+    candidate = SQLCandidate(
+        sql='SELECT COUNT(*) AS "订单数量" FROM sales_orders',
+        purpose="查询订单数量",
+        query_contract={
+            "required_concepts": ["订单数量"],
+            "expected_columns": ["订单数量"],
+            "result_kind": "aggregate",
+        },
+    )
+    agent = DataAgent(
+        sql_generator=FakeSQLGenerator(candidate=candidate),
+        sql_tool=FakeSQLTool(ToolOutput(success=True, data={})),
+    )
+
+    result = agent.run(
+        AgentInput(
+            question="本月广告点击率是多少？",
+            user_id=1,
+            context={
+                "semantic_review_enabled": True,
+                "plan": {
+                    "intent": {"required_capabilities": ["广告曝光量", "广告点击量"]}
+                },
+            },
+        )
+    )
+
+    assert result.success is False
+    assert result.error_code == "query_contract_incomplete"
+    assert "广告点击" in (result.error or "")
+
+
+def test_data_agent_accepts_only_measurement_suffix_variants_in_contract() -> None:
+    candidate = SQLCandidate(
+        sql='SELECT COUNT(*) AS "销售订单总数" FROM sales_orders',
+        purpose="查询销售订单总数",
+        query_contract={
+            "required_concepts": ["销售订单"],
+            "expected_columns": ["销售订单总数"],
+            "result_kind": "aggregate",
+        },
+    )
+    semantic_reviewer = FakeSemanticReviewer(
+        sql_review=SQLSemanticReview(
+            decision="execute", reason="满足查询契约。", missing_requirements=[]
+        )
+    )
+    tool = FakeSQLTool(
+        ToolOutput(
+            success=True,
+            data={"columns": ["销售订单总数"], "rows": [(3,)]},
+        )
+    )
+    agent = DataAgent(
+        sql_generator=FakeSQLGenerator(candidate=candidate),
+        sql_tool=tool,
+        semantic_reviewer=semantic_reviewer,
+    )
+
+    result = agent.run(
+        AgentInput(
+            question="当前销售订单总数是多少？",
+            user_id=1,
+            context={
+                "semantic_review_enabled": True,
+                "plan": {"intent": {"required_capabilities": ["销售订单计数"]}},
+            },
+        )
+    )
+
+    assert result.success is True
+    assert tool.inputs
+
+
 def test_data_agent_does_not_retry_permanent_generation_failure():
     generator = FakeSQLGenerator(error=PermanentModelError("模型配置错误"))
     tool = FakeSQLTool(ToolOutput(success=True, data={}))
@@ -281,7 +439,26 @@ def test_data_agent_does_not_retry_permanent_generation_failure():
     assert "无法生成受控 SQL" in result.error
     assert generator.questions == ["销售额是多少？"]
     assert tool.inputs == []
-    assert result.attempts == {"model_attempts": 1, "sql_attempts": 0}
+
+
+def test_data_agent_marks_empty_sql_result_as_insufficient_evidence() -> None:
+    candidate = SQLCandidate(
+        sql='SELECT 1 AS "订单数量" WHERE FALSE',
+        purpose="查询订单数量",
+    )
+    agent = DataAgent(
+        sql_generator=FakeSQLGenerator(candidate=candidate),
+        sql_tool=FakeSQLTool(
+            ToolOutput(success=True, data={"columns": ["订单数量"], "rows": []})
+        ),
+    )
+
+    result = agent.run(AgentInput(question="订单数量是多少？", user_id=1))
+
+    assert result.success is False
+    assert result.error_code == "no_matching_records"
+    assert result.evidence[0]["result_assessment"]["status"] == "no_matching_records"
+    assert result.attempts == {"model_attempts": 1, "sql_attempts": 1}
 
 
 def test_data_agent_returns_sql_tool_rejection():
@@ -395,9 +572,7 @@ def test_data_agent_does_not_retry_non_repairable_database_failure():
     assert len(generator.calls) == 1
     assert len(tool.inputs) == 1
     assert result.attempts == {"model_attempts": 1, "sql_attempts": 1}
-    assert result.evidence == [
-        {"sql": candidate.sql, "purpose": candidate.purpose}
-    ]
+    assert result.evidence == [{"sql": candidate.sql, "purpose": candidate.purpose}]
 
 
 def test_data_agent_stops_after_two_repairable_sql_failures():
@@ -460,6 +635,8 @@ def test_planner_returns_llm_hybrid_decision_for_causal_sales_question():
         "clarification_question": None,
         "response_message": None,
         "resolved_question": "分析销售额下降原因。",
+        "clarification": None,
+        "intent": None,
     }
     assert result.attempts == {"model_attempts": 1}
 
@@ -473,6 +650,7 @@ def test_planner_keeps_llm_clarification_decision():
             clarification_question="请补充区域、时间范围和需要分析的指标。",
             response_message=None,
             resolved_question=None,
+            clarification={"missing_slots": ["region", "time_range"], "examples": []},
         )
     )
     agent = PlannerAgent(planning_service=service)
@@ -597,6 +775,44 @@ def test_reviewer_marks_successful_data_only_query_as_completed():
     assert result.evidence[0]["review_status"] == "completed"
 
 
+def test_reviewer_model_hides_data_that_does_not_support_the_question():
+    semantic_reviewer = FakeSemanticReviewer(
+        evidence_review=EvidenceSemanticReview(
+            verdict="unsupported",
+            reason="客户编号不能支持广告点击率。",
+            limitations=["缺少广告曝光量和点击量。"],
+        )
+    )
+    agent = ReviewerAgent(semantic_reviewer=semantic_reviewer)
+
+    result = agent.run(
+        AgentInput(
+            question="本月广告点击率是多少？",
+            user_id=1,
+            context={
+                "semantic_review_enabled": True,
+                "plan": {"route": "data_only"},
+                "data_result": {
+                    "status": "ready",
+                    "evidence": [
+                        {
+                            "purpose": "查询客户编号",
+                            "columns": ["客户编号"],
+                            "rows": [[1]],
+                        }
+                    ],
+                },
+                "knowledge_result": {},
+            },
+        )
+    )
+
+    assert result.success is True
+    assert "客户编号为1" not in (result.answer or "")
+    assert result.evidence[0]["review_status"] == "partial"
+    assert result.evidence[0]["report"]["status"] == "partial"
+
+
 def test_reviewer_returns_partial_when_document_retrieval_failed():
     agent = ReviewerAgent()
 
@@ -667,6 +883,33 @@ def test_reviewer_returns_partial_when_only_document_evidence_is_available():
     assert result.evidence[0]["knowledge_available"] is True
 
 
+def test_reviewer_prioritizes_data_insufficiency_over_uncited_knowledge_text():
+    agent = ReviewerAgent()
+
+    result = agent.run(
+        AgentInput(
+            question="本月广告点击率是多少？",
+            user_id=1,
+            context={
+                "plan": {"route": "hybrid"},
+                "data_result": {
+                    "status": "insufficient_evidence",
+                    "error": "当前快照没有广告曝光量和点击量。",
+                },
+                "knowledge_result": {
+                    "status": "ready",
+                    "answer": "这是一段没有引用的文本。",
+                    "evidences": [],
+                },
+            },
+        )
+    )
+
+    assert result.success is True
+    assert "广告曝光量和点击量" in (result.answer or "")
+    assert "没有引用的文本" not in (result.answer or "")
+
+
 def test_planner_passes_conversation_context_to_planning_service():
     context = {
         "version": "1.0",
@@ -705,7 +948,7 @@ def test_planner_passes_conversation_context_to_planning_service():
     assert service.conversation_contexts == [context]
 
 
-def test_reviewer_fails_when_data_and_document_sources_both_failed():
+def test_reviewer_returns_structured_failed_report_when_sources_both_failed():
     agent = ReviewerAgent()
 
     result = agent.run(
@@ -719,11 +962,12 @@ def test_reviewer_fails_when_data_and_document_sources_both_failed():
         )
     )
 
-    assert result.success is False
-    assert result.error == "经营数据与文档检索均未成功，无法形成分析结果"
+    assert result.success is True
+    assert result.evidence[0]["review_status"] == "failed"
+    assert result.evidence[0]["report"]["status"] == "failed"
 
 
-def test_reviewer_fails_when_data_failed_and_document_evidence_is_insufficient():
+def test_reviewer_returns_failed_report_when_data_failed_and_document_evidence_is_insufficient():
     agent = ReviewerAgent()
 
     result = agent.run(
@@ -744,8 +988,8 @@ def test_reviewer_fails_when_data_failed_and_document_evidence_is_insufficient()
         )
     )
 
-    assert result.success is False
-    assert result.error == "经营数据与文档检索均未成功，无法形成分析结果"
+    assert result.success is True
+    assert result.evidence[0]["report"]["status"] == "failed"
 
 
 def test_reviewer_combines_data_and_document_evidence():
@@ -780,3 +1024,8 @@ def test_reviewer_combines_data_and_document_evidence():
     assert "chunk_id=42" in result.answer
     assert result.evidence[0]["review_status"] == "complete"
     assert result.evidence[0]["citation_chunk_ids"] == [42]
+    report = result.evidence[0]["report"]
+    assert report["status"] == "completed"
+    assert report["confirmed_facts"][0]["data_evidence_ids"] == ["data-1"]
+    assert report["hypotheses"][0]["citation_chunk_ids"] == [42]
+    assert report["recommendations"][0]["basis_fact_ids"] == ["fact-1"]

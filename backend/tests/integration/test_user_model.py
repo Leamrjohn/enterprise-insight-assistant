@@ -1,6 +1,7 @@
-﻿from uuid import uuid4
+from uuid import uuid4
 from sqlalchemy.orm import Session
 
+from app.core.security import hash_api_key
 from app.models.user import User
 
 
@@ -9,7 +10,6 @@ def test_create_user(db_session: Session) -> None:
     user = User(name="test-user", api_key=api_key)
     db_session.add(user)
     db_session.flush()
-    
 
     # 验证字段
     assert user.id is not None
@@ -18,8 +18,12 @@ def test_create_user(db_session: Session) -> None:
     assert user.role == "user"
     assert user.created_at is not None
 
-    # 按 api_key 查询
-    found = db_session.query(User).filter(User.api_key == api_key).first()
+    # 数据库只按哈希查询，不保存可还原的明文 key。
+    found = (
+        db_session.query(User)
+        .filter(User.api_key_hash == hash_api_key(api_key))
+        .first()
+    )
     assert found is not None
     assert found.id == user.id
     assert found.name == "test-user"
@@ -28,6 +32,7 @@ def test_create_user(db_session: Session) -> None:
     by_id = db_session.query(User).filter(User.id == user.id).first()
     assert by_id is not None
     assert by_id.api_key == api_key
+
 
 def test_api_key_uniqueness(db_session: Session) -> None:
     api_key = uuid4().hex
@@ -40,5 +45,6 @@ def test_api_key_uniqueness(db_session: Session) -> None:
 
     import pytest
     from sqlalchemy.exc import IntegrityError
+
     with pytest.raises(IntegrityError):
         db_session.flush()

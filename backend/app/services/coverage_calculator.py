@@ -3,7 +3,9 @@
 from app.core.rag.engine import _extract_keywords
 
 
-def calculate_coverage(question: str, evidences: list, answer: str = "") -> tuple[float, list[str]]:
+def calculate_coverage(
+    question: str, evidences: list, answer: str = ""
+) -> tuple[float, list[str]]:
     """计算证据对问题关键实体的覆盖率。返回(覆盖率, 未覆盖实体列表)"""
     if not evidences or not question:
         return (0.0, [])

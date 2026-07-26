@@ -1,6 +1,11 @@
 """LangGraph 工作流状态定义"""
 
+from collections.abc import Callable
 from typing import TypedDict
+
+from typing_extensions import NotRequired
+
+from app.models.company import BusinessDataSource
 
 
 class WorkflowState(TypedDict):
@@ -8,6 +13,7 @@ class WorkflowState(TypedDict):
 
     question: str  # 用户问题
     user_id: int  # 用户ID
+    company_id: int | None  # Worker 从已持久化任务读取的公司范围
     plan: dict | None  # Planner生成的计划
     planner_result: dict | None  # Planner 实际模型调用次数与状态
     planner_failure: dict | None  # Planner 调用或结构化校验失败信息
@@ -18,3 +24,8 @@ class WorkflowState(TypedDict):
     final_answer: str | None  # 最终回答
     error: str | None  # 错误信息
     conversation_context: dict | None
+    document_ids: list[int] | None
+    business_data_source: BusinessDataSource | None
+    schema_catalog: dict | None
+    semantic_review_enabled: bool
+    stage_callback: NotRequired[Callable[[str], None]]
