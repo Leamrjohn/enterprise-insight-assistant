@@ -38,9 +38,19 @@ def render_evidence_purpose(purpose: object) -> str:
     """Keep internal SQL/table terminology out of user-facing summaries."""
     if not isinstance(purpose, str) or not purpose.strip():
         return "已授权经营数据"
-    if any(char.isascii() and char.isalpha() for char in purpose):
+    normalized = purpose.strip()
+    lowered = normalized.lower()
+    if any(
+        token in lowered for token in ("select ", " from ", " join ", " where ", ";")
+    ):
         return "已授权经营数据"
-    return purpose.strip()
+    if " 的 " in normalized and any(
+        char.isascii() and char.isalpha() for char in normalized
+    ):
+        return "已授权经营数据"
+    if "_" in normalized:
+        return "已授权经营数据"
+    return normalized
 
 
 def render_data_fields(columns: list[str], row: list[object]) -> str:

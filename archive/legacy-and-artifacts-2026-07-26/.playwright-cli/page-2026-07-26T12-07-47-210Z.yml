@@ -1,0 +1,100 @@
+- generic [ref=e110]:
+  - complementary [ref=e111]:
+    - generic [ref=e112]:
+      - generic [ref=e113]: EI
+      - generic [ref=e114]: 经营洞察
+    - navigation [ref=e115]:
+      - button "经营助手" [ref=e116] [cursor=pointer]
+      - button "数据源管理" [ref=e117] [cursor=pointer]
+      - button "用户中心" [active] [ref=e118] [cursor=pointer]
+    - generic [ref=e119]:
+      - strong [ref=e120]: 前端管理员 E2E
+      - generic [ref=e121]: Acme Docker Demo
+      - button "退出登录" [ref=e122] [cursor=pointer]
+  - main [ref=e218]:
+    - generic [ref=e219]:
+      - generic [ref=e220]:
+        - paragraph [ref=e221]: 账户与权限
+        - heading "用户中心" [level=2] [ref=e222]
+        - paragraph [ref=e223]: 你的账户属于 Acme Docker Demo；权限由后端成员关系统一校验。
+      - generic [ref=e224]: 管理员
+    - generic [ref=e225]:
+      - generic [ref=e226]:
+        - heading "个人信息" [level=3] [ref=e227]
+        - generic [ref=e228]:
+          - generic [ref=e229]:
+            - text: 显示名称
+            - textbox "显示名称" [ref=e230]: 前端管理员 E2E
+          - generic [ref=e231]:
+            - generic [ref=e232]:
+              - term [ref=e233]: 用户名
+              - definition [ref=e234]: frontend-admin-e2e-20260726
+            - generic [ref=e235]:
+              - term [ref=e236]: 公司
+              - definition [ref=e237]: Acme Docker Demo
+            - generic [ref=e238]:
+              - term [ref=e239]: 成员状态
+              - definition [ref=e240]: 已启用
+          - button "保存个人信息" [ref=e241] [cursor=pointer]
+      - generic [ref=e242]:
+        - heading "安全设置" [level=3] [ref=e243]
+        - generic [ref=e244]:
+          - generic [ref=e245]:
+            - text: 当前密码
+            - textbox "当前密码" [ref=e246]
+          - generic [ref=e247]:
+            - text: 新密码
+            - textbox "新密码" [ref=e248]
+          - button "更新密码" [ref=e249] [cursor=pointer]
+    - generic [ref=e250]:
+      - generic [ref=e252]:
+        - paragraph [ref=e253]: 管理员操作
+        - heading "公司成员" [level=3] [ref=e254]
+        - paragraph [ref=e255]: 可以查看成员、调整角色，或将其禁用。所有者角色受后端的最后所有者保护规则约束。
+      - generic [ref=e256]:
+        - generic [ref=e257]:
+          - generic [ref=e258]: 用户
+          - generic [ref=e259]: 角色
+          - generic [ref=e260]: 状态
+          - generic [ref=e261]: 加入时间
+          - generic [ref=e262]: 操作
+        - generic [ref=e263]:
+          - strong [ref=e264]: "docker-demo-owner用户 #15"
+          - combobox "成员 docker-demo-owner 的角色" [ref=e265]:
+            - option "所有者" [selected]
+            - option "管理员"
+            - option "分析员"
+            - option "查看者"
+          - generic [ref=e266]: 已启用
+          - generic [ref=e267]: 2026年7月26日 03:30
+          - button "禁用" [ref=e268] [cursor=pointer]
+        - generic [ref=e269]:
+          - strong [ref=e270]: "acme-e2e-owner用户 #17"
+          - combobox "成员 acme-e2e-owner 的角色" [ref=e271]:
+            - option "所有者" [selected]
+            - option "管理员"
+            - option "分析员"
+            - option "查看者"
+          - generic [ref=e272]: 已启用
+          - generic [ref=e273]: 2026年7月26日 03:30
+          - button "禁用" [ref=e274] [cursor=pointer]
+        - generic [ref=e275]:
+          - strong [ref=e276]: 前端 E2E 测试员@frontend-e2e-20260726
+          - combobox "成员 前端 E2E 测试员 的角色" [ref=e277]:
+            - option "所有者"
+            - option "管理员"
+            - option "分析员" [selected]
+            - option "查看者"
+          - generic [ref=e278]: 已启用
+          - generic [ref=e279]: 2026年7月26日 04:55
+          - button "禁用" [ref=e280] [cursor=pointer]
+        - generic [ref=e281]:
+          - strong [ref=e282]: 前端管理员 E2E（你）@frontend-admin-e2e-20260726
+          - combobox "成员 前端管理员 E2E 的角色" [ref=e283]:
+            - option "所有者"
+            - option "管理员" [selected]
+            - option "分析员"
+            - option "查看者"
+          - generic [ref=e284]: 已启用
+          - generic [ref=e285]: 2026年7月26日 05:06
+          - button "禁用" [ref=e286] [cursor=pointer]

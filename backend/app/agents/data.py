@@ -9,6 +9,7 @@ from app.core.exceptions import (
 from app.services.sql_generation import SQLGenerationService
 from app.services.semantic_review import SemanticReviewService
 from app.services.query_result_validator import assess_query_result
+from app.schemas.query_contract import QueryContract
 from app.tools.protocol import Tool, ToolInput
 from app.tools.sql import SQLTool
 from app.models.company import BusinessDataSource
@@ -72,6 +73,13 @@ class DataAgent(Agent):
         return [self._sql_tool]
 
     def run(self, input: AgentInput) -> AgentOutput:
+        feedback = input.context.get("feedback") or {}
+        if (
+            feedback.get("target") == "data"
+            and feedback.get("mode") == "replay_validated_sql"
+            and isinstance(feedback.get("previous_sql"), str)
+        ):
+            return self._replay_validated_sql(feedback)
         if self._sql_generator is None:
             self._sql_generator = SQLGenerationService(catalog=self._snapshot_catalog)
 
@@ -269,6 +277,11 @@ class DataAgent(Agent):
                     {
                         "sql": candidate.sql,
                         "purpose": candidate.purpose,
+                        "query_contract": (
+                            candidate.query_contract.model_dump()
+                            if candidate.query_contract is not None
+                            else None
+                        ),
                     }
                 ],
             )
@@ -277,4 +290,51 @@ class DataAgent(Agent):
             attempts=attempts,
             error="经营数据查询未能完成。",
             error_code="data_attempt_budget_exhausted",
+        )
+
+    def _replay_validated_sql(self, feedback: dict) -> AgentOutput:
+        """Retry only a SQL statement that previously passed the SQL Tool boundary."""
+        sql = feedback["previous_sql"]
+        attempts = {"model_attempts": 0, "sql_attempts": 1, "replayed_sql": 1}
+        result = self._sql_tool.execute(ToolInput(parameters={"sql": sql}))
+        purpose = feedback.get("purpose") or "重试已验证经营数据查询"
+        contract_data = feedback.get("query_contract")
+        contract = (
+            QueryContract.model_validate(contract_data)
+            if isinstance(contract_data, dict)
+            else None
+        )
+        if result.success:
+            columns = result.data.get("columns") if result.data else []
+            rows = result.data.get("rows") if result.data else []
+            assessment = assess_query_result(
+                columns=columns,
+                rows=rows,
+                contract=contract,
+            )
+            evidence = {
+                "sql": sql,
+                "purpose": purpose,
+                "query_contract": contract.model_dump() if contract else None,
+                "columns": columns,
+                "rows": _make_json_safe(rows),
+                "result_assessment": assessment.model_dump(),
+            }
+            if assessment.status == "supported":
+                return AgentOutput(success=True, attempts=attempts, evidence=[evidence])
+            return AgentOutput(
+                success=False,
+                attempts=attempts,
+                error=assessment.reason,
+                error_code=assessment.status,
+                evidence=[evidence],
+            )
+        return AgentOutput(
+            success=False,
+            attempts=attempts,
+            error=result.error or "经营数据查询失败。",
+            error_code=result.error_code,
+            evidence=[
+                {"sql": sql, "purpose": purpose, "query_contract": contract_data}
+            ],
         )

@@ -11,7 +11,7 @@ import app.services.document_ingestion_service as document_ingestion_service
 
 def _create_pending_document(db: Session, user: User, suffix: str) -> Documents:
     document = Documents(
-        user_id=user.id,
+        uploaded_by_user_id=user.id,
         name=f"report-{suffix}.txt",
         content=None,
         source="upload",

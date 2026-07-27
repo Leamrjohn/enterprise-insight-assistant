@@ -30,6 +30,7 @@ class DocumentOut(BaseModel):
     file_size: int | None = None
     sha256: str | None = None
     status: str = "completed"
+    error_message: str | None = None
     min_view_role: DocumentMinViewRole = "any"
     created_at: datetime | None = None
     updated_at: datetime | None = None

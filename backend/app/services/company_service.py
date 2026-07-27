@@ -26,6 +26,8 @@ from app.repositories.company_repository import (
     get_application_for_user,
     get_data_source,
     get_invitation_by_hash,
+    get_invitation_for_company,
+    get_invitations_for_company,
     get_applications_for_company,
     get_latest_snapshot,
     get_members_for_company,
@@ -128,6 +130,31 @@ def create_company_invitation(
         db.rollback()
         raise
     return CreatedInvitation(invitation=invitation, code=code)
+
+
+def list_company_invitations(
+    db: Session, *, company_id: int
+) -> list[CompanyInvitation]:
+    return get_invitations_for_company(db, company_id=company_id)
+
+
+def revoke_company_invitation(
+    db: Session, *, invitation_id: int, company_id: int
+) -> CompanyInvitation | None:
+    invitation = get_invitation_for_company(
+        db, invitation_id=invitation_id, company_id=company_id
+    )
+    if invitation is None:
+        return None
+    if invitation.is_active:
+        invitation.is_active = False
+        try:
+            db.commit()
+            db.refresh(invitation)
+        except Exception:
+            db.rollback()
+            raise
+    return invitation
 
 
 def register_membership_application(

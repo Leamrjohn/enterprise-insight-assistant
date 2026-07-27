@@ -31,6 +31,9 @@ def test_upload_document_enqueues_ingestion_and_returns_pending(
     )
     monkeypatch.setattr(document_api.process_document_task, "delay", delay)
 
+    company = client.post("/companies", json={"name": "upload-test-company"})
+    assert company.status_code == 201
+
     response = client.post(
         "/documents/upload",
         files={"file": ("report.txt", b"hello", "text/plain")},
@@ -39,5 +42,6 @@ def test_upload_document_enqueues_ingestion_and_returns_pending(
     assert response.status_code == 202
     assert response.json()["id"] == 123
     assert response.json()["status"] == "pending"
+    assert response.json()["error_message"] is None
     upload_document.assert_called_once()
     delay.assert_called_once_with(document_id=123)

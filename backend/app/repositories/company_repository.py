@@ -56,6 +56,18 @@ def get_invitation_for_company(
     )
 
 
+def get_invitations_for_company(
+    db: Session, *, company_id: int
+) -> list[CompanyInvitation]:
+    return list(
+        db.scalars(
+            select(CompanyInvitation)
+            .where(CompanyInvitation.company_id == company_id)
+            .order_by(CompanyInvitation.id.desc())
+        )
+    )
+
+
 def get_application_for_company(
     db: Session, *, application_id: int, company_id: int
 ) -> MembershipApplication | None:

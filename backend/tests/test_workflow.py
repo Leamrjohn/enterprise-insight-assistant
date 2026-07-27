@@ -252,6 +252,51 @@ def test_data_node_maps_semantic_schema_gap_to_insufficient_evidence(
     assert result["data_result"]["candidate"]["missing_requirements"] == ["广告点击量"]
 
 
+def test_data_node_keeps_feedback_when_semantic_review_is_enabled(monkeypatch) -> None:
+    class FakeDataAgent:
+        def run(self, input):
+            assert input.context == {
+                "plan": {"route": "data_only"},
+                "semantic_review_enabled": True,
+                "feedback": {"target": "data", "mode": "replay_validated_sql"},
+            }
+            return AgentOutput(
+                success=False,
+                error="连接失败",
+                error_code="business_db_execution_failed",
+            )
+
+    monkeypatch.setattr(workflow_nodes, "DataAgent", FakeDataAgent)
+
+    workflow_nodes.data_node(
+        {
+            "question": "销售额是多少？",
+            "user_id": 1,
+            "semantic_review_enabled": True,
+            "plan": {"route": "data_only"},
+            "routing_feedback": {"target": "data", "mode": "replay_validated_sql"},
+        }
+    )
+
+
+def test_knowledge_node_preserves_insufficient_evidence_error_code(monkeypatch) -> None:
+    class FakeKnowledgeAgent:
+        def run(self, input):
+            return AgentOutput(
+                success=True,
+                answer="资料不足",
+                evidence=[],
+                error_code="insufficient_evidence",
+            )
+
+    monkeypatch.setattr(workflow_nodes, "KnowledgeAgent", FakeKnowledgeAgent)
+
+    result = workflow_nodes.knowledge_node({"question": "为什么下降？", "user_id": 1})
+
+    assert result["knowledge_result"]["status"] == "insufficient_evidence"
+    assert result["knowledge_result"]["error_code"] == "insufficient_evidence"
+
+
 def test_planner_router_accepts_only_known_terminal_actions() -> None:
     for action in {"direct_response", "scope_exit", "needs_clarification", "refuse"}:
         assert _route_after_planner({"plan": {"action": action}}) == (
@@ -445,6 +490,7 @@ def test_reviewer_node_preserves_final_answer_and_review_evidence(monkeypatch) -
         "review_result": {
             "review_status": "complete",
             "citation_chunk_ids": [42],
+            "review_outcome": "passed",
         },
         "final_answer": "数据与文档证据已汇总。",
     }
@@ -589,6 +635,105 @@ def test_workflow_keeps_data_failure_for_partial_review_with_document_evidence(
 
     assert result["review_result"]["review_status"] == "partial"
     assert result["final_answer"] == "文档线索存在，但经营数据尚未验证。"
+
+
+def test_workflow_retries_only_data_and_reuses_same_scope_knowledge(
+    monkeypatch,
+) -> None:
+    calls = []
+
+    def fake_planner_node(state):
+        calls.append("planner")
+        return {
+            "plan": {
+                "action": "analyze",
+                "route": "hybrid",
+                "resolved_question": "分析销售额下降原因。",
+            },
+            "scope_fingerprint": "scope-1",
+        }
+
+    def fake_data_node(state):
+        calls.append("data")
+        if calls.count("data") == 1:
+            return {
+                "data_result": {
+                    "status": "failed",
+                    "error_code": "business_db_execution_failed",
+                    "candidate": {"sql": "SELECT 1", "purpose": "查询销售额"},
+                }
+            }
+        assert state["routing_feedback"]["mode"] == "replay_validated_sql"
+        return {
+            "data_result": {"status": "ready", "evidence": [{"rows": [[100]]}]},
+            "knowledge_result": state["cached_knowledge_result"],
+        }
+
+    def fake_knowledge_node(state):
+        calls.append("knowledge")
+        return {
+            "knowledge_result": {
+                "status": "ready",
+                "answer": "合同尚未续约。",
+                "evidences": [{"chunk_id": 7}],
+            }
+        }
+
+    def fake_reviewer_node(state):
+        calls.append("reviewer")
+        if calls.count("reviewer") == 1:
+            assert state["data_result"]["status"] == "failed"
+            return {
+                "review_result": {"review_status": "partial"},
+                "final_answer": "数据暂时不可用。",
+            }
+        assert state["knowledge_result"]["evidences"] == [{"chunk_id": 7}]
+        return {
+            "review_result": {"review_status": "complete"},
+            "final_answer": "分析完成。",
+        }
+
+    monkeypatch.setattr(workflow_graph, "planner_node", fake_planner_node)
+    monkeypatch.setattr(workflow_graph, "data_node", fake_data_node)
+    monkeypatch.setattr(workflow_graph, "knowledge_node", fake_knowledge_node)
+    monkeypatch.setattr(workflow_graph, "reviewer_node", fake_reviewer_node)
+
+    workflow = workflow_graph.build_workflow().compile()
+    result = workflow.invoke(
+        {
+            "question": "销售额为什么下降？",
+            "user_id": 1,
+            "company_id": 1,
+            "plan": None,
+            "planner_failure": None,
+            "data_result": None,
+            "knowledge_result": None,
+            "review_result": None,
+            "terminal_result": None,
+            "final_answer": None,
+            "error": None,
+            "conversation_context": None,
+            "document_ids": [2],
+            "business_data_source": None,
+            "schema_catalog": None,
+            "semantic_review_enabled": False,
+            "scope_fingerprint": None,
+            "external_retry_count": 0,
+            "max_external_retries": 2,
+            "routing_action": None,
+            "routing_feedback": None,
+            "loop_stop_reason": None,
+            "loop_history": [],
+            "cached_data_result": None,
+            "cached_knowledge_result": None,
+            "cache_scope_fingerprint": None,
+            "empty_result_replanned": False,
+        }
+    )
+
+    assert calls == ["planner", "data", "knowledge", "reviewer", "data", "reviewer"]
+    assert result["external_retry_count"] == 1
+    assert result["loop_stop_reason"] == "evidence_complete"
 
 
 def test_workflow_ends_without_business_agents_for_clarification(monkeypatch) -> None:

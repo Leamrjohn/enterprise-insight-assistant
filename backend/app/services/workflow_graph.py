@@ -15,6 +15,7 @@ from app.services.workflow_nodes import (
     knowledge_node,
     data_node,
     reviewer_node,
+    smart_router_node,
 )
 
 
@@ -52,8 +53,27 @@ def _route_after_data(
     state: WorkflowState,
 ) -> Literal["knowledge_node", "reviewer_node"]:
     """Continue to knowledge only for an LLM-approved hybrid plan."""
+    if (
+        state.get("routing_action") == "retry_data"
+        and state.get("cached_knowledge_result") is not None
+        and state.get("cache_scope_fingerprint") == state.get("scope_fingerprint")
+    ):
+        return "reviewer_node"
     plan = state.get("plan") or {}
     return "knowledge_node" if plan.get("route") == "hybrid" else "reviewer_node"
+
+
+def _route_after_smart_router(
+    state: WorkflowState,
+) -> Literal["data_node", "knowledge_node", "planner_node", "end"]:
+    action = state.get("routing_action")
+    if action == "retry_data":
+        return "data_node"
+    if action == "retry_knowledge":
+        return "knowledge_node"
+    if action == "replan":
+        return "planner_node"
+    return "end"
 
 
 def build_workflow() -> StateGraph:
@@ -77,6 +97,7 @@ def build_workflow() -> StateGraph:
     graph.add_node("data_node", data_node)
     graph.add_node("knowledge_node", knowledge_node)
     graph.add_node("reviewer_node", reviewer_node)
+    graph.add_node("smart_router_node", smart_router_node)
 
     # 边：START → planner
     graph.add_edge(START, "planner_node")
@@ -108,8 +129,18 @@ def build_workflow() -> StateGraph:
     # 边：knowledge → reviewer
     graph.add_edge("knowledge_node", "reviewer_node")
 
-    # 边：reviewer → END
-    graph.add_edge("reviewer_node", END)
+    # Reviewer emits evidence status; the deterministic router owns all retry edges.
+    graph.add_edge("reviewer_node", "smart_router_node")
+    graph.add_conditional_edges(
+        "smart_router_node",
+        _route_after_smart_router,
+        {
+            "data_node": "data_node",
+            "knowledge_node": "knowledge_node",
+            "planner_node": "planner_node",
+            "end": END,
+        },
+    )
     graph.add_edge("planner_terminal_node", END)
     graph.add_edge("planning_failure_node", END)
 
@@ -151,6 +182,17 @@ def run_analysis(
         "business_data_source": business_data_source,
         "schema_catalog": schema_catalog,
         "semantic_review_enabled": semantic_review_enabled,
+        "scope_fingerprint": None,
+        "external_retry_count": 0,
+        "max_external_retries": 2,
+        "routing_action": None,
+        "routing_feedback": None,
+        "loop_stop_reason": None,
+        "loop_history": [],
+        "cached_data_result": None,
+        "cached_knowledge_result": None,
+        "cache_scope_fingerprint": None,
+        "empty_result_replanned": False,
         "stage_callback": stage_callback,
     }
     return workflow.invoke(initial_state)

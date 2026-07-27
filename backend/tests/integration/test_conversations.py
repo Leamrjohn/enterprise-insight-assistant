@@ -214,7 +214,63 @@ def test_send_message_creates_messages_and_task_after_commit(
         == payload["assistant_message"]["id"]
     )
     assert task_response.json()["assistant_content"] is None
+    assert task_response.json()["result_summary"] is None
     assert "result_data" not in task_response.json()
+
+
+def test_failed_conversation_task_can_create_a_linked_retry(
+    client: TestClient,
+    db_session: Session,
+    test_user: User,
+    monkeypatch,
+) -> None:
+    source_id = _setup_company_data_source(client, db_session, test_user)
+    conversation_id = client.post(
+        "/conversations", json={"title": "重试会话", "data_source_id": source_id}
+    ).json()["id"]
+    published_task_ids: list[int] = []
+
+    def fake_publish(db: Session, *, event_id: int) -> bool:
+        event = db.get(AnalysisTaskOutboxEvent, event_id)
+        assert event is not None
+        published_task_ids.append(event.task_id)
+        return True
+
+    monkeypatch.setattr(conversations_api, "publish_analysis_task_event", fake_publish)
+    original_response = client.post(
+        f"/conversations/{conversation_id}/messages",
+        json={"content": "华东区销售下降原因"},
+    )
+    original_task_id = original_response.json()["task_id"]
+    original = db_session.get(AnalysisTask, original_task_id)
+    assert original is not None
+    original.status = "failed"
+    original.stage = "completed"
+    original.error_message = "数据库临时不可用"
+    db_session.flush()
+
+    retried = client.post(
+        f"/conversations/{conversation_id}/tasks/{original_task_id}/retry"
+    )
+    assert retried.status_code == 202
+    retry_task_id = retried.json()["task_id"]
+    assert retry_task_id != original_task_id
+    assert published_task_ids == [original_task_id, retry_task_id]
+
+    retry = db_session.get(AnalysisTask, retry_task_id)
+    assert retry is not None
+    assert retry.status == "queued"
+    assert retry.parent_task_id == original_task_id
+    assert retry.question == original.question
+    assert retry.context_snapshot == original.context_snapshot
+    assert retry.schema_snapshot_id == original.schema_snapshot_id
+    assert retry.input_message_id is None
+    assert retried.json()["assistant_message"]["analysis_task_id"] == retry_task_id
+
+    non_terminal = client.post(
+        f"/conversations/{conversation_id}/tasks/{retry_task_id}/retry"
+    )
+    assert non_terminal.status_code == 409
 
 
 def test_conversation_requires_a_ready_data_source(

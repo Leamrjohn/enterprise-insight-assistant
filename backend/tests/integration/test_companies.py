@@ -39,6 +39,22 @@ def test_pending_account_needs_approval_before_company_access(
     application = registered.json()
     assert application["status"] == "pending"
 
+    pending = client.get(
+        "/company/membership-applications", params={"status": "pending"}
+    )
+    assert pending.status_code == 200
+    assert pending.json() == [
+        {
+            "id": application["id"],
+            "user_id": application["user_id"],
+            "status": "pending",
+            "created_at": application["created_at"],
+            "reviewed_at": None,
+            "user_name": "new analyst",
+            "username": "new-analyst",
+        }
+    ]
+
     # Remove the fixture's active-user shortcut: this request proves the
     # persisted account state, rather than a FastAPI dependency override.
     app.dependency_overrides.pop(get_current_user)
@@ -56,6 +72,7 @@ def test_pending_account_needs_approval_before_company_access(
     )
     assert approved.status_code == 200
     assert approved.json()["status"] == "approved"
+    assert approved.json()["username"] == "new-analyst"
 
     app.dependency_overrides.pop(get_current_user)
     try:
@@ -106,6 +123,48 @@ def test_rejected_account_can_only_reapply_to_the_same_company(
     assert resubmitted.status_code == 200
     assert resubmitted.json()["id"] == registered["id"]
     assert resubmitted.json()["status"] == "pending"
+
+
+def test_admin_can_list_and_revoke_invitation_without_exposing_code(
+    client: TestClient,
+) -> None:
+    _bootstrap_company(client, "Acme")
+    created = client.post("/company/invitations", json={"max_uses": 2})
+    assert created.status_code == 201
+    code = created.json()["code"]
+
+    invitations = client.get("/company/invitations")
+    assert invitations.status_code == 200
+    assert invitations.json() == [
+        {
+            "id": created.json()["id"],
+            "max_uses": 2,
+            "used_count": 0,
+            "is_active": True,
+            "expires_at": None,
+            "created_at": invitations.json()[0]["created_at"],
+        }
+    ]
+    assert "code" not in invitations.json()[0]
+
+    revoked = client.post(f"/company/invitations/{created.json()['id']}/revoke")
+    assert revoked.status_code == 200
+    assert revoked.json()["is_active"] is False
+    assert (
+        client.post(f"/company/invitations/{created.json()['id']}/revoke").status_code
+        == 200
+    )
+
+    rejected_registration = client.post(
+        "/auth/membership-applications",
+        json={
+            "name": "revoked invite user",
+            "username": "revoked-invite-user",
+            "password": "revoked-invite-password",
+            "invitation_code": code,
+        },
+    )
+    assert rejected_registration.status_code == 422
 
 
 def test_non_admin_cannot_create_invitation_or_approve_application(

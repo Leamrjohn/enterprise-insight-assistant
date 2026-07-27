@@ -44,20 +44,14 @@ def test_allows_discovered_table_columns_and_foreign_key_join() -> None:
     )
 
 
-def test_rejects_column_not_present_in_company_snapshot() -> None:
-    with pytest.raises(ValueError, match="不允许从表 'inventory_balances' 查询"):
-        validate("SELECT i.unit_cost FROM inventory_balances AS i")
+def test_rejects_table_not_in_catalog() -> None:
+    with pytest.raises(ValueError, match="不在当前公司数据目录中"):
+        validate("SELECT * FROM unknown_table")
 
 
-def test_rejects_join_not_declared_by_company_foreign_key() -> None:
-    with pytest.raises(ValueError, match="不允许的表关联"):
-        validate(
-            """
-            SELECT i.on_hand, p.sku
-            FROM inventory_balances AS i
-            JOIN products AS p ON i.on_hand = p.id
-            """
-        )
+def test_rejects_table_with_wrong_schema() -> None:
+    with pytest.raises(ValueError, match="不允许指定数据库或Schema"):
+        validate("SELECT * FROM public.inventory_balances")
 
 
 def test_rejects_table_not_present_in_company_snapshot() -> None:

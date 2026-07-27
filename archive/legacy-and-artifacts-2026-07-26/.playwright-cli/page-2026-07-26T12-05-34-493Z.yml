@@ -1,0 +1,71 @@
+- generic [ref=e22]:
+  - complementary [ref=e23]:
+    - generic [ref=e24]:
+      - generic [ref=e25]: EI
+      - generic [ref=e26]: 经营洞察
+    - navigation [ref=e27]:
+      - button "经营助手" [ref=e28] [cursor=pointer]
+      - button "用户中心" [ref=e29] [cursor=pointer]
+    - generic [ref=e30]:
+      - strong [ref=e31]: 前端 E2E 测试员
+      - generic [ref=e32]: Acme Docker Demo
+      - button "退出登录" [ref=e33] [cursor=pointer]
+  - generic [ref=e35]:
+    - complementary [ref=e36]:
+      - generic [ref=e37]:
+        - generic [ref=e38]: 分析会话
+        - button "新建" [ref=e39] [cursor=pointer]
+      - button "请基于当前经营数据和选定文档，说明华东区销售表现，并清楚区分事实、推断、 2026年7月26日 05:03" [ref=e41] [cursor=pointer]:
+        - text: 请基于当前经营数据和选定文档，说明华东区销售表现，并清楚区分事实、推断、
+        - generic [ref=e42]: 2026年7月26日 05:03
+    - main [ref=e43]:
+      - generic [ref=e45]:
+        - paragraph [ref=e46]: 经营助手
+        - heading "请基于当前经营数据和选定文档，说明华东区销售表现，并清楚区分事实、推断、" [level=2] [ref=e47]
+      - generic [ref=e48]:
+        - article [ref=e49]:
+          - generic [ref=e50]: 你
+          - paragraph [ref=e51]: 请基于当前经营数据和选定文档，说明华东区销售表现，并清楚区分事实、推断、建议和资料限制。
+        - article [ref=e52]:
+          - generic [ref=e53]: 系统
+          - paragraph [ref=e54]: 本次未能取得可确认的经营数据，无法形成经营结论。
+        - article [ref=e55]:
+          - generic [ref=e56]: 你
+          - paragraph [ref=e57]: "1"
+        - article [ref=e58]:
+          - generic [ref=e59]: 系统
+          - paragraph [ref=e60]: 分析任务执行失败，请稍后重试。
+        - article [ref=e61]:
+          - generic [ref=e62]: 你
+          - paragraph [ref=e63]: 华南区销售额变化原因
+        - article [ref=e64]:
+          - generic [ref=e65]: 系统
+          - paragraph [ref=e66]: 本次未能取得可确认的经营数据，无法形成经营结论。
+      - generic [ref=e67]:
+        - paragraph [ref=e68]: 结构化输出
+        - heading "结果将在这里呈现" [level=3] [ref=e69]
+        - paragraph [ref=e70]: 每次分析会分开呈现确认事实、可能原因、建议行动和证据限制。
+      - generic [ref=e71]:
+        - textbox "经营问题" [ref=e72]:
+          - /placeholder: 例如：华东区 6 月销售额较 5 月下降，哪些数据事实与文档资料能够说明情况？
+        - generic [ref=e73]:
+          - generic [ref=e74]: 数据源：Acme readonly database
+          - button "发起分析" [ref=e75] [cursor=pointer]
+    - complementary [ref=e76]:
+      - paragraph [ref=e77]: 本次分析范围
+      - heading "证据边界" [level=3] [ref=e78]
+      - generic [ref=e79]:
+        - text: 经营数据源
+        - combobox "经营数据源" [ref=e80]:
+          - option "选择数据源" [disabled]
+          - option "Acme readonly database" [selected]
+      - generic [ref=e81]:
+        - generic [ref=e82]: 运行契约快照
+        - strong [ref=e83]: "版本 #5"
+        - generic [ref=e84]: 当前任务将使用此版本限制可查询的表、字段和关联。
+      - group "文档检索范围" [ref=e85]:
+        - generic [ref=e87]:
+          - checkbox "acme_e2e_document.txt 可检索" [checked] [ref=e88]
+          - generic [ref=e89]:
+            - text: acme_e2e_document.txt
+            - generic [ref=e90]: 可检索

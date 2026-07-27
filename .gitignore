@@ -25,3 +25,8 @@ dist/
 build/
 .DS_Store
 Thumbs.db
+.kilo/
+.agents/
+.claude/
+.codex/
+tmp/

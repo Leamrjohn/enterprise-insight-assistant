@@ -1,6 +1,23 @@
 """覆盖率计算器 —— 检查证据是否覆盖了问题的关键实体"""
 
-from app.core.rag.engine import _extract_keywords
+import re
+
+
+def _extract_keywords(question: str) -> list[str]:
+    """Small local extractor so coverage is independent from RAG internals."""
+    stop_words = {
+        "为什么",
+        "怎么",
+        "如何",
+        "请问",
+        "分析",
+        "是否",
+        "当前",
+        "这个",
+        "哪些",
+    }
+    tokens = re.findall(r"[A-Za-z0-9_]+|[\u4e00-\u9fff]{2,}", question)
+    return [token for token in dict.fromkeys(tokens) if token not in stop_words]
 
 
 def calculate_coverage(
@@ -19,7 +36,12 @@ def calculate_coverage(
     for kw in keywords:
         found = False
         for ev in evidences:
-            if kw in ev.content:
+            content = (
+                ev.get("content", "")
+                if isinstance(ev, dict)
+                else getattr(ev, "content", "")
+            )
+            if kw in content:
                 found = True
                 break
         if found:

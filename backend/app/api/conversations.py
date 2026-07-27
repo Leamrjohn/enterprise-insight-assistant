@@ -15,6 +15,7 @@ from app.schemas.conversation import (
     ConversationMessageCreate,
     ConversationMessageOut,
     ConversationOut,
+    ConversationTaskRetryAccepted,
 )
 from app.schemas.task import ConversationTaskOut, TaskOut
 from app.repositories.conversation_repository import get_assistant_message_by_task_id
@@ -28,6 +29,7 @@ from app.services.conversation_service import (
     get_conversation_service,
     get_conversation_task_service,
     get_conversations_service,
+    retry_conversation_task_service,
 )
 from app.services.outbox_service import publish_analysis_task_event
 
@@ -46,6 +48,7 @@ def _conversation_task_out(db: Session, task) -> ConversationTaskOut:
         duration_ms=task.duration_ms,
         error_type=task.error_type,
         error_message=task.error_message,
+        result_summary=task.result_summary,
         assistant_message_id=assistant_message.id if assistant_message else None,
         assistant_content=assistant_message.content if assistant_message else None,
         report=task.report,
@@ -163,6 +166,39 @@ def cancel_conversation_task_endpoint(
     if task is None:
         raise HTTPException(status_code=404, detail="task not found")
     return task
+
+
+@router.post(
+    "/conversations/{conversation_id}/tasks/{task_id}/retry",
+    response_model=ConversationTaskRetryAccepted,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+def retry_conversation_task_endpoint(
+    conversation_id: int,
+    task_id: int,
+    context: CurrentCompanyContext = Depends(require_analysis_permission),
+    db: Session = Depends(get_db),
+):
+    try:
+        bundle = retry_conversation_task_service(
+            db,
+            conversation_id=conversation_id,
+            task_id=task_id,
+            context=context,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc))
+    if bundle is None:
+        raise HTTPException(status_code=404, detail="task not found")
+
+    publish_analysis_task_event(db, event_id=bundle.outbox_event_id)
+    return ConversationTaskRetryAccepted(
+        task_id=bundle.task.id,
+        status="queued",
+        assistant_message=ConversationMessageOut.model_validate(
+            bundle.assistant_message
+        ),
+    )
 
 
 @router.post(

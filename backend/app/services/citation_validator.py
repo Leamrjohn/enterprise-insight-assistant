@@ -9,7 +9,12 @@ from app.models.company import CompanyMember
 from app.repositories.document_repository import allowed_min_view_roles
 
 
-def validate_citations(answer: str, user_id: int) -> tuple[bool, list[int]]:
+def validate_citations(
+    answer: str,
+    user_id: int,
+    *,
+    allowed_chunk_ids: set[int] | None = None,
+) -> tuple[bool, list[int]]:
     """
     校验答案中的引用编号是否真实存在，且当前用户的公司角色可见。
 
@@ -22,6 +27,10 @@ def validate_citations(answer: str, user_id: int) -> tuple[bool, list[int]]:
 
     chunk_ids = [int(x) for x in result]
     unique_ids = list(dict.fromkeys(chunk_ids))
+    if allowed_chunk_ids is not None:
+        out_of_scope = [cid for cid in unique_ids if cid not in allowed_chunk_ids]
+        if out_of_scope:
+            return False, out_of_scope
 
     db = SessionLocal()
     invalid = []

@@ -11,7 +11,14 @@ from app.core.exceptions import (
     StructuredOutputError,
 )
 from app.services.semantic_review import SemanticReviewService
+from app.services.citation_validator import validate_citations
 from app.services.workflow_state import WorkflowState
+from app.services.workflow_router import (
+    MAX_EXTERNAL_RETRIES,
+    build_feedback,
+    build_scope_fingerprint,
+    choose_next_action,
+)
 from app.tools.snapshot_catalog import SnapshotCatalog
 
 
@@ -72,12 +79,20 @@ def planner_node(state: WorkflowState) -> dict:
         AgentInput(
             question=state["question"],
             user_id=state["user_id"],
-            context={"conversation_context": state.get("conversation_context")},
+            context={
+                "conversation_context": state.get("conversation_context"),
+                **(
+                    {"feedback": state["routing_feedback"]}
+                    if state.get("routing_feedback") is not None
+                    else {}
+                ),
+            },
         )
     )
     if result.success and result.plan:
         return {
             "plan": result.plan,
+            "scope_fingerprint": build_scope_fingerprint(state, result.plan),
             "planner_result": {
                 "status": "ready",
                 "attempts": result.attempts,
@@ -168,6 +183,7 @@ def planner_semantic_review_node(state: WorkflowState) -> dict:
         }
     return {
         "plan": reviewed_plan.model_dump(),
+        "scope_fingerprint": build_scope_fingerprint(state, reviewed_plan.model_dump()),
         "planner_result": {
             "status": "ready",
             "attempts": {
@@ -229,28 +245,37 @@ def knowledge_node(state: WorkflowState) -> dict:
         AgentInput(
             question=_effective_question(state),
             user_id=state["user_id"],
-            context=(
-                {
-                    "company_id": state.get("company_id"),
-                    "document_ids": state["document_ids"],
-                }
-                if state.get("document_ids") is not None
-                else {"company_id": state.get("company_id")}
-            ),
+            context={
+                "company_id": state.get("company_id"),
+                **(
+                    {"document_ids": state["document_ids"]}
+                    if state.get("document_ids") is not None
+                    else {}
+                ),
+                **(
+                    {"feedback": state["routing_feedback"]}
+                    if state.get("routing_feedback") is not None
+                    else {}
+                ),
+            },
         )
     )
     if result.success:
-        return {
-            "knowledge_result": {
-                "status": ("ready" if result.evidence else "insufficient_evidence"),
-                "answer": result.answer,
-                "evidences": result.evidence,
-            }
+        knowledge_result = {
+            "status": ("ready" if result.evidence else "insufficient_evidence"),
+            "answer": result.answer,
+            "evidences": result.evidence,
         }
+        if result.error_code is not None:
+            knowledge_result["error_code"] = result.error_code
+        if result.attempts:
+            knowledge_result["attempts"] = result.attempts
+        return {"knowledge_result": knowledge_result}
     return {
         "knowledge_result": {
             "status": "failed",
             "error": result.error or "文档检索失败",
+            "error_code": result.error_code or "knowledge_retrieval_failed",
         },
         "error": result.error,
     }
@@ -276,11 +301,15 @@ def data_node(state: WorkflowState) -> dict:
     else:
         agent = DataAgent()
     data_context = {}
+    if state.get("routing_feedback") is not None:
+        data_context["feedback"] = state["routing_feedback"]
     if state.get("semantic_review_enabled"):
-        data_context = {
-            "plan": state.get("plan") or {},
-            "semantic_review_enabled": True,
-        }
+        data_context.update(
+            {
+                "plan": state.get("plan") or {},
+                "semantic_review_enabled": True,
+            }
+        )
     result = agent.run(
         AgentInput(
             question=_effective_question(state),
@@ -289,13 +318,20 @@ def data_node(state: WorkflowState) -> dict:
         )
     )
     if result.success:
-        return {
+        update = {
             "data_result": {
                 "status": "ready",
                 "evidence": result.evidence,
                 "attempts": result.attempts,
             }
         }
+        if (
+            state.get("routing_action") == "retry_data"
+            and state.get("cached_knowledge_result") is not None
+            and state.get("cache_scope_fingerprint") == state.get("scope_fingerprint")
+        ):
+            update["knowledge_result"] = state["cached_knowledge_result"]
+        return update
     if result.error_code in {
         "insufficient_schema",
         "sql_semantic_unsupported",
@@ -334,6 +370,8 @@ def reviewer_node(state: WorkflowState) -> dict:
     """
     _set_stage(state, "composing_report")
     agent = ReviewerAgent()
+    if hasattr(agent, "set_citation_validator"):
+        agent.set_citation_validator(validate_citations)
     reviewer_context = {
         "plan": state.get("plan") or {},
         "data_result": state.get("data_result", {}),
@@ -349,8 +387,93 @@ def reviewer_node(state: WorkflowState) -> dict:
         )
     )
     if result.success:
+        review_result = result.evidence[0] if result.evidence else {}
+        report = (
+            review_result.get("report") if isinstance(review_result, dict) else None
+        )
+        if isinstance(review_result.get("answer_validation"), dict) and not all(
+            value is not False
+            for key, value in review_result["answer_validation"].items()
+            if key.endswith("_valid")
+        ):
+            review_outcome = "validation_failed"
+        elif isinstance(report, dict) and report.get("status") == "failed":
+            review_outcome = "exhausted"
+        elif review_result.get("review_status") in {"complete", "completed"}:
+            review_outcome = "passed"
+        else:
+            review_outcome = "partial"
         return {
-            "review_result": result.evidence[0] if result.evidence else {},
+            "review_result": {**review_result, "review_outcome": review_outcome},
             "final_answer": result.answer or "分析完成，详见证据",
         }
     return {"error": result.error, "final_answer": None}
+
+
+def smart_router_node(state: WorkflowState) -> dict:
+    """Bounded policy engine: choose a node from typed execution state only."""
+    action, reason = choose_next_action(state)
+    retries = state.get("external_retry_count", 0)
+    maximum = state.get("max_external_retries", MAX_EXTERNAL_RETRIES)
+    if action != "stop" and retries >= maximum:
+        action, reason = "stop", "external_retry_budget_exhausted"
+
+    history = [
+        *(state.get("loop_history") or []),
+        {
+            "attempt": retries,
+            "action": action,
+            "reason": reason,
+            "data_status": (state.get("data_result") or {}).get("status"),
+            "knowledge_status": (state.get("knowledge_result") or {}).get("status"),
+        },
+    ]
+    if action == "stop":
+        existing_terminal = state.get("terminal_result") or {}
+        return {
+            "routing_action": action,
+            "loop_stop_reason": reason,
+            "loop_history": history,
+            "terminal_result": {
+                **existing_terminal,
+                "outcome": existing_terminal.get("outcome", "completed"),
+                "reason": existing_terminal.get("reason", reason),
+            },
+        }
+
+    feedback = build_feedback(state, action, reason)
+    updates = {
+        "routing_action": action,
+        "routing_feedback": feedback,
+        "external_retry_count": retries + 1,
+        "loop_history": history,
+    }
+    if action == "retry_data":
+        updates.update(
+            {
+                "cached_knowledge_result": state.get("knowledge_result"),
+                "cache_scope_fingerprint": state.get("scope_fingerprint"),
+            }
+        )
+    elif action == "retry_knowledge":
+        updates.update(
+            {
+                "cached_data_result": state.get("data_result"),
+                "cache_scope_fingerprint": state.get("scope_fingerprint"),
+            }
+        )
+    elif action == "replan":
+        updates.update(
+            {
+                "plan": None,
+                "data_result": None,
+                "knowledge_result": None,
+                "review_result": None,
+                "cached_data_result": None,
+                "cached_knowledge_result": None,
+                "cache_scope_fingerprint": None,
+                "empty_result_replanned": state.get("empty_result_replanned")
+                or reason == "empty_result_scope_check",
+            }
+        )
+    return updates

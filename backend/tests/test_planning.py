@@ -209,3 +209,44 @@ def test_planning_service_raises_after_two_transient_model_errors() -> None:
     assert service.model_attempts == 2
     assert len(gateway.calls) == 2
     assert waits == [PLANNER_RETRY_BASE_DELAY_SECONDS]
+
+
+def test_planning_service_exposes_structured_execution_feedback_to_planner() -> None:
+    gateway = FakeGateway(
+        '{"action":"needs_clarification","route":null,'
+        '"reason":"资料不支持原因判断",'
+        '"clarification_question":"请补充销售下降原因的业务资料。",'
+        '"response_message":null,"resolved_question":null,'
+        '"clarification":{"missing_slots":["object"],"examples":[]}}'
+    )
+
+    PlanningService(gateway=gateway).decide(
+        "销售额为什么下降？",
+        feedback={
+            "target": "planner",
+            "reason": "validation_failure",
+            "validation_failures": {"numbers_valid": False},
+        },
+    )
+
+    prompt = gateway.calls[0]["prompt"]
+    assert "<execution_feedback>" in prompt
+    assert '"numbers_valid": false' in prompt
+
+
+def test_planning_repair_prompt_keeps_execution_feedback() -> None:
+    gateway = FakeGateway(
+        [
+            '{"action":"analyze"}',
+            '{"action":"needs_clarification","route":null,'
+            '"reason":"资料不足","clarification_question":"请补充资料。",'
+            '"response_message":null,"resolved_question":null,'
+            '"clarification":{"missing_slots":["object"],"examples":[]}}',
+        ]
+    )
+    PlanningService(gateway=gateway).decide(
+        "销售为什么下降？", feedback={"target": "planner", "suggestion": "改为追问"}
+    )
+
+    assert "<execution_feedback>" in gateway.calls[1]["prompt"]
+    assert "改为追问" in gateway.calls[1]["prompt"]

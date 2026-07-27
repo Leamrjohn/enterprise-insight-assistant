@@ -47,6 +47,7 @@ class ConversationTaskOut(BaseModel):
     duration_ms: int | None
     error_type: str | None
     error_message: str | None
+    result_summary: str | None
     assistant_message_id: int | None
     assistant_content: str | None
     report: FinalAnalysisReport | None

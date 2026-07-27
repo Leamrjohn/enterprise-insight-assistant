@@ -28,4 +28,15 @@ class WorkflowState(TypedDict):
     business_data_source: BusinessDataSource | None
     schema_catalog: dict | None
     semantic_review_enabled: bool
+    scope_fingerprint: str | None
+    external_retry_count: int
+    max_external_retries: int
+    routing_action: str | None
+    routing_feedback: dict | None
+    loop_stop_reason: str | None
+    loop_history: list[dict]
+    cached_data_result: dict | None
+    cached_knowledge_result: dict | None
+    cache_scope_fingerprint: str | None
+    empty_result_replanned: bool
     stage_callback: NotRequired[Callable[[str], None]]

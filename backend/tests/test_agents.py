@@ -256,6 +256,42 @@ def test_knowledge_agent_downgrades_invalid_model_output_to_insufficient_evidenc
     assert "可引用" in (result.answer or "")
 
 
+def test_knowledge_agent_retries_the_same_question_and_scope_without_feedback_injection():
+    rag_tool = FakeRAGTool(
+        ToolOutput(
+            success=True,
+            data={
+                "status": "insufficient_evidence",
+                "answer": "无法回答：资料不足",
+                "evidences": [],
+            },
+        )
+    )
+    agent = KnowledgeAgent(rag_tool=rag_tool)
+
+    result = agent.run(
+        AgentInput(
+            question="销售为什么下降？",
+            user_id=7,
+            context={
+                "company_id": 3,
+                "document_ids": [5],
+                "feedback": {
+                    "target": "knowledge",
+                    "mode": "retry_same_scope",
+                },
+            },
+        )
+    )
+
+    assert rag_tool.inputs[0].parameters == {
+        "question": "销售为什么下降？",
+        "company_id": 3,
+        "document_ids": [5],
+    }
+    assert result.attempts == {"same_scope_retry": 1}
+
+
 def test_data_agent_interface():
     agent = DataAgent()
     assert agent.name == "data"
@@ -572,7 +608,13 @@ def test_data_agent_does_not_retry_non_repairable_database_failure():
     assert len(generator.calls) == 1
     assert len(tool.inputs) == 1
     assert result.attempts == {"model_attempts": 1, "sql_attempts": 1}
-    assert result.evidence == [{"sql": candidate.sql, "purpose": candidate.purpose}]
+    assert result.evidence == [
+        {
+            "sql": candidate.sql,
+            "purpose": candidate.purpose,
+            "query_contract": None,
+        }
+    ]
 
 
 def test_data_agent_stops_after_two_repairable_sql_failures():
@@ -610,6 +652,36 @@ def test_data_agent_stops_after_two_repairable_sql_failures():
     assert len(generator.calls) == 2
     assert len(tool.inputs) == 2
     assert result.attempts == {"model_attempts": 2, "sql_attempts": 2}
+
+
+def test_data_agent_replays_previously_validated_sql_without_regenerating() -> None:
+    generator = FakeSQLGenerator(
+        candidate=SQLCandidate(sql="SELECT should_not_run", purpose="不应调用")
+    )
+    tool = FakeSQLTool(
+        ToolOutput(success=True, data={"columns": ["销售额"], "rows": [(100,)]})
+    )
+    agent = DataAgent(sql_generator=generator, sql_tool=tool)
+
+    result = agent.run(
+        AgentInput(
+            question="销售额是多少？",
+            user_id=1,
+            context={
+                "feedback": {
+                    "target": "data",
+                    "mode": "replay_validated_sql",
+                    "previous_sql": "SELECT total_sales FROM monthly_sales",
+                    "purpose": "查询销售额",
+                }
+            },
+        )
+    )
+
+    assert result.success is True
+    assert generator.calls == []
+    assert tool.inputs[0].parameters == {"sql": "SELECT total_sales FROM monthly_sales"}
+    assert result.attempts["replayed_sql"] == 1
 
 
 def test_planner_returns_llm_hybrid_decision_for_causal_sales_question():
@@ -1021,7 +1093,7 @@ def test_reviewer_combines_data_and_document_evidence():
     assert result.answer is not None
     assert "-166405.92" in result.answer
     assert "客户年度合同到期后未续约。" in result.answer
-    assert "chunk_id=42" in result.answer
+    assert "[引用:42]" in result.answer
     assert result.evidence[0]["review_status"] == "complete"
     assert result.evidence[0]["citation_chunk_ids"] == [42]
     report = result.evidence[0]["report"]

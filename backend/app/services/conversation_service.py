@@ -19,7 +19,11 @@ from app.repositories.conversation_repository import (
     touch_conversation,
     get_recent_context_messages,
 )
-from app.repositories.task_repository import create_task, get_task_by_id
+from app.repositories.task_repository import (
+    create_task,
+    get_task_by_id,
+    get_task_document_ids,
+)
 from app.repositories.company_repository import (
     get_data_source,
     get_snapshot,
@@ -32,6 +36,13 @@ class ConversationTaskBundle:
     task: AnalysisTask
     outbox_event_id: int
     user_message: ConversationMessage
+    assistant_message: ConversationMessage
+
+
+@dataclass(frozen=True)
+class ConversationTaskRetryBundle:
+    task: AnalysisTask
+    outbox_event_id: int
     assistant_message: ConversationMessage
 
 
@@ -266,6 +277,66 @@ def cancel_conversation_task_service(
         db.commit()
         db.refresh(task)
         return task
+    except Exception:
+        db.rollback()
+        raise
+
+
+def retry_conversation_task_service(
+    db: Session,
+    *,
+    conversation_id: int,
+    task_id: int,
+    context: CurrentCompanyContext,
+) -> ConversationTaskRetryBundle | None:
+    """Create a linked retry without mutating the original terminal task."""
+    original = get_conversation_task_service(
+        db,
+        conversation_id=conversation_id,
+        task_id=task_id,
+        context=context,
+    )
+    if original is None:
+        return None
+    if original.status not in {"failed", "cancelled"}:
+        raise ValueError(
+            f"task {task_id} cannot be retried from status {original.status}"
+        )
+    if original.data_source_id is None or original.schema_snapshot_id is None:
+        raise ValueError("task does not have a reusable execution scope")
+
+    document_ids = get_task_document_ids(db, task_id=original.id)
+    try:
+        task = create_task(
+            db,
+            user_id=context.user.id,
+            question=original.question,
+            conversation_id=conversation_id,
+            context_snapshot=original.context_snapshot,
+            company_id=context.company.id,
+            data_source_id=original.data_source_id,
+            schema_snapshot_id=original.schema_snapshot_id,
+            document_ids=document_ids,
+            parent_task_id=original.id,
+        )
+        outbox_event = create_analysis_task_event(db, task_id=task.id)
+        assistant_message = create_message(
+            db,
+            conversation_id=conversation_id,
+            role="assistant",
+            content=None,
+            status="queued",
+            analysis_task_id=task.id,
+        )
+        touch_conversation(db, conversation_id=conversation_id)
+        db.commit()
+        for record in (task, assistant_message):
+            db.refresh(record)
+        return ConversationTaskRetryBundle(
+            task=task,
+            outbox_event_id=outbox_event.id,
+            assistant_message=assistant_message,
+        )
     except Exception:
         db.rollback()
         raise

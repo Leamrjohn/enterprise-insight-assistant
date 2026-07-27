@@ -117,6 +117,17 @@ class CompanyInvitationCreated(BaseModel):
     expires_at: datetime | None
 
 
+class CompanyInvitationOut(BaseModel):
+    id: int
+    max_uses: int
+    used_count: int
+    is_active: bool
+    expires_at: datetime | None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
 class MembershipApplicationRegister(BaseModel):
     name: str = Field(min_length=1, max_length=255)
     username: str = Field(min_length=3, max_length=64, pattern=r"^[A-Za-z0-9_.-]+$")
@@ -136,6 +147,8 @@ class MembershipApplicationOut(BaseModel):
     status: str
     created_at: datetime
     reviewed_at: datetime | None
+    user_name: str | None = None
+    username: str | None = None
 
     model_config = {"from_attributes": True}
 

@@ -21,6 +21,7 @@ from app.schemas.company import (
     CompanyCreate,
     CompanyInvitationCreate,
     CompanyInvitationCreated,
+    CompanyInvitationOut,
     CompanyMemberOut,
     CompanyMemberUpdate,
     CompanyOut,
@@ -36,9 +37,11 @@ from app.services.company_service import (
     create_data_source,
     discover_data_source_schema,
     get_current_schema_snapshot,
+    list_company_invitations,
     list_membership_applications,
     list_company_members,
     reject_membership_application,
+    revoke_company_invitation,
 )
 
 router = APIRouter()
@@ -70,6 +73,20 @@ def _member_out(db: Session, member: CompanyMember) -> CompanyMemberOut:
         role=member.role,
         status=member.status,
         created_at=member.created_at,
+    )
+
+
+def _application_out(db: Session, application) -> MembershipApplicationOut:
+    """Expose applicant identity only to an administrator of the same company."""
+    user = db.get(User, application.user_id)
+    return MembershipApplicationOut(
+        id=application.id,
+        user_id=application.user_id,
+        status=application.status,
+        created_at=application.created_at,
+        reviewed_at=application.reviewed_at,
+        user_name=user.name if user is not None else None,
+        username=user.username if user is not None else None,
     )
 
 
@@ -319,20 +336,48 @@ def create_invitation(
     )
 
 
+@router.get("/company/invitations", response_model=list[CompanyInvitationOut])
+def list_invitations(
+    context: CurrentCompanyContext = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    return list_company_invitations(db, company_id=context.company.id)
+
+
+@router.post(
+    "/company/invitations/{invitation_id}/revoke",
+    response_model=CompanyInvitationOut,
+)
+def revoke_invitation(
+    invitation_id: int,
+    context: CurrentCompanyContext = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    invitation = revoke_company_invitation(
+        db, invitation_id=invitation_id, company_id=context.company.id
+    )
+    if invitation is None:
+        raise HTTPException(status_code=404, detail="invitation not found")
+    return invitation
+
+
 @router.get(
     "/company/membership-applications",
     response_model=list[MembershipApplicationOut],
 )
 def list_membership_applications_endpoint(
-    status_filter: str | None = None,
+    status: str | None = None,
     context: CurrentCompanyContext = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
-    if status_filter not in {None, "pending", "approved", "rejected"}:
+    if status not in {None, "pending", "approved", "rejected"}:
         raise HTTPException(status_code=422, detail="invalid application status")
-    return list_membership_applications(
-        db, company_id=context.company.id, status=status_filter
-    )
+    return [
+        _application_out(db, application)
+        for application in list_membership_applications(
+            db, company_id=context.company.id, status=status
+        )
+    ]
 
 
 @router.post(
@@ -355,7 +400,7 @@ def approve_membership_application_endpoint(
         raise HTTPException(status_code=409, detail=str(exc))
     if application is None:
         raise HTTPException(status_code=404, detail="membership application not found")
-    return application
+    return _application_out(db, application)
 
 
 @router.post(
@@ -378,7 +423,7 @@ def reject_membership_application_endpoint(
         raise HTTPException(status_code=409, detail=str(exc))
     if application is None:
         raise HTTPException(status_code=404, detail="membership application not found")
-    return application
+    return _application_out(db, application)
 
 
 @router.patch("/company/members/{member_id}", response_model=CompanyMemberOut)

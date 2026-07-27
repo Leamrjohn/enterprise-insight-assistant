@@ -171,6 +171,13 @@ def _save_workflow_result(
             "knowledge_result": workflow_result.get("knowledge_result"),
             "review_result": workflow_result.get("review_result"),
             "report": report.model_dump(mode="json") if report is not None else None,
+            "execution": {
+                "external_retry_count": workflow_result.get("external_retry_count", 0),
+                "max_external_retries": workflow_result.get("max_external_retries", 0),
+                "loop_stop_reason": workflow_result.get("loop_stop_reason"),
+                "loop_history": workflow_result.get("loop_history", []),
+                "scope_fingerprint": workflow_result.get("scope_fingerprint"),
+            },
         }
     )
 

@@ -14,6 +14,7 @@ def create_task(
     data_source_id: int | None = None,
     schema_snapshot_id: int | None = None,
     document_ids: list[int] | None = None,
+    parent_task_id: int | None = None,
 ) -> AnalysisTask:
     record = AnalysisTask(
         user_id=user_id,
@@ -25,6 +26,7 @@ def create_task(
         company_id=company_id,
         data_source_id=data_source_id,
         schema_snapshot_id=schema_snapshot_id,
+        parent_task_id=parent_task_id,
     )
     db.add(record)
     db.flush()
@@ -32,6 +34,18 @@ def create_task(
         db.add(AnalysisTaskDocument(task_id=record.id, document_id=document_id))
     db.refresh(record)
     return record
+
+
+def get_task_document_ids(db: Session, *, task_id: int) -> list[int]:
+    return [
+        document_id
+        for (document_id,) in (
+            db.query(AnalysisTaskDocument.document_id)
+            .filter(AnalysisTaskDocument.task_id == task_id)
+            .order_by(AnalysisTaskDocument.document_id)
+            .all()
+        )
+    ]
 
 
 def get_task_by_id(db: Session, task_id: int, user_id: int) -> AnalysisTask | None:

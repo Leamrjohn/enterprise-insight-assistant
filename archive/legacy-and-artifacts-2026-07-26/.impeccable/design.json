@@ -1,0 +1,48 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-07-26T11:53:00Z",
+  "title": "Design System: Enterprise Insight Assistant",
+  "extensions": {
+    "colorMeta": {
+      "primary": { "role": "primary", "displayName": "Cobalt Action", "canonical": "#1767d9", "tonalRamp": ["#102f62", "#174a96", "#1767d9", "#5e98ed", "#dceaff", "#eef5ff", "#f6faff", "#ffffff"] },
+      "page-mist": { "role": "neutral", "displayName": "Mist Ground", "canonical": "#eef5ff", "tonalRamp": ["#17365f", "#294b70", "#63758e", "#b9cce4", "#d8e5f3", "#eef5ff", "#f6faff", "#ffffff"] }
+    },
+    "shadows": [
+      { "name": "ambient-entry", "value": "0 20px 48px rgba(78, 121, 180, .14)", "purpose": "Login and intentional entry surfaces." },
+      { "name": "ambient-control", "value": "0 12px 28px rgba(84, 126, 182, .09)", "purpose": "Message composer only." }
+    ],
+    "breakpoints": [
+      { "name": "workspace-collapse", "value": "1080px" },
+      { "name": "mobile", "value": "760px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "High-commitment actions such as login, submit analysis, and create data source.",
+      "html": "<button class=\"ds-btn-primary\">发起分析</button>",
+      "css": ".ds-btn-primary { border: 0; border-radius: 10px; background: #1767d9; color: #fff; padding: 11px 16px; font: 700 14px system-ui, sans-serif; box-shadow: 0 8px 20px rgba(23,103,217,.2); } .ds-btn-primary:hover { background: #145abd; } .ds-btn-primary:focus-visible { outline: 3px solid #7da9ff; outline-offset: 2px; } .ds-btn-primary:active { transform: translateY(1px); }"
+    },
+    {
+      "name": "Evidence Scope",
+      "kind": "custom",
+      "refersTo": "evidence-inspector",
+      "description": "Persistent pre-analysis scope of data source, snapshot, and document selection.",
+      "html": "<section class=\"ds-scope\"><span>本次分析范围</span><strong>运行契约快照 #18</strong><small>当前任务将使用此版本限制可查询边界。</small></section>",
+      "css": ".ds-scope { display: grid; gap: 6px; padding: 14px 0; border-top: 1px solid #d1e0f3; color: #507093; font: 13px system-ui, sans-serif; } .ds-scope strong { color: #254c7c; } .ds-scope small { line-height: 1.55; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "Evidence in Daylight",
+    "overview": "A bright, operational interface for business users who must see analysis boundaries before trusting conclusions. The system makes source, snapshot, document scope, task state, and structured report sections legible before and after each action.",
+    "keyCharacteristics": ["Low-contrast mist-blue surroundings", "One cobalt interaction color", "Evidence scope is persistent", "Facts and inferences remain separate"],
+    "rules": [
+      { "name": "The One Accent Rule", "body": "Cobalt is the only general action accent; semantic status colors only communicate status.", "section": "colors" },
+      { "name": "The Proof Surface Rule", "body": "A report or configuration boundary may be elevated, but routine rows remain flat.", "section": "elevation" }
+    ],
+    "dos": ["Do keep evidence scope visible beside the analysis task.", "Do use Chinese errors that say what failed and what the user can do next."],
+    "donts": ["Don't use DeepSeek branding or copied text.", "Don't display database passwords or authentication secrets."]
+  }
+}

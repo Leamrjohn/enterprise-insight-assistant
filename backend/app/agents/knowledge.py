@@ -34,6 +34,14 @@ class KnowledgeAgent(Agent):
 
     def run(self, input: AgentInput) -> AgentOutput:
         """执行知识检索"""
+        feedback = input.context.get("feedback") or {}
+        same_scope_retry = (
+            feedback.get("target") == "knowledge"
+            and feedback.get("mode") == "retry_same_scope"
+        )
+        attempts = {"same_scope_retry": 1} if same_scope_retry else {}
+        # A retrieval-service retry deliberately keeps the original question and scope.
+        # Feedback selects the operation; it must not be mixed into untrusted document text.
         parameters = {"question": input.question}
         company_id = input.context.get("company_id")
         if company_id is not None:
@@ -46,6 +54,7 @@ class KnowledgeAgent(Agent):
             return AgentOutput(
                 success=False,
                 error=result.error or "RAGTool failed",
+                attempts=attempts,
             )
         data = result.data or {}
 
@@ -54,12 +63,15 @@ class KnowledgeAgent(Agent):
                 success=True,
                 answer=data["answer"],
                 evidence=[],
+                error_code="insufficient_evidence",
+                attempts=attempts,
             )
 
         if data.get("status") != "ready":
             return AgentOutput(
                 success=False,
                 error="RAGTool returned an unexpected result status",
+                attempts=attempts,
             )
 
         gateway = self._gateway or get_model_gateway()
@@ -82,6 +94,7 @@ class KnowledgeAgent(Agent):
                 answer="无法根据现有文档形成可引用的原因判断。",
                 evidence=[],
                 error_code="knowledge_invalid_output",
+                attempts=attempts,
             )
 
         retrieved_evidences = {
@@ -104,4 +117,5 @@ class KnowledgeAgent(Agent):
             success=True,
             answer=parsed_result.answer,
             evidence=cited_evidences,
+            attempts=attempts,
         )

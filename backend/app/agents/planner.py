@@ -37,10 +37,10 @@ class PlannerAgent(Agent):
             self._planning_service = PlanningService()
 
         try:
-            decision = self._planning_service.decide(
-                input.question,
-                conversation_context=input.context.get("conversation_context"),
-            )
+            kwargs = {"conversation_context": input.context.get("conversation_context")}
+            if input.context.get("feedback") is not None:
+                kwargs["feedback"] = input.context["feedback"]
+            decision = self._planning_service.decide(input.question, **kwargs)
         except RetryableModelError as error:
             logger.warning("Planner model retryable failure exhausted")
             return AgentOutput(

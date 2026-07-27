@@ -13,7 +13,11 @@ from app.services.report_composer import (
     render_data_fields,
     render_evidence_purpose,
 )
+from app.services.coverage_calculator import calculate_coverage
+from app.services.numeric_validator import validate_numbers
+from app.services.schema_validator import validate_schema
 from app.tools.protocol import Tool
+from collections.abc import Callable
 
 
 def _format_data_result(data_result: dict) -> str | None:
@@ -21,22 +25,21 @@ def _format_data_result(data_result: dict) -> str | None:
     if not evidences:
         return None
 
-    first_evidence = evidences[0]
-    assessment = first_evidence.get("result_assessment")
-    if isinstance(assessment, dict) and assessment.get("status") != "supported":
-        return None
-    columns = first_evidence.get("columns") or []
-    rows = first_evidence.get("rows") or []
-    purpose = render_evidence_purpose(first_evidence.get("purpose"))
+    rendered_evidences = []
+    for evidence in evidences:
+        assessment = evidence.get("result_assessment")
+        if isinstance(assessment, dict) and assessment.get("status") != "supported":
+            continue
+        columns = evidence.get("columns") or []
+        rows = evidence.get("rows") or []
+        purpose = render_evidence_purpose(evidence.get("purpose"))
+        if not columns or not rows:
+            rendered_evidences.append(f"数据查询（{purpose}）未返回可展示的记录。")
+            continue
+        rendered_rows = [render_data_fields(columns, row) for row in rows]
+        rendered_evidences.append(f"数据查询（{purpose}）：{'；'.join(rendered_rows)}")
 
-    if not columns or not rows:
-        return f"数据查询（{purpose}）未返回可展示的记录。"
-
-    rendered_rows = []
-    for row in rows[:5]:
-        rendered_rows.append(render_data_fields(columns, row))
-
-    return f"数据查询（{purpose}）：{'；'.join(rendered_rows)}"
+    return "\n".join(rendered_evidences) or None
 
 
 def _review_metadata(
@@ -47,11 +50,79 @@ def _review_metadata(
     return {**metadata, "report": report.model_dump(mode="json")}
 
 
+def _validate_final_answer(
+    *,
+    answer: str,
+    question: str,
+    user_id: int,
+    data_result: dict,
+    knowledge_evidences: list[dict],
+    citation_validator: Callable[..., tuple[bool, list[int]]] | None,
+) -> tuple[bool, dict]:
+    """Run deterministic guards after composition, before exposing model-derived text."""
+    citation_required = bool(knowledge_evidences)
+    schema_valid, schema_errors = validate_schema(
+        answer,
+        len(knowledge_evidences),
+        citation_required=citation_required,
+    )
+    numbers_valid, number_errors = validate_numbers(answer, data_result)
+    citations_valid, invalid_citation_ids = (
+        citation_validator(
+            answer,
+            user_id,
+            allowed_chunk_ids={
+                evidence["chunk_id"]
+                for evidence in knowledge_evidences
+                if isinstance(evidence.get("chunk_id"), int)
+            },
+        )
+        if citation_required and citation_validator is not None
+        else (True, [])
+    )
+    coverage, uncovered = calculate_coverage(question, knowledge_evidences, answer)
+    # Coverage is a diagnostic signal. Citation ownership and parser checks are
+    # the hard boundary; a lexical score must not discard otherwise valid evidence.
+    coverage_valid = True
+    return (
+        schema_valid and numbers_valid and citations_valid and coverage_valid,
+        {
+            "schema_valid": schema_valid,
+            "schema_errors": schema_errors,
+            "numbers_valid": numbers_valid,
+            "number_errors": number_errors,
+            "citations_valid": citations_valid,
+            "invalid_citation_ids": invalid_citation_ids,
+            "coverage": coverage,
+            "uncovered_entities": uncovered,
+            "coverage_valid": coverage_valid,
+        },
+    )
+
+
+def _safe_validation_failure_answer(data_summary: str | None) -> str:
+    if data_summary:
+        return f"{data_summary}\n文档回答未通过证据校验，未据此作出原因判断。"
+    return "现有资料未通过证据校验，无法形成可引用的原因判断。"
+
+
 class ReviewerAgent(Agent):
     """检查多个 Agent 的结果是否存在冲突，不直接生成新结论"""
 
-    def __init__(self, semantic_reviewer: SemanticReviewService | None = None) -> None:
+    def __init__(
+        self,
+        semantic_reviewer: SemanticReviewService | None = None,
+        *,
+        citation_validator: Callable[..., tuple[bool, list[int]]] | None = None,
+    ) -> None:
         self._semantic_reviewer = semantic_reviewer
+        self._citation_validator = citation_validator
+
+    def set_citation_validator(
+        self, validator: Callable[..., tuple[bool, list[int]]]
+    ) -> None:
+        """Attach the database-backed ownership check at the workflow boundary."""
+        self._citation_validator = validator
 
     @property
     def name(self) -> str:
@@ -138,12 +209,46 @@ class ReviewerAgent(Agent):
             ),
             "semantic_review_error": semantic_review_error,
         }
+        if (
+            input.context.get("semantic_review_enabled")
+            and knowledge_answer
+            and citation_chunk_ids
+            and (semantic_review is None or semantic_review.verdict != "supported")
+        ):
+            report = report.model_copy(
+                update={
+                    "status": "partial",
+                    "hypotheses": [],
+                    "document_citations": [],
+                    "limitations": [
+                        *report.limitations,
+                        Limitation(
+                            code="citation_relevance_unverified",
+                            message="文档引用未通过问题与回答的语义相关性复核。",
+                            next_step="补充直接支撑该问题的资料后重试。",
+                        ),
+                    ],
+                }
+            )
+            return AgentOutput(
+                success=True,
+                answer="现有资料未通过问题相关性复核，无法据此形成原因判断。",
+                evidence=[
+                    _review_metadata(
+                        report,
+                        review_status="partial",
+                        data_available=bool(data_result.get("evidence")),
+                        knowledge_available=bool(citation_chunk_ids),
+                        citation_chunk_ids=citation_chunk_ids,
+                        limitations=semantic_review.limitations,
+                        **semantic_metadata,
+                    )
+                ],
+            )
         if semantic_review is not None and semantic_review.verdict == "unsupported":
             return AgentOutput(
                 success=True,
-                answer=(
-                    f"现有数据和资料不足以支持回答该问题。{semantic_review.reason}"
-                ),
+                answer="现有数据和资料不足以支持回答该问题，请补充相关指标、筛选范围或可引用资料后重试。",
                 evidence=[
                     _review_metadata(
                         report,
@@ -157,17 +262,43 @@ class ReviewerAgent(Agent):
                 ],
             )
         if data_summary and knowledge_answer and citation_chunk_ids:
-            citations_text = ", ".join(
-                f"chunk_id={chunk_id}" for chunk_id in citation_chunk_ids
+            citations_text = " ".join(
+                f"[引用:{chunk_id}]" for chunk_id in citation_chunk_ids
             )
+            answer = (
+                f"{data_summary}\n"
+                f"文档说明：{knowledge_answer}\n"
+                f"文档引用：{citations_text}"
+            )
+            valid, validation = _validate_final_answer(
+                answer=answer,
+                question=input.question,
+                user_id=input.user_id,
+                data_result=data_result,
+                knowledge_evidences=knowledge_evidences,
+                citation_validator=self._citation_validator,
+            )
+            if not valid:
+                report = report.model_copy(
+                    update={
+                        "status": "partial",
+                        "hypotheses": [],
+                        "document_citations": [],
+                        "limitations": [
+                            *report.limitations,
+                            Limitation(
+                                code="final_answer_validation_failed",
+                                message="文档回答未通过数值、引用、覆盖率或格式校验。",
+                                next_step="补充可验证资料或检查引用后重试。",
+                            ),
+                        ],
+                    }
+                )
+                answer = _safe_validation_failure_answer(data_summary)
 
             return AgentOutput(
                 success=True,
-                answer=(
-                    f"{data_summary}\n"
-                    f"文档说明：{knowledge_answer}\n"
-                    f"文档引用：{citations_text}"
-                ),
+                answer=answer,
                 evidence=[
                     _review_metadata(
                         report,
@@ -176,14 +307,27 @@ class ReviewerAgent(Agent):
                         knowledge_available=True,
                         citation_chunk_ids=citation_chunk_ids,
                         limitations=[],
+                        answer_validation=validation,
                         **semantic_metadata,
                     )
                 ],
             )
         if data_summary and plan.get("route") == "data_only":
+            valid, validation = _validate_final_answer(
+                answer=data_summary,
+                question=input.question,
+                user_id=input.user_id,
+                data_result=data_result,
+                knowledge_evidences=[],
+                citation_validator=self._citation_validator,
+            )
             return AgentOutput(
                 success=True,
-                answer=data_summary,
+                answer=(
+                    data_summary
+                    if valid
+                    else _safe_validation_failure_answer(data_summary)
+                ),
                 evidence=[
                     _review_metadata(
                         report,
@@ -192,6 +336,7 @@ class ReviewerAgent(Agent):
                         knowledge_available=False,
                         citation_chunk_ids=[],
                         limitations=[],
+                        answer_validation=validation,
                         **semantic_metadata,
                     )
                 ],
@@ -202,9 +347,20 @@ class ReviewerAgent(Agent):
                 if knowledge_failed
                 else "未检索到足够的文档证据，未对原因作出结论。"
             )
+            answer = f"{data_summary}\n无法根据现有文档说明下降原因。"
+            valid, validation = _validate_final_answer(
+                answer=answer,
+                question=input.question,
+                user_id=input.user_id,
+                data_result=data_result,
+                knowledge_evidences=[],
+                citation_validator=self._citation_validator,
+            )
             return AgentOutput(
                 success=True,
-                answer=f"{data_summary}\n无法根据现有文档说明下降原因。",
+                answer=(
+                    answer if valid else _safe_validation_failure_answer(data_summary)
+                ),
                 evidence=[
                     _review_metadata(
                         report,
@@ -213,21 +369,40 @@ class ReviewerAgent(Agent):
                         knowledge_available=False,
                         citation_chunk_ids=[],
                         limitations=[limitation],
+                        answer_validation=validation,
                         **semantic_metadata,
                     )
                 ],
             )
 
         if knowledge_answer and citation_chunk_ids:
-            citations_text = ", ".join(
-                f"chunk_id={chunk_id}" for chunk_id in citation_chunk_ids
+            citations_text = " ".join(
+                f"[引用:{chunk_id}]" for chunk_id in citation_chunk_ids
             )
+            answer = (
+                "文档线索（尚未由当前经营数据验证）："
+                f"{knowledge_answer}\n文档引用：{citations_text}"
+            )
+            valid, validation = _validate_final_answer(
+                answer=answer,
+                question=input.question,
+                user_id=input.user_id,
+                data_result=data_result,
+                knowledge_evidences=knowledge_evidences,
+                citation_validator=self._citation_validator,
+            )
+            if not valid:
+                report = report.model_copy(
+                    update={
+                        "status": "partial",
+                        "hypotheses": [],
+                        "document_citations": [],
+                    }
+                )
+                answer = _safe_validation_failure_answer(None)
             return AgentOutput(
                 success=True,
-                answer=(
-                    "文档线索（尚未由当前经营数据验证）："
-                    f"{knowledge_answer}\n文档引用：{citations_text}"
-                ),
+                answer=answer,
                 evidence=[
                     _review_metadata(
                         report,
@@ -238,6 +413,7 @@ class ReviewerAgent(Agent):
                         limitations=[
                             "经营数据查询未成功，文档线索不能作为已确认事实。"
                         ],
+                        answer_validation=validation,
                         **semantic_metadata,
                     )
                 ],
@@ -283,7 +459,7 @@ class ReviewerAgent(Agent):
         if knowledge_answer and not knowledge_failed:
             return AgentOutput(
                 success=True,
-                answer=knowledge_answer,
+                answer="未检索到可验证引用，无法根据现有文档形成原因判断。",
                 evidence=[
                     _review_metadata(
                         report,

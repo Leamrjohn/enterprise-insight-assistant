@@ -62,3 +62,9 @@ class ConversationMessageAccepted(BaseModel):
     status: Literal["queued"]
     user_message: ConversationMessageOut
     assistant_message: ConversationMessageOut
+
+
+class ConversationTaskRetryAccepted(BaseModel):
+    task_id: int
+    status: Literal["queued"]
+    assistant_message: ConversationMessageOut

@@ -60,6 +60,13 @@ def test_worker_saves_langgraph_terminal_result() -> None:
         "knowledge_result": None,
         "review_result": None,
         "report": None,
+        "execution": {
+            "external_retry_count": 0,
+            "max_external_retries": 0,
+            "loop_stop_reason": None,
+            "loop_history": [],
+            "scope_fingerprint": None,
+        },
     }
 
     analysis_tasks._save_workflow_result(db, record, workflow_result)
@@ -79,6 +86,13 @@ def test_worker_saves_langgraph_terminal_result() -> None:
         "knowledge_result": None,
         "review_result": None,
         "report": None,
+        "execution": {
+            "external_retry_count": 0,
+            "max_external_retries": 0,
+            "loop_stop_reason": None,
+            "loop_history": [],
+            "scope_fingerprint": None,
+        },
     }
 
 
