@@ -9,6 +9,7 @@ from unittest.mock import Mock
 
 from app.core.gateway.deepseek import DeepSeekGateway
 from app.core.settings import get_settings
+from app.services.model_governance import model_call_scope
 
 
 def test_local_gateway_returns_string():
@@ -124,6 +125,72 @@ def test_deepseek_gateway_converts_timeout_to_retryable_error(monkeypatch):
             gateway.chat("用户问题")
 
         create.assert_called_once()
+    finally:
+        get_settings.cache_clear()
+
+
+def test_deepseek_gateway_uses_frozen_fallback_only_after_temporary_error(monkeypatch):
+    monkeypatch.setenv("LLM_PROVIDER", "deepseek")
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+    get_settings.cache_clear()
+    try:
+        gateway = DeepSeekGateway()
+        timeout = APITimeoutError(
+            request=Request("POST", "https://api.deepseek.com/chat/completions")
+        )
+        response = SimpleNamespace(
+            choices=[
+                SimpleNamespace(message=SimpleNamespace(content="fallback answer"))
+            ],
+            usage=SimpleNamespace(prompt_tokens=2, completion_tokens=1),
+        )
+        create = Mock(side_effect=[timeout, response])
+        gateway.client = SimpleNamespace(
+            chat=SimpleNamespace(completions=SimpleNamespace(create=create))
+        )
+
+        task = SimpleNamespace(
+            id=99,
+            model_policy_snapshot={
+                "fallback_models": ["deepseek-fallback"],
+                "max_attempts": 2,
+            },
+            model_budget_snapshot={
+                "max_calls": 3,
+                "max_calls_per_node": 3,
+                "max_total_tokens": 1000,
+                "max_cost": "1.00",
+                "max_repairs": 1,
+            },
+            model_budget_usage={
+                "calls": 0,
+                "tokens": 0,
+                "cost": "0",
+                "calls_by_node": {},
+            },
+        )
+
+        class Db:
+            def get(self, *args, **kwargs):
+                return task
+
+            def commit(self):
+                return None
+
+            def refresh(self, value):
+                return None
+
+            def add(self, value):
+                return None
+
+        with model_call_scope(
+            Db(), task=task, attempt=SimpleNamespace(id=5), node_name="planner"
+        ):
+            assert gateway.chat("question") == "fallback answer"
+
+        assert create.call_count == 2
+        assert create.call_args_list[0].kwargs["model"] == gateway.model_name
+        assert create.call_args_list[1].kwargs["model"] == "deepseek-fallback"
     finally:
         get_settings.cache_clear()
 

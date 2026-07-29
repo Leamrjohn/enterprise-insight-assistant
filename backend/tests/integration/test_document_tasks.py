@@ -5,7 +5,8 @@ import pytest
 from app.core.settings import get_settings
 from app.core.rag.embeddings_local import LocalEmbeddingProvider
 from app.core.rag.retrieval import retrieve_evidence
-from app.db.session import SessionLocal
+from app.db.session import SessionLocal, set_tenant_scope
+from app.models.company import Company, CompanyMember
 from app.models.document_chunk import DocumentChunk
 from app.models.documents import Documents
 from app.models.user import User
@@ -23,7 +24,9 @@ def test_document_worker_persists_mocked_ingestion_output(monkeypatch) -> None:
             assert texts == chunk_texts
             return embeddings
 
-    monkeypatch.setattr(document_ingestion_service, "chunk_file", lambda _: chunk_texts)
+    monkeypatch.setattr(
+        document_ingestion_service, "chunk_file", lambda _, **__: chunk_texts
+    )
     monkeypatch.setattr(
         document_ingestion_service,
         "LocalEmbeddingProvider",
@@ -33,6 +36,7 @@ def test_document_worker_persists_mocked_ingestion_output(monkeypatch) -> None:
     db = SessionLocal()
     document_id: int | None = None
     user_id: int | None = None
+    company_id: int | None = None
     try:
         suffix = uuid4().hex
         user = User(
@@ -43,9 +47,24 @@ def test_document_worker_persists_mocked_ingestion_output(monkeypatch) -> None:
         db.flush()
         db.commit()
         user_id = user.id
+        company = Company(name=f"document-worker-company-{suffix}")
+        db.add(company)
+        db.flush()
+        db.add(
+            CompanyMember(
+                user_id=user.id,
+                company_id=company.id,
+                role="owner",
+                status="approved",
+            )
+        )
+        db.commit()
+        company_id = company.id
+        set_tenant_scope(db, company_id)
 
         document = Documents(
-            user_id=user_id,
+            uploaded_by_user_id=user_id,
+            company_id=company_id,
             name="report.txt",
             content=None,
             source="upload",
@@ -60,7 +79,7 @@ def test_document_worker_persists_mocked_ingestion_output(monkeypatch) -> None:
         document_id = document.id
 
         # .run() 直接执行 Worker 任务主体；不会经过 Redis。
-        process_document_task.run(document_id=document_id)
+        process_document_task.run(document_id=document_id, company_id=company_id)
 
         db.expire_all()
         stored_document = db.get(Documents, document_id)
@@ -97,6 +116,7 @@ def test_document_worker_indexes_and_retrieves_real_text_file(
     monkeypatch,
     tmp_path,
 ) -> None:
+    pytest.importorskip("sentence_transformers")
     storage_dir = tmp_path / "storage"
     upload_dir = storage_dir / "uploads"
     upload_dir.mkdir(parents=True)
@@ -112,6 +132,7 @@ def test_document_worker_indexes_and_retrieves_real_text_file(
     document_id: int | None = None
     user_id: int | None = None
     other_user_id: int | None = None
+    company_id: int | None = None
     try:
         suffix = uuid4().hex
         user = User(
@@ -122,6 +143,20 @@ def test_document_worker_indexes_and_retrieves_real_text_file(
         db.flush()
         db.commit()
         user_id = user.id
+        company = Company(name=f"real-document-worker-company-{suffix}")
+        db.add(company)
+        db.flush()
+        db.add(
+            CompanyMember(
+                user_id=user.id,
+                company_id=company.id,
+                role="owner",
+                status="approved",
+            )
+        )
+        db.commit()
+        company_id = company.id
+        set_tenant_scope(db, company_id)
 
         other_user = User(
             name=f"real-document-other-user-{suffix}",
@@ -132,7 +167,8 @@ def test_document_worker_indexes_and_retrieves_real_text_file(
         other_user_id = other_user.id
 
         document = Documents(
-            user_id=user_id,
+            uploaded_by_user_id=user_id,
+            company_id=company_id,
             name="report.txt",
             content=None,
             source="upload",
@@ -146,7 +182,7 @@ def test_document_worker_indexes_and_retrieves_real_text_file(
         db.commit()
         document_id = document.id
 
-        process_document_task.run(document_id=document_id)
+        process_document_task.run(document_id=document_id, company_id=company_id)
 
         db.expire_all()
         stored_document = db.get(Documents, document_id)

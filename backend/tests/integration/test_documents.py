@@ -3,6 +3,24 @@ import pytest
 from app.core.auth import get_current_user
 from app.main import app
 from app.models.user import User
+from app.models.company import Company, CompanyMember
+
+
+@pytest.fixture(autouse=True)
+def approved_company_for_document_api(db_session, test_user):
+    company = Company(name="document-api-company")
+    db_session.add(company)
+    db_session.flush()
+    db_session.add(
+        CompanyMember(
+            company_id=company.id,
+            user_id=test_user.id,
+            role="analyst",
+            status="approved",
+        )
+    )
+    db_session.flush()
+    return company
 
 
 def test_document_lifecycle(
@@ -44,7 +62,7 @@ def test_document_lifecycle(
     assert missing_response.headers["X-Request-ID"]
     assert missing_response.json() == {
         "code": "not_found",
-        "message": "document not found",
+        "message": "未找到文档。",
         "details": [],
     }
 
@@ -127,6 +145,7 @@ def test_update_document_rejects_blank_content(
 def test_user_cannot_access_another_users_document(
     db_session,
     client: TestClient,
+    approved_company_for_document_api,
 ) -> None:
     create_response = client.post(
         "/documents",
@@ -138,10 +157,20 @@ def test_user_cannot_access_another_users_document(
     other_user = User(name="ceshiyuequan", api_key="123456")
     db_session.add(other_user)
     db_session.flush()
+    db_session.add(
+        CompanyMember(
+            company_id=approved_company_for_document_api.id,
+            user_id=other_user.id,
+            role="analyst",
+            status="approved",
+        )
+    )
+    db_session.flush()
 
     def return_other_user():
         return other_user
 
     app.dependency_overrides[get_current_user] = return_other_user
     get_response = client.get(f"/documents/{document_id}")
-    assert get_response.status_code == 404
+    # 文档可见性由同公司角色控制；上传者仅承担审计责任，不是授权过滤条件。
+    assert get_response.status_code == 200

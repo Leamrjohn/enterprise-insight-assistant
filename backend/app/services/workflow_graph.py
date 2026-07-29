@@ -7,6 +7,7 @@ from langgraph.graph import StateGraph, START, END
 
 from app.services.workflow_state import WorkflowState
 from app.models.company import BusinessDataSource
+from app.services.tool_runtime import ToolRuntime
 from app.services.workflow_nodes import (
     planner_node,
     planner_semantic_review_node,
@@ -17,6 +18,26 @@ from app.services.workflow_nodes import (
     reviewer_node,
     smart_router_node,
 )
+
+
+_RESUMABLE_NODES = frozenset(
+    {
+        "planner_node",
+        "planner_semantic_review_node",
+        "planner_terminal_node",
+        "planning_failure_node",
+        "data_node",
+        "knowledge_node",
+        "reviewer_node",
+        "smart_router_node",
+    }
+)
+
+
+def _route_from_start(state: WorkflowState) -> str:
+    """Resume only an allow-listed graph node from a database checkpoint."""
+    next_node = state.get("resume_next_node")
+    return next_node if next_node in _RESUMABLE_NODES else "planner_node"
 
 
 def _route_after_planner(
@@ -65,12 +86,14 @@ def _route_after_data(
 
 def _route_after_smart_router(
     state: WorkflowState,
-) -> Literal["data_node", "knowledge_node", "planner_node", "end"]:
+) -> Literal["data_node", "knowledge_node", "reviewer_node", "planner_node", "end"]:
     action = state.get("routing_action")
     if action == "retry_data":
         return "data_node"
     if action == "retry_knowledge":
         return "knowledge_node"
+    if action == "retry_reviewer":
+        return "reviewer_node"
     if action == "replan":
         return "planner_node"
     return "end"
@@ -99,8 +122,11 @@ def build_workflow() -> StateGraph:
     graph.add_node("reviewer_node", reviewer_node)
     graph.add_node("smart_router_node", smart_router_node)
 
-    # 边：START → planner
-    graph.add_edge(START, "planner_node")
+    graph.add_conditional_edges(
+        START,
+        _route_from_start,
+        {node: node for node in _RESUMABLE_NODES},
+    )
 
     graph.add_edge("planner_node", "planner_semantic_review_node")
 
@@ -111,6 +137,7 @@ def build_workflow() -> StateGraph:
         {
             "data_node": "data_node",
             "knowledge_node": "knowledge_node",
+            "reviewer_node": "reviewer_node",
             "planner_terminal_node": "planner_terminal_node",
             "planning_failure_node": "planning_failure_node",
         },
@@ -157,11 +184,16 @@ def run_analysis(
     *,
     company_id: int | None = None,
     conversation_context: dict | None = None,
+    planner_memory: list[dict] | None = None,
     document_ids: list[int] | None = None,
     business_data_source: BusinessDataSource | None = None,
     schema_catalog: dict | None = None,
     semantic_review_enabled: bool = True,
     stage_callback: Callable[[str], None] | None = None,
+    checkpoint_callback: Callable[[str, str | None, dict], None] | None = None,
+    resume_next_node: str | None = None,
+    resume_state: dict | None = None,
+    tool_runtime: ToolRuntime | None = None,
 ) -> dict:
     """运行一次完整分析"""
     initial_state: WorkflowState = {
@@ -171,13 +203,20 @@ def run_analysis(
         "plan": None,
         "planner_result": None,
         "planner_failure": None,
+        "planner_outcome": None,
+        "semantic_review_outcome": None,
         "data_result": None,
+        "confirmed_facts": None,
         "knowledge_result": None,
+        "data_outcome": None,
+        "knowledge_outcome": None,
         "review_result": None,
+        "reviewer_outcome": None,
         "terminal_result": None,
         "final_answer": None,
         "error": None,
         "conversation_context": conversation_context,
+        "planner_memory": planner_memory or [],
         "document_ids": document_ids,
         "business_data_source": business_data_source,
         "schema_catalog": schema_catalog,
@@ -193,6 +232,40 @@ def run_analysis(
         "cached_knowledge_result": None,
         "cache_scope_fingerprint": None,
         "empty_result_replanned": False,
+        "tool_runtime": tool_runtime,
         "stage_callback": stage_callback,
+        "checkpoint_callback": checkpoint_callback,
+        "resume_next_node": resume_next_node,
     }
+    # The persisted patch is selected by the Worker, not supplied by a client.
+    # Keep this allow-list tight so a stale/old checkpoint cannot replace scope.
+    for key in (
+        "plan",
+        "planner_result",
+        "planner_failure",
+        "planner_outcome",
+        "semantic_review_outcome",
+        "data_result",
+        "confirmed_facts",
+        "knowledge_result",
+        "data_outcome",
+        "knowledge_outcome",
+        "review_result",
+        "reviewer_outcome",
+        "terminal_result",
+        "final_answer",
+        "error",
+        "scope_fingerprint",
+        "external_retry_count",
+        "routing_action",
+        "routing_feedback",
+        "loop_stop_reason",
+        "loop_history",
+        "cached_data_result",
+        "cached_knowledge_result",
+        "cache_scope_fingerprint",
+        "empty_result_replanned",
+    ):
+        if isinstance(resume_state, dict) and key in resume_state:
+            initial_state[key] = resume_state[key]
     return workflow.invoke(initial_state)

@@ -15,6 +15,7 @@ def create_task(
     schema_snapshot_id: int | None = None,
     document_ids: list[int] | None = None,
     parent_task_id: int | None = None,
+    request_id: str | None = None,
 ) -> AnalysisTask:
     record = AnalysisTask(
         user_id=user_id,
@@ -27,6 +28,7 @@ def create_task(
         data_source_id=data_source_id,
         schema_snapshot_id=schema_snapshot_id,
         parent_task_id=parent_task_id,
+        request_id=request_id,
     )
     db.add(record)
     db.flush()

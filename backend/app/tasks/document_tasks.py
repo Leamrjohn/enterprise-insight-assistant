@@ -2,7 +2,7 @@ import logging
 
 from app.core.celery_app import celery_app
 from app.core.settings import get_settings
-from app.db.session import SessionLocal
+from app.db.session import SessionLocal, set_tenant_scope
 from app.models.documents import Documents
 from app.services.document_ingestion_service import process_document_chunks
 from sqlalchemy import update
@@ -11,12 +11,13 @@ logger = logging.getLogger(__name__)
 
 
 @celery_app.task
-def process_document_task(document_id: int) -> None:
+def process_document_task(document_id: int, company_id: int) -> None:
     """异步切分文档并生成、保存 Embedding。"""
     db = SessionLocal()
     try:
+        set_tenant_scope(db, company_id)
         document = db.get(Documents, document_id)
-        if document is None:
+        if document is None or document.company_id != company_id:
             logger.error("Document %s not found", document_id)
             return
 

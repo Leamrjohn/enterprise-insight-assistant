@@ -20,18 +20,34 @@ def upgrade() -> None:
     )
     op.add_column(
         "company_members",
-        sa.Column("status", sa.String(length=20), nullable=False, server_default="approved"),
+        sa.Column(
+            "status", sa.String(length=20), nullable=False, server_default="approved"
+        ),
     )
     op.add_column(
         "company_members",
-        sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("now()"),
+        ),
     )
     op.add_column(
         "company_members",
-        sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("now()")),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            nullable=False,
+            server_default=sa.text("now()"),
+        ),
     )
-    op.drop_constraint("uq_company_members_company_user", "company_members", type_="unique")
-    op.create_unique_constraint("uq_company_members_user", "company_members", ["user_id"])
+    op.drop_constraint(
+        "uq_company_members_company_user", "company_members", type_="unique"
+    )
+    op.create_unique_constraint(
+        "uq_company_members_user", "company_members", ["user_id"]
+    )
     op.add_column(
         "business_data_sources",
         sa.Column("active_schema_snapshot_id", sa.Integer(), nullable=True),
@@ -52,13 +68,17 @@ def upgrade() -> None:
         "fk_data_sources_active_snapshot",
         "business_data_sources",
         "schema_snapshots",
-        ["active_schema_snapshot_id"], ["id"], ondelete="SET NULL",
+        ["active_schema_snapshot_id"],
+        ["id"],
+        ondelete="SET NULL",
     )
     op.create_foreign_key(
         "fk_schema_snapshots_discovered_by_user_id_users",
         "schema_snapshots",
         "users",
-        ["discovered_by_user_id"], ["id"], ondelete="RESTRICT",
+        ["discovered_by_user_id"],
+        ["id"],
+        ondelete="RESTRICT",
     )
 
 

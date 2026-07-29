@@ -1,4 +1,24 @@
 from fastapi.testclient import TestClient
+import pytest
+
+from app.models.company import Company, CompanyMember
+
+
+@pytest.fixture(autouse=True)
+def approved_company_for_document_api(db_session, test_user):
+    company = Company(name="document-upload-company")
+    db_session.add(company)
+    db_session.flush()
+    db_session.add(
+        CompanyMember(
+            company_id=company.id,
+            user_id=test_user.id,
+            role="analyst",
+            status="approved",
+        )
+    )
+    db_session.flush()
+    return company
 
 
 def test_upload_text_file(client: TestClient) -> None:

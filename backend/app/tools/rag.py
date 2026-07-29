@@ -8,7 +8,7 @@ from app.core.rag.reranker import (
 )
 from app.core.rag.retrieval import retrieve_evidence
 from app.core.settings import get_settings
-from app.db.session import SessionLocal
+from app.db.session import SessionLocal, set_tenant_scope
 from app.core.exceptions import RetrievalError
 import logging
 
@@ -38,6 +38,7 @@ class RAGTool(Tool):
         try:
             settings = get_settings()
             db = SessionLocal()
+            set_tenant_scope(db, company_id)
             evidences = retrieve_evidence(
                 db=db,
                 question=question,
@@ -82,6 +83,11 @@ class RAGTool(Tool):
                             "chunk_id": evidence.chunk_id,
                             "document_id": evidence.document_id,
                             "content": evidence.content,
+                            "document_name": evidence.document_name,
+                            "document_type": evidence.document_type,
+                            "page_number": evidence.page_number,
+                            "paragraph_start": evidence.paragraph_start,
+                            "paragraph_end": evidence.paragraph_end,
                             "score": evidence.score,
                             "rerank_score": evidence.rerank_score,
                         }

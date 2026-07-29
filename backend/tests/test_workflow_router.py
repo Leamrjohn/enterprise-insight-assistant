@@ -81,6 +81,63 @@ def test_replans_once_after_empty_result_to_check_scope_alias() -> None:
     assert choose_next_action(state) == ("stop", "evidence_exhausted")
 
 
+def test_node_outcome_keeps_empty_business_data_distinct_from_failure() -> None:
+    action, reason = choose_next_action(
+        {
+            "data_outcome": {
+                "status": "no_matching_records",
+                "output": {},
+                "error_code": "no_matching_records",
+                "retry_hint": "stop",
+                "checkpoint_patch": {},
+            },
+            "knowledge_result": {"status": "insufficient_evidence"},
+            "review_result": {},
+        }
+    )
+
+    assert (action, reason) == ("stop", "no_matching_records")
+
+
+def test_node_outcome_denied_never_retries_or_exposes_repair_context() -> None:
+    state = {
+        "data_outcome": {
+            "status": "denied",
+            "output": {},
+            "error_code": "sql_forbidden_table",
+            "retry_hint": "stop",
+            "checkpoint_patch": {},
+        },
+        "knowledge_result": {"status": "ready"},
+        "review_result": {},
+    }
+
+    action, reason = choose_next_action(state)
+
+    assert (action, reason) == ("stop", "data_denied")
+    assert build_feedback(state, action, reason) is None
+
+
+def test_reviewer_retryable_outcome_retries_same_evidence() -> None:
+    state = {
+        "data_result": {"status": "ready"},
+        "knowledge_result": {"status": "ready"},
+        "review_result": {},
+        "reviewer_outcome": {
+            "status": "retryable_error",
+            "output": {},
+            "error_code": "reviewer_rate_limited",
+            "retry_hint": "retry",
+            "checkpoint_patch": {},
+        },
+    }
+
+    action, reason = choose_next_action(state)
+
+    assert (action, reason) == ("retry_reviewer", "retryable_reviewer_failure")
+    assert build_feedback(state, action, reason)["mode"] == "retry_same_evidence"
+
+
 def test_security_citation_failure_never_replans() -> None:
     action, reason = choose_next_action(
         {

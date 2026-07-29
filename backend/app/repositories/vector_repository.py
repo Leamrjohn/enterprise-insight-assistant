@@ -40,11 +40,16 @@ def search_similar_chunks(
             dc.document_id,
             dc.content,
             dc.page_number,
+            dc.paragraph_start,
+            dc.paragraph_end,
+            d.name AS document_name,
+            d.file_type AS document_type,
             1 - (dc.embedding <=> :embedding) AS score
         FROM document_chunks dc
         JOIN documents d ON d.id = dc.document_id
         WHERE
-            d.company_id = :company_id
+            dc.company_id = :company_id
+            AND d.company_id = :company_id
             AND 1 - (dc.embedding <=> :embedding) > :min_score
             {scope_filter}
         ORDER BY dc.embedding <=> :embedding
@@ -68,6 +73,10 @@ def search_similar_chunks(
             "document_id": row.document_id,
             "content": row.content,
             "page_number": row.page_number,
+            "paragraph_start": row.paragraph_start,
+            "paragraph_end": row.paragraph_end,
+            "document_name": row.document_name,
+            "document_type": row.document_type,
             "score": round(float(row.score), 4),
         }
         for row in rows

@@ -2,8 +2,15 @@ from sqlalchemy import CheckConstraint, DateTime, ForeignKey, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base
 from datetime import datetime
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 from sqlalchemy.dialects.postgresql import JSONB
+
+if TYPE_CHECKING:
+    from app.models.task_execution_attempt import TaskExecutionAttempt
+    from app.models.model_call_record import ModelCallRecord
+    from app.models.review_request import ReviewRequest
+    from app.models.workflow_event import WorkflowEvent
+    from app.models.tool_call_record import ToolCallRecord
 
 
 class AnalysisTask(Base):
@@ -12,11 +19,11 @@ class AnalysisTask(Base):
     __table_args__ = (
         CheckConstraint(
             "status IN "
-            "('queued','running','retrying','completed','partial','failed','cancelled','needs_clarification')",
+            "('queued','running','retrying','awaiting_review','completed','partial','failed','cancelled','needs_clarification')",
             name="analysistask_status_values",
         ),
         CheckConstraint(
-            "stage IN ('queued','planning','querying_data','retrieving_knowledge','composing_report','saving_result','retrying','completed')",
+            "stage IN ('queued','planning','querying_data','retrieving_knowledge','composing_report','saving_result','awaiting_review','retrying','completed')",
             name="analysistask_task_stage_values",
         ),
     )
@@ -66,6 +73,63 @@ class AnalysisTask(Base):
         server_default="0",
     )
     celery_task_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    request_id: Mapped[str | None] = mapped_column(
+        String(128), nullable=True, index=True
+    )
+    active_execution_id: Mapped[str | None] = mapped_column(
+        String(36), nullable=True, index=True
+    )
+    model_policy_snapshot: Mapped[dict[str, Any]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=lambda: {
+            "primary_model": "configured-default",
+            "fallback_models": [],
+            "require_json": False,
+            "allow_tool_calling": False,
+            "timeout_seconds": 30,
+            "max_attempts": 3,
+        },
+    )
+    model_budget_snapshot: Mapped[dict[str, Any]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=lambda: {
+            "max_calls": 12,
+            "max_calls_per_node": 4,
+            "max_repairs": 2,
+            "max_total_tokens": 12000,
+            "max_cost": "1.00",
+        },
+    )
+    model_budget_usage: Mapped[dict[str, Any]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=lambda: {
+            "calls": 0,
+            "tokens": 0,
+            "cost": "0.00",
+            "repairs": 0,
+            "calls_by_node": {},
+        },
+    )
+    tool_policy_snapshot: Mapped[dict[str, Any]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=lambda: {
+            "allowed_tools": ["rag_search", "sql_query", "template_query"],
+            "require_company_scope": True,
+            "require_frozen_document_scope": True,
+        },
+    )
+    tool_budget_snapshot: Mapped[dict[str, Any]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=lambda: {"max_calls": 12, "max_calls_per_tool": 6},
+    )
+    tool_budget_usage: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, default=lambda: {"calls": 0, "calls_by_tool": {}}
+    )
     error_type: Mapped[str | None] = mapped_column(String(128), nullable=True)
     duration_ms: Mapped[int | None] = mapped_column(nullable=True)
     result_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -111,6 +175,24 @@ class AnalysisTask(Base):
     child_tasks: Mapped[list["AnalysisTask"]] = relationship(
         "AnalysisTask", back_populates="parent_task", cascade="all, delete-orphan"
     )
+    execution_attempts: Mapped[list["TaskExecutionAttempt"]] = relationship(
+        "TaskExecutionAttempt", back_populates="task", cascade="all, delete-orphan"
+    )
+    model_call_records: Mapped[list["ModelCallRecord"]] = relationship(
+        "ModelCallRecord", back_populates="task", cascade="all, delete-orphan"
+    )
+    review_request: Mapped["ReviewRequest | None"] = relationship(
+        "ReviewRequest",
+        back_populates="task",
+        cascade="all, delete-orphan",
+        uselist=False,
+    )
+    workflow_events: Mapped[list["WorkflowEvent"]] = relationship(
+        back_populates="task", cascade="all, delete-orphan"
+    )
+    tool_call_records: Mapped[list["ToolCallRecord"]] = relationship(
+        back_populates="task", cascade="all, delete-orphan"
+    )
 
     @property
     def report(self) -> dict[str, Any] | None:
@@ -130,3 +212,14 @@ class AnalysisTaskDocument(Base):
     document_id: Mapped[int] = mapped_column(
         ForeignKey("documents.id", ondelete="RESTRICT"), primary_key=True
     )
+
+
+# Relationship targets must be registered even in processes that only import
+# AnalysisTask (for example, the isolated workflow test process).
+from app.models.task_execution_attempt import TaskExecutionAttempt  # noqa: E402, F401
+from app.models.workflow_checkpoint import WorkflowCheckpoint  # noqa: E402, F401
+from app.models.model_call_record import ModelCallRecord  # noqa: E402, F401
+from app.models.review_request import ReviewRequest  # noqa: E402, F401
+from app.models.workflow_event import WorkflowEvent  # noqa: E402, F401
+from app.models.tool_call_record import ToolCallRecord  # noqa: E402, F401
+from app.models.memory_source import MemorySource  # noqa: E402, F401

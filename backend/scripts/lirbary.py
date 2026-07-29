@@ -1,8 +1,6 @@
-from ast import PyCF_TYPE_COMMENTS
 import random
 from datetime import date, timedelta
 import psycopg
-from sympy import O
 
 random.seed(42)
 
@@ -75,7 +73,7 @@ for day_offset in range(total_days):
     else:
         active_readers = list(range(1, n_readers + 1))  # [1, 2, 3]
 
-    active_books = list(range(1, n_books + 1))          # [1, 2, 3]
+    active_books = list(range(1, n_books + 1))  # [1, 2, 3]
 
     # 今天借几条
     num_today = random.choice([0, 1, 1, 2])
@@ -104,6 +102,3 @@ cur.executemany(
 print(f"borrow_records 填充完成 ({len(borrow_records)} 条)")
 cur.close()
 conn.close()
-
-
-

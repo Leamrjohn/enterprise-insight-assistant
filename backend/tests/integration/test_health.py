@@ -6,9 +6,7 @@ from sqlalchemy.orm import Session
 def test_database_fixture_uses_test_database(
     db_session: Session,
 ) -> None:
-    database_name = db_session.execute(
-        text("SELECT current_database()")
-    ).scalar_one()
+    database_name = db_session.execute(text("SELECT current_database()")).scalar_one()
 
     assert database_name == "agent_platform_test"
 

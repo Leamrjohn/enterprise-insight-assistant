@@ -2,7 +2,7 @@
 
 import re
 
-from app.db.session import SessionLocal
+from app.db.session import SessionLocal, set_tenant_scope
 from app.models.document_chunk import DocumentChunk
 from app.models.documents import Documents
 from app.models.company import CompanyMember
@@ -44,6 +44,7 @@ def validate_citations(
         )
         if membership is None:
             return (False, unique_ids)
+        set_tenant_scope(db, membership.company_id)
         for cid in unique_ids:
             chunk = (
                 db.query(DocumentChunk)

@@ -5,7 +5,7 @@ Revises: 88b83d61d1f9
 Create Date: 2026-07-18 10:35:01.905468
 
 """
-from typing import Sequence, Union
+
 from alembic import op
 import sqlalchemy as sa
 from pgvector.sqlalchemy import Vector
@@ -26,6 +26,7 @@ def upgrade() -> None:
         existing_nullable=True,
         postgresql_using="embedding::vector(384)",
     )
+
 
 def downgrade() -> None:
     raise RuntimeError(

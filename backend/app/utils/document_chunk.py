@@ -1,4 +1,14 @@
 from pathlib import Path
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class ChunkText:
+    """Extracted text plus the original paragraph range (one-based)."""
+
+    content: str
+    paragraph_start: int
+    paragraph_end: int
 
 
 def chunk_text(content: str, max_tokens: int = 512) -> list[str]:
@@ -46,7 +56,48 @@ def chunk_text(content: str, max_tokens: int = 512) -> list[str]:
     return chunks
 
 
-def chunk_file(file_path: Path) -> list[str]:
+def chunk_file(
+    file_path: Path, *, include_metadata: bool = False
+) -> list[str] | list[ChunkText]:
     """读取文件并分块。"""
     content = file_path.read_text(encoding="utf-8")
-    return chunk_text(content)
+    if not include_metadata:
+        return chunk_text(content)
+
+    paragraphs = [p.strip() for p in content.split("\n\n") if p.strip()]
+    chunks: list[ChunkText] = []
+    buffer: list[str] = []
+    buffer_start = 0
+    token_count = 0
+    for paragraph_index, paragraph in enumerate(paragraphs, start=1):
+        words = paragraph.split()
+        word_count = len(words)
+        if word_count > 512:
+            if buffer:
+                chunks.append(
+                    ChunkText("\n\n".join(buffer), buffer_start, paragraph_index - 1)
+                )
+                buffer = []
+                token_count = 0
+            for start in range(0, len(words), 512):
+                chunks.append(
+                    ChunkText(
+                        " ".join(words[start : start + 512]),
+                        paragraph_index,
+                        paragraph_index,
+                    )
+                )
+            continue
+        if token_count + word_count > 512 and buffer:
+            chunks.append(
+                ChunkText("\n\n".join(buffer), buffer_start, paragraph_index - 1)
+            )
+            buffer = []
+            token_count = 0
+        if not buffer:
+            buffer_start = paragraph_index
+        buffer.append(paragraph)
+        token_count += word_count
+    if buffer:
+        chunks.append(ChunkText("\n\n".join(buffer), buffer_start, len(paragraphs)))
+    return chunks

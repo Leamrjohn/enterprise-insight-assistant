@@ -130,6 +130,13 @@ def test_password_login_and_jwt_can_read_current_user(db_session) -> None:
 
 
 def test_bootstrap_owner_only_works_before_any_company(db_session) -> None:
+    # This test asserts the bootstrap precondition itself. Other integration
+    # modules may have committed fixture data through independent Sessions, so
+    # establish that precondition inside this transaction explicitly.
+    db_session.query(Company).delete(synchronize_session=False)
+    db_session.flush()
+    suffix = uuid4().hex
+
     def override_get_db():
         yield db_session
 
@@ -141,7 +148,7 @@ def test_bootstrap_owner_only_works_before_any_company(db_session) -> None:
                 json={
                     "name": "初始管理员",
                     "company_name": "Acme",
-                    "username": "owner",
+                    "username": f"owner-{suffix}",
                     "password": "owner-password",
                 },
             )
@@ -156,7 +163,7 @@ def test_bootstrap_owner_only_works_before_any_company(db_session) -> None:
                 json={
                     "name": "第二位管理员",
                     "company_name": "Other",
-                    "username": "owner-2",
+                    "username": f"owner-2-{suffix}",
                     "password": "owner-password",
                 },
             )

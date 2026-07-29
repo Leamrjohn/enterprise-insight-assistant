@@ -352,16 +352,16 @@ def test_data_node_records_agent_failure(monkeypatch) -> None:
 
     result = workflow_nodes.data_node({"question": "销售额是多少？", "user_id": 1})
 
-    assert result == {
-        "data_result": {
-            "status": "failed",
-            "error": "模型输出不符合契约",
-            "error_code": "sql_generation_invalid_output",
-            "attempts": {},
-            "candidate": None,
-        },
+    assert result["data_result"] == {
+        "status": "failed",
         "error": "模型输出不符合契约",
+        "error_code": "sql_generation_invalid_output",
+        "attempts": {},
+        "candidate": None,
     }
+    assert result["data_outcome"]["status"] == "retryable_error"
+    assert result["data_outcome"]["retry_hint"] == "retry"
+    assert result["error"] == "模型输出不符合契约"
 
 
 def test_data_node_builds_agent_with_company_source_and_snapshot(monkeypatch) -> None:
@@ -409,6 +409,51 @@ def test_data_node_builds_agent_with_company_source_and_snapshot(monkeypatch) ->
     assert captured["snapshot_catalog"].tables == {"inventory": frozenset({"on_hand"})}
 
 
+def test_data_checkpoint_keeps_the_prior_planner_contract(monkeypatch) -> None:
+    captured: dict[str, object] = {}
+
+    class FakeDataAgent:
+        def run(self, input):
+            return AgentOutput(success=True, evidence=[{"rows": [[100]]}])
+
+    monkeypatch.setattr(workflow_nodes, "DataAgent", FakeDataAgent)
+    workflow_nodes.data_node(
+        {
+            "question": "销售额是多少？",
+            "user_id": 1,
+            "plan": {"action": "analyze", "route": "data_only"},
+            "planner_result": {"status": "ready"},
+            "checkpoint_callback": lambda completed, next_node, patch: captured.update(
+                completed=completed, next_node=next_node, patch=patch
+            ),
+        }
+    )
+
+    assert captured["completed"] == "data_node"
+    assert captured["next_node"] == "reviewer_node"
+    assert captured["patch"] == {
+        "plan": {"action": "analyze", "route": "data_only"},
+        "planner_result": {"status": "ready"},
+        "data_result": {
+            "status": "ready",
+            "evidence": [{"rows": [[100]]}],
+            "attempts": {},
+        },
+        "confirmed_facts": [],
+        "data_outcome": {
+            "status": "succeeded",
+            "output": {
+                "status": "ready",
+                "evidence": [{"rows": [[100]]}],
+                "attempts": {},
+            },
+            "error_code": None,
+            "retry_hint": "stop",
+            "checkpoint_patch": {"stage": "querying_data"},
+        },
+    }
+
+
 def test_knowledge_node_keeps_answer_and_citations(monkeypatch) -> None:
     class FakeKnowledgeAgent:
         def run(self, input):
@@ -433,20 +478,19 @@ def test_knowledge_node_keeps_answer_and_citations(monkeypatch) -> None:
         {"question": "华东区销售额为什么下降？", "user_id": 1}
     )
 
-    assert result == {
-        "knowledge_result": {
-            "status": "ready",
-            "answer": "客户年度合同到期后未续约。",
-            "evidences": [
-                {
-                    "chunk_id": 42,
-                    "document_id": 9,
-                    "content": "客户年度合同到期后未续约。",
-                    "score": 0.93,
-                }
-            ],
-        }
+    assert result["knowledge_result"] == {
+        "status": "ready",
+        "answer": "客户年度合同到期后未续约。",
+        "evidences": [
+            {
+                "chunk_id": 42,
+                "document_id": 9,
+                "content": "客户年度合同到期后未续约。",
+                "score": 0.93,
+            }
+        ],
     }
+    assert result["knowledge_outcome"]["status"] == "succeeded"
 
 
 def test_reviewer_node_preserves_final_answer_and_review_evidence(monkeypatch) -> None:
@@ -493,7 +537,33 @@ def test_reviewer_node_preserves_final_answer_and_review_evidence(monkeypatch) -
             "review_outcome": "passed",
         },
         "final_answer": "数据与文档证据已汇总。",
+        "reviewer_outcome": {
+            "status": "succeeded",
+            "output": {"review_status": "passed"},
+            "error_code": None,
+            "retry_hint": "stop",
+            "checkpoint_patch": {"stage": "composing_report"},
+        },
     }
+
+
+def test_reviewer_node_returns_retryable_outcome_without_revealing_error(
+    monkeypatch,
+) -> None:
+    class FakeReviewerAgent:
+        def run(self, input):
+            return AgentOutput(
+                success=False,
+                error="provider retry later",
+                error_code="reviewer_rate_limited",
+                retryable=True,
+            )
+
+    monkeypatch.setattr(workflow_nodes, "ReviewerAgent", FakeReviewerAgent)
+    result = workflow_nodes.reviewer_node({"question": "销售额", "user_id": 1})
+
+    assert result["reviewer_outcome"]["status"] == "retryable_error"
+    assert result["reviewer_outcome"]["retry_hint"] == "retry"
 
 
 def test_workflow_runs_data_knowledge_and_reviewer_path(monkeypatch) -> None:
@@ -557,6 +627,60 @@ def test_workflow_runs_data_knowledge_and_reviewer_path(monkeypatch) -> None:
     assert calls == ["planner", "data", "knowledge", "reviewer"]
     assert result["final_answer"] == "数据与文档证据已汇总。"
     assert result["review_result"] == {"review_status": "complete"}
+
+
+def test_workflow_resumes_at_checkpoint_next_node_without_replanning(
+    monkeypatch,
+) -> None:
+    calls = []
+
+    def fail_planner(state):
+        raise AssertionError("planner must not rerun after data checkpoint")
+
+    def fake_knowledge(state):
+        calls.append("knowledge")
+        assert state["data_result"] == {
+            "status": "ready",
+            "evidence": [{"rows": [[1]]}],
+        }
+        return {"knowledge_result": {"status": "ready", "evidences": [{"chunk_id": 7}]}}
+
+    def fake_reviewer(state):
+        calls.append("reviewer")
+        return {
+            "review_result": {"review_status": "complete"},
+            "final_answer": "已从检查点恢复。",
+        }
+
+    monkeypatch.setattr(workflow_graph, "planner_node", fail_planner)
+    monkeypatch.setattr(workflow_graph, "knowledge_node", fake_knowledge)
+    monkeypatch.setattr(workflow_graph, "reviewer_node", fake_reviewer)
+    workflow = workflow_graph.build_workflow().compile()
+    result = workflow.invoke(
+        {
+            "question": "销售额为什么下降？",
+            "user_id": 1,
+            "plan": {"action": "analyze", "route": "hybrid"},
+            "data_result": {"status": "ready", "evidence": [{"rows": [[1]]}]},
+            "knowledge_result": None,
+            "review_result": None,
+            "terminal_result": None,
+            "final_answer": None,
+            "error": None,
+            "resume_next_node": "knowledge_node",
+            "external_retry_count": 0,
+            "max_external_retries": 2,
+            "loop_history": [],
+            "data_outcome": None,
+            "knowledge_outcome": None,
+            "routing_action": None,
+            "routing_feedback": None,
+            "empty_result_replanned": False,
+        }
+    )
+
+    assert calls == ["knowledge", "reviewer"]
+    assert result["final_answer"] == "已从检查点恢复。"
 
 
 def test_workflow_keeps_data_failure_for_partial_review_with_document_evidence(

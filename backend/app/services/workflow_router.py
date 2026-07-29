@@ -6,8 +6,12 @@ import hashlib
 import json
 from typing import Literal
 
+from app.schemas.node_outcome import NodeOutcome
 
-RoutingAction = Literal["stop", "retry_data", "retry_knowledge", "replan"]
+
+RoutingAction = Literal[
+    "stop", "retry_data", "retry_knowledge", "retry_reviewer", "replan"
+]
 
 MAX_EXTERNAL_RETRIES = 2
 RETRYABLE_DATA_CODES = frozenset(
@@ -20,6 +24,14 @@ RETRYABLE_DATA_CODES = frozenset(
 )
 RETRYABLE_KNOWLEDGE_CODES = frozenset({"knowledge_retrieval_failed"})
 SECURITY_VALIDATION_FAILURES = frozenset({"citations_valid"})
+
+
+def _outcome_from_state(state: dict, name: str) -> NodeOutcome | None:
+    """Read the durable node contract, tolerating pre-contract workflow state."""
+    raw = state.get(f"{name}_outcome")
+    if not isinstance(raw, dict):
+        return None
+    return NodeOutcome.model_validate(raw)
 
 
 def build_scope_fingerprint(state: dict, plan: dict | None = None) -> str:
@@ -62,6 +74,41 @@ def choose_next_action(state: dict) -> tuple[RoutingAction, str]:
     if validation_action is not None:
         return validation_action, "validation_failure"
 
+    data_outcome = _outcome_from_state(state, "data")
+    knowledge_outcome = _outcome_from_state(state, "knowledge")
+    reviewer_outcome = _outcome_from_state(state, "reviewer")
+    outcomes = (
+        ("data", data_outcome),
+        ("knowledge", knowledge_outcome),
+        ("reviewer", reviewer_outcome),
+    )
+    for name, outcome in outcomes:
+        if outcome is None:
+            continue
+        if outcome.status == "cancelled":
+            return "stop", "cancelled"
+        if outcome.status == "denied":
+            return "stop", f"{name}_denied"
+        if outcome.status == "no_matching_records":
+            # Empty business data is a valid fact, not a transport or SQL error.
+            return "stop", "no_matching_records"
+        if outcome.status == "repairable_error":
+            return (
+                ("replan", f"{name}_repairable_error")
+                if name == "data"
+                else ("retry_knowledge", "knowledge_repairable_error")
+                if name == "knowledge"
+                else ("replan", "reviewer_repairable_error")
+            )
+        if outcome.status == "retryable_error" and outcome.retry_hint == "retry":
+            return (
+                ("retry_data", "retryable_data_failure")
+                if name == "data"
+                else ("retry_knowledge", "retryable_knowledge_failure")
+                if name == "knowledge"
+                else ("retry_reviewer", "retryable_reviewer_failure")
+            )
+
     data_result = state.get("data_result") or {}
     knowledge_result = state.get("knowledge_result") or {}
     data_status = data_result.get("status")
@@ -69,7 +116,7 @@ def choose_next_action(state: dict) -> tuple[RoutingAction, str]:
     data_code = data_result.get("error_code")
     knowledge_code = knowledge_result.get("error_code")
 
-    # Empty data can be a planner scope/alias mismatch once, rather than a fact.
+    # Legacy state from before NodeOutcome preserves its previous one-time repair.
     if data_code == "no_matching_records" and not state.get("empty_result_replanned"):
         return "replan", "empty_result_scope_check"
 
@@ -143,6 +190,13 @@ def build_feedback(state: dict, action: RoutingAction, reason: str) -> dict | No
             "error_code": knowledge_result.get("error_code"),
             "reason": reason,
             "suggestion": "保持问题、公司和文档范围不变，重试文档检索与引用生成。",
+        }
+    if action == "retry_reviewer":
+        return {
+            "target": "reviewer",
+            "mode": "retry_same_evidence",
+            "reason": reason,
+            "suggestion": "保持已确认的数据与文档证据不变，重试报告合成。",
         }
     return {
         "target": "planner",

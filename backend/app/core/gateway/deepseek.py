@@ -18,6 +18,12 @@ from openai import (
     UnprocessableEntityError,
 )
 from app.core.exceptions import PermanentModelError, RetryableModelError
+from app.services.model_governance import (
+    fallback_chain_scope,
+    next_fallback_model,
+    record_model_call,
+    reserve_model_call,
+)
 
 
 class DeepSeekGateway(ModelGateway):
@@ -46,7 +52,18 @@ class DeepSeekGateway(ModelGateway):
         *,
         json_mode: bool = False,
     ) -> str:
+        with fallback_chain_scope(self.model_name):
+            return self._chat_once(prompt, system_prompt, json_mode=json_mode)
+
+    def _chat_once(
+        self, prompt: str, system_prompt: str | None = None, *, json_mode: bool = False
+    ) -> str:
         create_at = time.perf_counter()
+        governance_scope = reserve_model_call(
+            provider="deepseek",
+            model_name=self.model_name,
+            estimated_prompt_tokens=self.count_tokens(prompt),
+        )
         try:
             messages = []
             if system_prompt is not None:
@@ -96,6 +113,15 @@ class DeepSeekGateway(ModelGateway):
                     "cost": record.cost,
                 },
             )
+            record_model_call(
+                governance_scope,
+                provider="deepseek",
+                model_name=self.model_name,
+                prompt_tokens=prompt_tokens,
+                completion_tokens=completion_tokens,
+                duration_ms=duration_ms,
+                result_category="success",
+            )
             return result
         except (
             APIConnectionError,
@@ -105,6 +131,22 @@ class DeepSeekGateway(ModelGateway):
         ) as exc:
             # 保留原有失败日志记录代码
             self._log_failure(prompt=prompt, create_at=create_at, exc=exc)
+            record_model_call(
+                governance_scope,
+                provider="deepseek",
+                model_name=self.model_name,
+                duration_ms=(time.perf_counter() - create_at) * 1000,
+                result_category="retryable_error",
+                error_code="provider_temporary_error",
+            )
+            fallback_model = next_fallback_model(self.model_name)
+            if fallback_model is not None:
+                failed_model = self.model_name
+                self.model_name = fallback_model
+                try:
+                    return self._chat_once(prompt, system_prompt, json_mode=json_mode)
+                finally:
+                    self.model_name = failed_model
             raise RetryableModelError(
                 "Model service is temporarily unavailable"
             ) from exc
@@ -118,10 +160,26 @@ class DeepSeekGateway(ModelGateway):
         ) as exc:
             # 保留原有失败日志记录代码
             self._log_failure(prompt=prompt, create_at=create_at, exc=exc)
+            record_model_call(
+                governance_scope,
+                provider="deepseek",
+                model_name=self.model_name,
+                duration_ms=(time.perf_counter() - create_at) * 1000,
+                result_category="permanent_error",
+                error_code="provider_request_invalid",
+            )
             raise PermanentModelError("Model request configuration is invalid") from exc
 
         except Exception as exc:
             self._log_failure(prompt=prompt, create_at=create_at, exc=exc)
+            record_model_call(
+                governance_scope,
+                provider="deepseek",
+                model_name=self.model_name,
+                duration_ms=(time.perf_counter() - create_at) * 1000,
+                result_category="unexpected_error",
+                error_code="provider_unexpected_error",
+            )
             raise
 
     def count_tokens(self, text: str) -> int:

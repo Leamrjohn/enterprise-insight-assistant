@@ -82,6 +82,7 @@ def test_cancelled_task_is_skipped_by_real_worker(
             record_task = db.get(AnalysisTask, task_id)
             if record_task is not None:
                 db.delete(record_task)
+                db.flush()
         if user_id is not None:
             record_user = db.get(User, user_id)
             if record_user is not None:
@@ -137,6 +138,7 @@ def test_real_worker_persists_planner_model_attempts(
             record_task = db.get(AnalysisTask, task_id)
             if record_task is not None:
                 db.delete(record_task)
+                db.flush()
         if user_id is not None:
             record_user = db.get(User, user_id)
             if record_user is not None:

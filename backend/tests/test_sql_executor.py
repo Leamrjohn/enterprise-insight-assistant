@@ -2,7 +2,13 @@ import pytest
 from app.tools.executor import _apply_row_limit, execute_readonly_sql
 
 
-ALLOWED_TABLES = {"customers", "products", "sales_orders", "sales_order_items", "complaints"}
+ALLOWED_TABLES = {
+    "customers",
+    "products",
+    "sales_orders",
+    "sales_order_items",
+    "complaints",
+}
 
 
 @pytest.mark.skip(reason="需要 Docker 业务数据库，本地非 E2E 环境跳过")

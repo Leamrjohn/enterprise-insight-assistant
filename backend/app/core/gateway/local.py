@@ -10,6 +10,7 @@ import json
 import re
 import time
 from app.core.gateway.base import ModelGateway, ModelCallRecord
+from app.services.model_governance import record_model_call, reserve_model_call
 
 logger = logging.getLogger(__name__)
 
@@ -26,6 +27,11 @@ class LocalModelGateway(ModelGateway):
     ) -> str:
         """模拟 AI 对话"""
         start = time.perf_counter()
+        governance_scope = reserve_model_call(
+            provider="local",
+            model_name="local-simulator",
+            estimated_prompt_tokens=self.count_tokens(prompt),
+        )
 
         # 模拟模型处理的耗时
         time.sleep(0.5)
@@ -71,6 +77,15 @@ class LocalModelGateway(ModelGateway):
                 "completion_tokens": record.completion_tokens,
                 "duration_ms": record.duration_ms,
             },
+        )
+        record_model_call(
+            governance_scope,
+            provider="local",
+            model_name="local-simulator",
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            duration_ms=duration,
+            result_category="success",
         )
 
         return response

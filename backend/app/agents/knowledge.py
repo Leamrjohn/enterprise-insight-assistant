@@ -7,6 +7,7 @@ from app.tools.rag import RAGTool
 from app.core.gateway.factory import get_model_gateway
 from app.core.exceptions import StructuredOutputError
 from app.core.rag.result_parser import parse_analysis_result
+from app.schemas.retrieval_brief import RetrievalBrief
 
 
 class KnowledgeAgent(Agent):
@@ -14,7 +15,7 @@ class KnowledgeAgent(Agent):
 
     def __init__(
         self,
-        rag_tool: RAGTool | None = None,
+        rag_tool: Tool | None = None,
         gateway: ModelGateway | None = None,
     ) -> None:
         self._rag_tool = rag_tool or RAGTool()
@@ -42,7 +43,23 @@ class KnowledgeAgent(Agent):
         attempts = {"same_scope_retry": 1} if same_scope_retry else {}
         # A retrieval-service retry deliberately keeps the original question and scope.
         # Feedback selects the operation; it must not be mixed into untrusted document text.
-        parameters = {"question": input.question}
+        facts = input.context.get("confirmed_facts") or []
+        brief = RetrievalBrief(
+            question=input.question,
+            confirmed_fact_ids=[
+                fact["fact_id"]
+                for fact in facts
+                if isinstance(fact, dict) and isinstance(fact.get("fact_id"), str)
+            ],
+            confirmed_fact_statements=[
+                fact["statement"]
+                for fact in facts
+                if isinstance(fact, dict)
+                and isinstance(fact.get("statement"), str)
+                and fact["statement"].strip()
+            ],
+        )
+        parameters = {"question": brief.render_query()}
         company_id = input.context.get("company_id")
         if company_id is not None:
             parameters["company_id"] = company_id
@@ -54,6 +71,7 @@ class KnowledgeAgent(Agent):
             return AgentOutput(
                 success=False,
                 error=result.error or "RAGTool failed",
+                error_code=result.error_code,
                 attempts=attempts,
             )
         data = result.data or {}

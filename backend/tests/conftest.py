@@ -5,6 +5,7 @@ from pathlib import Path
 
 os.environ["APP_ENV"] = "test"
 os.environ["DATABASE_NAME"] = "agent_platform_test"
+os.environ["MIGRATION_DATABASE_USER"] = "agent_migrator"
 os.environ["LOG_LEVEL"] = "WARNING"
 os.environ["LOG_DIR"] = "./.test-logs"
 os.environ["STORAGE_DIR"] = "./.test-storage"

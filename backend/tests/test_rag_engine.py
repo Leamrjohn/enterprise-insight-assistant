@@ -1,4 +1,5 @@
 """测试可靠RAG引擎"""
+
 from app.core.rag.engine import (
     EvidenceRef,
     build_prompt,
@@ -12,7 +13,9 @@ def test_build_prompt():
         EvidenceRef(chunk_id=1, document_id=10, content="销售额下降了15%"),
         EvidenceRef(chunk_id=2, document_id=10, content="原因是成本上升"),
     ]
-    system_prompt, user_prompt,allowed_chunk_ids = build_prompt("为什么销售额下降", evidences)
+    system_prompt, user_prompt, allowed_chunk_ids = build_prompt(
+        "为什么销售额下降", evidences
+    )
     assert isinstance(system_prompt, str)
     assert isinstance(user_prompt, str)
     assert "销售额下降了15%" in user_prompt
@@ -56,7 +59,6 @@ def test_check_sufficiency_accepts_relevant_chinese_evidence_by_score():
         )
         is True
     )
-
 
 
 def test_build_prompt_allows_only_selected_evidence():

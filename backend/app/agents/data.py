@@ -44,7 +44,7 @@ class DataAgent(Agent):
     def __init__(
         self,
         sql_generator: SQLGenerationService | None = None,
-        sql_tool: SQLTool | None = None,
+        sql_tool: Tool | None = None,
         *,
         data_source: BusinessDataSource | None = None,
         snapshot_catalog: SnapshotCatalog | None = None,

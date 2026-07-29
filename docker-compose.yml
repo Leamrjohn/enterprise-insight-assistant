@@ -14,9 +14,12 @@ services:
     image: pgvector/pgvector:0.8.0-pg16
     container_name: agent-platform-postgres
     environment:
-      POSTGRES_USER: agent_app
+      POSTGRES_USER: postgres
       POSTGRES_PASSWORD: changeme_in_production
       POSTGRES_DB: agent_platform
+      # Applies only when a new data volume is initialized. C collation avoids
+      # host libc-version drift for future local platform databases.
+      POSTGRES_INITDB_ARGS: "--lc-collate=C --lc-ctype=C"
     ports:
       - "5433:5432"
     volumes:
@@ -77,7 +80,10 @@ services:
     command: ["python", "-m", "alembic", "upgrade", "head"]
     env_file:
       - ./backend/.env
-    environment: *backend-environment
+    environment:
+      <<: *backend-environment
+      DATABASE_USER: agent_migrator
+      DATABASE_PASSWORD: changeme_in_production
     depends_on:
       postgres:
         condition: service_healthy

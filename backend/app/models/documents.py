@@ -28,8 +28,8 @@ class Documents(Base):
     uploaded_by_user_id: Mapped[int] = mapped_column(
         ForeignKey("users.id"), nullable=False
     )
-    company_id: Mapped[int | None] = mapped_column(
-        ForeignKey("companies.id", ondelete="SET NULL"), nullable=True, index=True
+    company_id: Mapped[int] = mapped_column(
+        ForeignKey("companies.id", ondelete="RESTRICT"), nullable=False, index=True
     )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     content: Mapped[str | None] = mapped_column(Text, nullable=True)

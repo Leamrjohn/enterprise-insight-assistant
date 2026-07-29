@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
 from fastapi.testclient import TestClient
@@ -6,6 +7,7 @@ from sqlalchemy.orm import Session
 
 import app.tasks.analysis_tasks as analysis_tasks
 from app.core.auth import get_current_user
+from app.core.logging import request_id_context
 from app.db.session import SessionLocal
 from app.main import app
 from app.models.analysis_task import AnalysisTask
@@ -13,6 +15,12 @@ from app.models.company import Company, CompanyMember
 from app.models.conversation import Conversation, ConversationMessage
 from app.models.user import User
 from app.tasks.analysis_tasks import process_analysis_task
+from app.services.task_execution_service import (
+    checkpoint_workflow_state,
+    claim_execution,
+    recover_expired_executions,
+)
+from app.services.model_governance import ModelBudgetExceeded
 
 
 def create_analysis_task(
@@ -300,6 +308,7 @@ def test_worker_runs_langgraph_and_saves_terminal_planner_result(monkeypatch) ->
         company_id: int | None = None,
         conversation_context: dict | None = None,
         stage_callback=None,
+        **kwargs,
     ) -> dict:
         calls.append((question, user_id, conversation_context))
         return {
@@ -356,6 +365,46 @@ def test_worker_runs_langgraph_and_saves_terminal_planner_result(monkeypatch) ->
         _delete_created_records(db, task_id, user_id)
 
 
+def test_worker_sets_and_restores_persisted_request_correlation(monkeypatch) -> None:
+    observed_request_ids: list[str] = []
+
+    def fake_run_analysis(*args, **kwargs) -> dict:
+        observed_request_ids.append(request_id_context.get())
+        return {
+            "plan": {"action": "scope_exit", "route": None},
+            "planner_result": {"status": "ready", "attempts": {"model_attempts": 0}},
+            "terminal_result": {"outcome": "scope_exit"},
+            "final_answer": "范围外。",
+        }
+
+    monkeypatch.setattr(analysis_tasks, "run_analysis", fake_run_analysis)
+    db = SessionLocal()
+    task_id: int | None = None
+    user_id: int | None = None
+    try:
+        suffix = uuid4().hex
+        user = User(name=f"trace-user-{suffix}", api_key=f"trace-key-{suffix}")
+        db.add(user)
+        db.flush()
+        task = AnalysisTask(
+            user_id=user.id,
+            question="范围外问题",
+            status="queued",
+            stage="queued",
+            request_id="worker-correlation-id",
+        )
+        db.add(task)
+        db.commit()
+        task_id, user_id = task.id, user.id
+
+        process_analysis_task.run(task_id=task_id)
+
+        assert observed_request_ids == ["worker-correlation-id"]
+        assert request_id_context.get() == "-"
+    finally:
+        _delete_created_records(db, task_id, user_id)
+
+
 def test_worker_syncs_running_and_completed_assistant_message(monkeypatch) -> None:
     db = SessionLocal()
     task_id: int | None = None
@@ -381,6 +430,7 @@ def test_worker_syncs_running_and_completed_assistant_message(monkeypatch) -> No
             company_id: int | None = None,
             conversation_context: dict | None = None,
             stage_callback=None,
+            **kwargs,
         ) -> dict:
             independent_db = SessionLocal()
             try:
@@ -482,7 +532,7 @@ def test_worker_syncs_partial_assistant_message(monkeypatch) -> None:
         monkeypatch.setattr(
             analysis_tasks,
             "run_analysis",
-            lambda question, user_id, *, company_id=None, conversation_context=None, stage_callback=None: {
+            lambda question, user_id, *, company_id=None, conversation_context=None, stage_callback=None, **kwargs: {
                 "plan": {"action": "analyze", "route": "hybrid"},
                 "final_answer": "销售额已下降，但资料不足以确认原因。",
                 "review_result": {"review_status": "partial"},
@@ -523,7 +573,7 @@ def test_worker_syncs_unexpected_failure_and_skips_terminal_redelivery(
         monkeypatch.setattr(
             analysis_tasks,
             "run_analysis",
-            lambda question, user_id, *, company_id=None, conversation_context=None, stage_callback=None: (
+            lambda question, user_id, *, company_id=None, conversation_context=None, stage_callback=None, **kwargs: (
                 (_ for _ in ()).throw(RuntimeError("boom"))
             ),
         )
@@ -557,7 +607,7 @@ def test_worker_persists_partial_workflow_result(monkeypatch) -> None:
     monkeypatch.setattr(
         analysis_tasks,
         "run_analysis",
-        lambda question, user_id, *, company_id=None, conversation_context=None, stage_callback=None: {
+        lambda question, user_id, *, company_id=None, conversation_context=None, stage_callback=None, **kwargs: {
             "plan": {
                 "action": "analyze",
                 "route": "hybrid",
@@ -615,7 +665,7 @@ def test_worker_persists_retryable_planner_failure_as_failed(monkeypatch) -> Non
     monkeypatch.setattr(
         analysis_tasks,
         "run_analysis",
-        lambda question, user_id, *, company_id=None, conversation_context=None, stage_callback=None: {
+        lambda question, user_id, *, company_id=None, conversation_context=None, stage_callback=None, **kwargs: {
             "terminal_result": {
                 "outcome": "failed",
                 "stage": "planning",
@@ -709,3 +759,103 @@ def _delete_created_records(
             db.delete(user)
     db.commit()
     db.close()
+
+
+def test_worker_resumes_from_database_checkpoint(monkeypatch) -> None:
+    db = SessionLocal()
+    task_id: int | None = None
+    user_id: int | None = None
+    try:
+        suffix = uuid4().hex
+        user = User(name=f"resume-user-{suffix}", api_key=f"resume-key-{suffix}")
+        db.add(user)
+        db.flush()
+        user_id = user.id
+        task = AnalysisTask(
+            user_id=user.id, question="销售额", status="queued", stage="queued"
+        )
+        db.add(task)
+        db.commit()
+        task_id = task.id
+        old = claim_execution(
+            db, task_id=task.id, celery_task_id="old", worker_id="dead-worker"
+        )
+        assert old is not None
+        assert checkpoint_workflow_state(
+            db,
+            attempt=old.attempt,
+            stage="querying_data",
+            completed_node="data_node",
+            next_node="knowledge_node",
+            workflow_state={
+                "plan": {"action": "analyze", "route": "hybrid"},
+                "data_result": {"status": "ready", "evidence": [{"rows": [[1]]}]},
+            },
+        )
+        old.attempt.lease_expires_at = datetime.now(timezone.utc) - timedelta(seconds=1)
+        db.commit()
+        assert recover_expired_executions(db) == [task.id]
+
+        captured: dict[str, object] = {}
+
+        def fake_run_analysis(question, user_id, **kwargs):
+            captured["resume_next_node"] = kwargs["resume_next_node"]
+            captured["resume_state"] = kwargs["resume_state"]
+            return {
+                "plan": kwargs["resume_state"]["plan"],
+                "final_answer": "从数据检查点恢复后完成。",
+                "review_result": {"review_status": "complete"},
+            }
+
+        monkeypatch.setattr(analysis_tasks, "run_analysis", fake_run_analysis)
+        process_analysis_task.run(task_id=task.id)
+
+        db.expire_all()
+        stored = db.get(AnalysisTask, task.id)
+        assert stored is not None
+        assert stored.status == "completed"
+        assert captured["resume_next_node"] == "knowledge_node"
+        assert captured["resume_state"] == {
+            "plan": {"action": "analyze", "route": "hybrid"},
+            "data_result": {"status": "ready", "evidence": [{"rows": [[1]]}]},
+        }
+    finally:
+        _delete_created_records(db, task_id, user_id)
+
+
+def test_worker_marks_model_budget_exhaustion_as_partial_without_retry(
+    monkeypatch,
+) -> None:
+    db = SessionLocal()
+    task_id: int | None = None
+    user_id: int | None = None
+    try:
+        suffix = uuid4().hex
+        user = User(name=f"budget-user-{suffix}", api_key=f"budget-key-{suffix}")
+        db.add(user)
+        db.flush()
+        user_id = user.id
+        task = AnalysisTask(
+            user_id=user.id, question="销售额", status="queued", stage="queued"
+        )
+        db.add(task)
+        db.commit()
+        task_id = task.id
+        monkeypatch.setattr(
+            analysis_tasks,
+            "run_analysis",
+            lambda *args, **kwargs: (_ for _ in ()).throw(
+                ModelBudgetExceeded("model call budget exhausted")
+            ),
+        )
+
+        process_analysis_task.run(task_id=task.id)
+
+        db.expire_all()
+        stored = db.get(AnalysisTask, task.id)
+        assert stored is not None
+        assert stored.status == "partial"
+        assert stored.error_type == "model_budget_exhausted"
+        assert stored.result_data["type"] == "model_budget_exhausted"
+    finally:
+        _delete_created_records(db, task_id, user_id)

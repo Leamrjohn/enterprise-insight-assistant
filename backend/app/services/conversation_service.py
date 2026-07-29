@@ -155,6 +155,7 @@ def create_conversation_task_service(
     context: CurrentCompanyContext,
     content: str,
     document_ids: list[int] | None = None,
+    request_id: str | None = None,
 ) -> ConversationTaskBundle | None:
     conversation = get_conversation_service(
         db,
@@ -222,6 +223,7 @@ def create_conversation_task_service(
             data_source_id=conversation.data_source_id,
             schema_snapshot_id=snapshot.id if snapshot else None,
             document_ids=selected_document_ids,
+            request_id=request_id,
         )
         outbox_event = create_analysis_task_event(db, task_id=task.id)
         assistant_message = create_message(
@@ -253,6 +255,7 @@ def cancel_conversation_task_service(
     conversation_id: int,
     task_id: int,
     context: CurrentCompanyContext,
+    request_id: str | None = None,
 ) -> AnalysisTask | None:
     """Cancel a non-terminal conversation task and update its assistant message."""
     task = get_conversation_task_service(
@@ -288,6 +291,7 @@ def retry_conversation_task_service(
     conversation_id: int,
     task_id: int,
     context: CurrentCompanyContext,
+    request_id: str | None = None,
 ) -> ConversationTaskRetryBundle | None:
     """Create a linked retry without mutating the original terminal task."""
     original = get_conversation_task_service(
@@ -318,6 +322,7 @@ def retry_conversation_task_service(
             schema_snapshot_id=original.schema_snapshot_id,
             document_ids=document_ids,
             parent_task_id=original.id,
+            request_id=request_id,
         )
         outbox_event = create_analysis_task_event(db, task_id=task.id)
         assistant_message = create_message(

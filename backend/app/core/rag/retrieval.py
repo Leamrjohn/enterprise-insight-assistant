@@ -42,6 +42,11 @@ def retrieve_evidence(
             document_id=row["document_id"],
             content=row["content"],
             score=float(row["score"]),
+            document_name=row.get("document_name"),
+            document_type=row.get("document_type"),
+            page_number=row.get("page_number"),
+            paragraph_start=row.get("paragraph_start"),
+            paragraph_end=row.get("paragraph_end"),
         )
         for row in results
     ]

@@ -63,6 +63,7 @@ def test_rag_tool_uses_reranked_evidence_for_prompt(monkeypatch):
             pass
 
     monkeypatch.setattr("app.tools.rag.SessionLocal", FakeSession)
+    monkeypatch.setattr("app.tools.rag.set_tenant_scope", lambda *_: None)
     monkeypatch.setattr("app.tools.rag.LocalEmbeddingProvider", lambda: object())
     monkeypatch.setattr(
         "app.tools.rag.retrieve_evidence",
@@ -98,6 +99,7 @@ def test_rag_tool_rejects_high_vector_score_with_low_rerank_score(monkeypatch):
             pass
 
     monkeypatch.setattr("app.tools.rag.SessionLocal", FakeSession)
+    monkeypatch.setattr("app.tools.rag.set_tenant_scope", lambda *_: None)
     monkeypatch.setattr("app.tools.rag.LocalEmbeddingProvider", lambda: object())
     monkeypatch.setattr(
         "app.tools.rag.retrieve_evidence",

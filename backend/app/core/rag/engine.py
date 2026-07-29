@@ -15,6 +15,11 @@ class EvidenceRef:
     content: str
     score: float = 0.0  # 向量召回分数
     rerank_score: float | None = None  # CrossEncoder 相关性分数
+    document_name: str | None = None
+    document_type: str | None = None
+    page_number: int | None = None
+    paragraph_start: int | None = None
+    paragraph_end: int | None = None
 
 
 @dataclass
@@ -58,7 +63,14 @@ def build_prompt(
         total_chars = next_total
 
     context = "\n\n".join(
-        (f'<evidence chunk_id="{evidence.chunk_id}">\n{evidence.content}\n</evidence>')
+        (
+            f'<evidence chunk_id="{evidence.chunk_id}" '
+            f'document="{evidence.document_name or "unknown"}" '
+            f'type="{evidence.document_type or "unknown"}" '
+            f'page="{evidence.page_number or "unknown"}" '
+            f'paragraphs="{evidence.paragraph_start or "unknown"}-{evidence.paragraph_end or "unknown"}">\n'
+            f"{evidence.content}\n</evidence>"
+        )
         for evidence in selected
     )
     system_prompt = (

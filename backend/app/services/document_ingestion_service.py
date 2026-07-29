@@ -1,5 +1,5 @@
 from app.repositories.chunk_repository import add_chunk
-from app.utils.document_chunk import chunk_file
+from app.utils.document_chunk import ChunkText, chunk_file
 from typing import BinaryIO
 from sqlalchemy.orm import Session
 from app.core.settings import Settings
@@ -67,6 +67,8 @@ def process_document_chunks(
 ) -> Documents:
 
     document_id = document.id
+    if document.company_id is None:
+        raise ValueError("Document company scope is missing")
 
     document.status = "processing"
     document.error_message = None
@@ -75,22 +77,36 @@ def process_document_chunks(
         if document.file_path is None:
             raise ValueError("Document file path is missing")
         absolute_path = settings.storage_dir / document.file_path
-        chunk_texts = chunk_file(absolute_path)
-        if not chunk_texts:
+        chunk_records = chunk_file(absolute_path, include_metadata=True)
+        if not chunk_records:
             raise EmptyDocumentError("Document has no extractable text")
+        chunk_records = [
+            record
+            if isinstance(record, ChunkText)
+            else ChunkText(
+                content=record, paragraph_start=index + 1, paragraph_end=index + 1
+            )
+            for index, record in enumerate(chunk_records)
+        ]
+        chunk_texts = [record.content for record in chunk_records]
 
         embeddings = LocalEmbeddingProvider().embed_batch(chunk_texts)
 
         if len(embeddings) != len(chunk_texts):
             raise RuntimeError("Embedding count does not match document chunk count")
-        for index, (chunk_text, embedding) in enumerate(zip(chunk_texts, embeddings)):
+        for index, (chunk_record, embedding) in enumerate(
+            zip(chunk_records, embeddings)
+        ):
             add_chunk(
                 db=db,
                 document_id=document_id,
+                company_id=document.company_id,
                 chunk_index=index,
-                content=chunk_text,
-                token_count=len(chunk_text.split()),
+                content=chunk_record.content,
+                token_count=len(chunk_record.content.split()),
                 embedding=embedding,
+                paragraph_start=chunk_record.paragraph_start,
+                paragraph_end=chunk_record.paragraph_end,
             )
         document.status = "completed"
         document.content = "\n\n".join(chunk_texts)

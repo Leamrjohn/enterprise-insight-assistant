@@ -2,6 +2,8 @@ import pytest
 from sqlalchemy.orm import Session
 
 from app.core.settings import get_settings
+from app.db.session import set_tenant_scope
+from app.models.company import Company, CompanyMember
 from app.models.document_chunk import DocumentChunk
 from app.models.documents import Documents
 from app.models.user import User
@@ -10,8 +12,22 @@ import app.services.document_ingestion_service as document_ingestion_service
 
 
 def _create_pending_document(db: Session, user: User, suffix: str) -> Documents:
+    company = Company(name=f"ingestion-company-{suffix}")
+    db.add(company)
+    db.flush()
+    db.add(
+        CompanyMember(
+            user_id=user.id,
+            company_id=company.id,
+            role="owner",
+            status="approved",
+        )
+    )
+    db.flush()
+    set_tenant_scope(db, company.id)
     document = Documents(
         uploaded_by_user_id=user.id,
+        company_id=company.id,
         name=f"report-{suffix}.txt",
         content=None,
         source="upload",
@@ -40,7 +56,9 @@ def test_process_document_chunks_saves_one_embedding_per_chunk(
             assert texts == chunk_texts
             return embeddings
 
-    monkeypatch.setattr(document_ingestion_service, "chunk_file", lambda _: chunk_texts)
+    monkeypatch.setattr(
+        document_ingestion_service, "chunk_file", lambda _, **__: chunk_texts
+    )
     monkeypatch.setattr(
         document_ingestion_service,
         "LocalEmbeddingProvider",
@@ -66,6 +84,10 @@ def test_process_document_chunks_saves_one_embedding_per_chunk(
     assert [len(chunk.embedding) for chunk in chunks] == [384, 384]
     assert chunks[0].embedding[0] == pytest.approx(0.1)
     assert chunks[1].embedding[0] == pytest.approx(0.2)
+    assert [(chunk.paragraph_start, chunk.paragraph_end) for chunk in chunks] == [
+        (1, 1),
+        (2, 2),
+    ]
 
 
 def test_process_document_chunks_marks_document_failed_when_embedding_fails(
@@ -82,7 +104,7 @@ def test_process_document_chunks_marks_document_failed_when_embedding_fails(
     monkeypatch.setattr(
         document_ingestion_service,
         "chunk_file",
-        lambda _: ["first chunk"],
+        lambda _, **__: ["first chunk"],
     )
     monkeypatch.setattr(
         document_ingestion_service,

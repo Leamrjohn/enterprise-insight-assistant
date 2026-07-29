@@ -131,7 +131,9 @@ def test_build_conversation_context_uses_large_enough_remaining_fragment() -> No
     }
 
 
-def test_build_conversation_context_stops_when_remaining_fragment_is_too_small() -> None:
+def test_build_conversation_context_stops_when_remaining_fragment_is_too_small() -> (
+    None
+):
     messages = [
         SimpleNamespace(id=100, role="user", content="tiny"),
         SimpleNamespace(id=101, role="assistant", content="older"),
@@ -159,7 +161,9 @@ def test_build_conversation_context_stops_when_remaining_fragment_is_too_small()
     }
 
 
-def test_build_conversation_context_marks_older_messages_omitted_after_fragment() -> None:
+def test_build_conversation_context_marks_older_messages_omitted_after_fragment() -> (
+    None
+):
     messages = [
         SimpleNamespace(id=100, role="user", content="first"),
         SimpleNamespace(id=101, role="assistant", content="older"),

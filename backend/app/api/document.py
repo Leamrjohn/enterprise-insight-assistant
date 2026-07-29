@@ -127,7 +127,10 @@ async def upload_document(
             original_name=file.filename,
             settings=get_settings(),
         )
-        process_document_task.delay(document_id=record.id)
+        process_document_task.delay(
+            document_id=record.id,
+            company_id=context.company.id,
+        )
         return record
     except DuplicateDocumentError:
         raise HTTPException(status_code=409, detail="document already exists")

@@ -7,7 +7,7 @@ from fastapi import Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.core.auth import get_current_user
-from app.db.session import get_db
+from app.db.session import get_db, set_tenant_scope
 from app.models.company import Company, CompanyMember
 from app.models.user import User
 from app.repositories.company_repository import get_company, get_membership_for_user
@@ -40,6 +40,7 @@ def get_current_company_context(
     company = get_company(db, company_id=membership.company_id)
     if company is None:
         raise HTTPException(status_code=403, detail="company membership is invalid")
+    set_tenant_scope(db, company.id)
     return CurrentCompanyContext(
         user=current_user, company=company, membership=membership
     )

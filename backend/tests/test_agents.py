@@ -203,6 +203,37 @@ def test_knowledge_agent_keeps_metadata_for_cited_chunks_only():
     ]
 
 
+def test_knowledge_agent_uses_confirmed_facts_only_as_a_retrieval_brief():
+    rag_tool = FakeRAGTool(
+        ToolOutput(
+            success=True,
+            data={
+                "status": "insufficient_evidence",
+                "answer": "无法回答：资料不足",
+                "evidences": [],
+            },
+        )
+    )
+    agent = KnowledgeAgent(rag_tool=rag_tool, gateway=FakeModelGateway("unused"))
+
+    agent.run(
+        AgentInput(
+            question="华东销售为什么下降？",
+            user_id=7,
+            context={
+                "confirmed_facts": [
+                    {"fact_id": "fact-1", "statement": "华东区销售额为100。"}
+                ]
+            },
+        )
+    )
+
+    query = rag_tool.inputs[0].parameters["question"]
+    assert "华东销售为什么下降？" in query
+    assert "华东区销售额为100。" in query
+    assert "仅用于检索可能解释" in query
+
+
 def test_knowledge_agent_does_not_call_model_when_evidence_is_insufficient():
     rag_tool = FakeRAGTool(
         ToolOutput(

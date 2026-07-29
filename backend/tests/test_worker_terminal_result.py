@@ -38,7 +38,46 @@ class FakeTaskRecord:
         return self.result_data.get("report")
 
 
-def test_worker_saves_langgraph_terminal_result() -> None:
+class FakeAttempt:
+    def __init__(self, record: FakeTaskRecord) -> None:
+        self.record = record
+
+
+class FakeExecution:
+    def __init__(self, record: FakeTaskRecord) -> None:
+        self.attempt = FakeAttempt(record)
+
+
+def _save(db, record: FakeTaskRecord, workflow_result: dict, monkeypatch) -> None:
+    monkeypatch.setattr(
+        analysis_tasks, "checkpoint_stage", lambda *args, **kwargs: True
+    )
+
+    def fake_finish(
+        db,
+        *,
+        attempt,
+        task_status,
+        result_summary,
+        result_data,
+        error_message,
+        **kwargs,
+    ):
+        task = attempt.record
+        task.status = task_status
+        task.stage = "completed"
+        task.result_summary = result_summary
+        task.result_data = result_data
+        task.error_message = error_message
+        return True
+
+    monkeypatch.setattr(analysis_tasks, "finish_execution", fake_finish)
+    analysis_tasks._save_workflow_result(
+        db, record, FakeExecution(record), workflow_result
+    )
+
+
+def test_worker_saves_langgraph_terminal_result(monkeypatch) -> None:
     db = FakeDb()
     record = FakeTaskRecord()
     workflow_result = {
@@ -69,9 +108,9 @@ def test_worker_saves_langgraph_terminal_result() -> None:
         },
     }
 
-    analysis_tasks._save_workflow_result(db, record, workflow_result)
+    _save(db, record, workflow_result, monkeypatch)
 
-    assert db.commits == 2
+    assert db.commits == 1
     assert record.status == "completed"
     assert record.stage == "completed"
     assert record.result_summary == "我目前只处理经营数据和内部资料分析。"
@@ -96,7 +135,7 @@ def test_worker_saves_langgraph_terminal_result() -> None:
     }
 
 
-def test_worker_marks_planner_failure_as_failed() -> None:
+def test_worker_marks_planner_failure_as_failed(monkeypatch) -> None:
     db = FakeDb()
     record = FakeTaskRecord()
     workflow_result = {
@@ -117,7 +156,7 @@ def test_worker_marks_planner_failure_as_failed() -> None:
         "review_result": None,
     }
 
-    analysis_tasks._save_workflow_result(db, record, workflow_result)
+    _save(db, record, workflow_result, monkeypatch)
 
     assert record.status == "failed"
     assert record.stage == "completed"
@@ -125,7 +164,7 @@ def test_worker_marks_planner_failure_as_failed() -> None:
     assert record.result_data["planner_result"] == workflow_result["planner_result"]
 
 
-def test_worker_marks_partial_review_as_partial() -> None:
+def test_worker_marks_partial_review_as_partial(monkeypatch) -> None:
     db = FakeDb()
     record = FakeTaskRecord()
     workflow_result = {
@@ -153,7 +192,7 @@ def test_worker_marks_partial_review_as_partial() -> None:
         },
     }
 
-    analysis_tasks._save_workflow_result(db, record, workflow_result)
+    _save(db, record, workflow_result, monkeypatch)
 
     assert record.status == "partial"
     assert record.stage == "completed"
@@ -187,7 +226,7 @@ def test_task_response_schema_accepts_langgraph_result_data() -> None:
     assert payload["report"] is None
 
 
-def test_worker_promotes_validated_report_to_task_response() -> None:
+def test_worker_promotes_validated_report_to_task_response(monkeypatch) -> None:
     db = FakeDb()
     record = FakeTaskRecord()
     report = {
@@ -238,7 +277,7 @@ def test_worker_promotes_validated_report_to_task_response() -> None:
         "review_result": {"review_status": "complete", "report": report},
     }
 
-    analysis_tasks._save_workflow_result(db, record, workflow_result)
+    _save(db, record, workflow_result, monkeypatch)
 
     payload = TaskOut.model_validate(record).model_dump(mode="json")
     expected_report = FinalAnalysisReport.model_validate(report).model_dump(mode="json")
@@ -246,7 +285,76 @@ def test_worker_promotes_validated_report_to_task_response() -> None:
     assert payload["report"] == expected_report
 
 
-def test_worker_marks_retryable_planner_failure_as_failed() -> None:
+def test_worker_holds_company_scoped_causal_report_for_human_review(
+    monkeypatch,
+) -> None:
+    db = FakeDb()
+    record = FakeTaskRecord()
+    record.company_id = 3
+    created = []
+    monkeypatch.setattr(
+        analysis_tasks,
+        "create_review_request",
+        lambda _db, *, task: created.append(task.id),
+    )
+    report = {
+        "status": "completed",
+        "executive_summary": "经营数据确认下降，原因仍需人工复核。",
+        "confirmed_facts": [
+            {
+                "fact_id": "fact-1",
+                "statement": "销售额下降。",
+                "data_evidence_ids": ["data-1"],
+            }
+        ],
+        "hypotheses": [
+            {
+                "hypothesis_id": "hypothesis-1",
+                "statement": "可能原因（未证实）：客户缩减采购。",
+                "related_fact_ids": ["fact-1"],
+                "citation_chunk_ids": [8],
+                "support_level": "low",
+            }
+        ],
+        "recommendations": [
+            {
+                "recommendation_id": "recommendation-1",
+                "priority": "medium",
+                "action": "复核客户计划。",
+                "rationale": "基于已确认事实和待审核假设。",
+                "basis_fact_ids": ["fact-1"],
+            }
+        ],
+        "data_evidence": [
+            {
+                "evidence_id": "data-1",
+                "purpose": "销售比较",
+                "columns": ["sales"],
+                "rows": [[1]],
+            }
+        ],
+        "document_citations": [{"chunk_id": 8, "excerpt": "客户缩减采购计划。"}],
+        "limitations": [],
+    }
+
+    _save(
+        db,
+        record,
+        {
+            "final_answer": "待审核结论。",
+            "review_result": {"review_status": "complete", "report": report},
+        },
+        monkeypatch,
+    )
+
+    assert record.status == "awaiting_review"
+    assert record.report is None
+    assert record.result_data["report_draft"]["status"] == "completed"
+    assert record.result_data["review"]["status"] == "pending"
+    assert created == [record.id]
+
+
+def test_worker_marks_retryable_planner_failure_as_failed(monkeypatch) -> None:
     db = FakeDb()
     record = FakeTaskRecord()
     workflow_result = {
@@ -263,13 +371,15 @@ def test_worker_marks_retryable_planner_failure_as_failed() -> None:
         "review_result": None,
     }
 
-    analysis_tasks._save_workflow_result(db, record, workflow_result)
+    _save(db, record, workflow_result, monkeypatch)
 
     assert record.status == "failed"
     assert record.stage == "completed"
 
 
-def test_worker_serializes_datetime_values_before_persisting_result_data() -> None:
+def test_worker_serializes_datetime_values_before_persisting_result_data(
+    monkeypatch,
+) -> None:
     db = FakeDb()
     record = FakeTaskRecord()
     workflow_result = {
@@ -284,7 +394,7 @@ def test_worker_serializes_datetime_values_before_persisting_result_data() -> No
         "review_result": {"review_status": "completed"},
     }
 
-    analysis_tasks._save_workflow_result(db, record, workflow_result)
+    _save(db, record, workflow_result, monkeypatch)
 
     assert record.result_data["data_result"]["evidence"][0]["rows"][0][0] == (
         "2025-08-01T00:00:00+00:00"

@@ -44,4 +44,4 @@ def test_upload_document_enqueues_ingestion_and_returns_pending(
     assert response.json()["status"] == "pending"
     assert response.json()["error_message"] is None
     upload_document.assert_called_once()
-    delay.assert_called_once_with(document_id=123)
+    delay.assert_called_once_with(document_id=123, company_id=company.json()["id"])

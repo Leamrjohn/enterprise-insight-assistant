@@ -1,7 +1,8 @@
 """Conversation HTTP API."""
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
+from sqlalchemy import func
 
 from app.core.company_auth import (
     CurrentCompanyContext,
@@ -19,6 +20,9 @@ from app.schemas.conversation import (
 )
 from app.schemas.task import ConversationTaskOut, TaskOut
 from app.repositories.conversation_repository import get_assistant_message_by_task_id
+from app.models.task_execution_attempt import TaskExecutionAttempt
+from app.models.workflow_checkpoint import WorkflowCheckpoint
+from app.models.model_call_record import ModelCallRecord
 from app.services.conversation_service import (
     ConversationDocumentScopeError,
     DataSourceNotReadyError,
@@ -37,6 +41,55 @@ from app.services.outbox_service import publish_analysis_task_event
 router = APIRouter()
 
 
+def _task_observability(db: Session, task) -> dict:
+    checkpoint = (
+        db.query(WorkflowCheckpoint)
+        .join(
+            TaskExecutionAttempt,
+            WorkflowCheckpoint.execution_attempt_id == TaskExecutionAttempt.id,
+        )
+        .filter(TaskExecutionAttempt.task_id == task.id)
+        .order_by(WorkflowCheckpoint.id.desc())
+        .first()
+    )
+    calls, tokens, cost = (
+        db.query(
+            func.count(ModelCallRecord.id),
+            func.coalesce(
+                func.sum(
+                    ModelCallRecord.prompt_tokens + ModelCallRecord.completion_tokens
+                ),
+                0,
+            ),
+            func.coalesce(func.sum(ModelCallRecord.cost), 0),
+        )
+        .filter(ModelCallRecord.task_id == task.id)
+        .one()
+    )
+    return {
+        "request_id": task.request_id,
+        "active_execution_id": task.active_execution_id,
+        "latest_checkpoint": (
+            {
+                "completed_node": checkpoint.completed_node,
+                "next_node": checkpoint.next_node,
+                "error_code": checkpoint.error_code,
+                "recovery_instruction": checkpoint.recovery_instruction,
+                "created_at": checkpoint.created_at,
+            }
+            if checkpoint is not None
+            else None
+        ),
+        "model_usage": {
+            "calls": calls,
+            "tokens": int(tokens),
+            "cost": str(cost),
+            "budget": task.model_budget_snapshot,
+            "usage": task.model_budget_usage,
+        },
+    }
+
+
 def _conversation_task_out(db: Session, task) -> ConversationTaskOut:
     assistant_message = get_assistant_message_by_task_id(db, task_id=task.id)
     return ConversationTaskOut(
@@ -52,6 +105,7 @@ def _conversation_task_out(db: Session, task) -> ConversationTaskOut:
         assistant_message_id=assistant_message.id if assistant_message else None,
         assistant_content=assistant_message.content if assistant_message else None,
         report=task.report,
+        observability=_task_observability(db, task),
         created_at=task.created_at,
         updated_at=task.updated_at,
     )
@@ -176,6 +230,7 @@ def cancel_conversation_task_endpoint(
 def retry_conversation_task_endpoint(
     conversation_id: int,
     task_id: int,
+    request: Request,
     context: CurrentCompanyContext = Depends(require_analysis_permission),
     db: Session = Depends(get_db),
 ):
@@ -185,6 +240,7 @@ def retry_conversation_task_endpoint(
             conversation_id=conversation_id,
             task_id=task_id,
             context=context,
+            request_id=request.state.request_id,
         )
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc))
@@ -209,6 +265,7 @@ def retry_conversation_task_endpoint(
 def create_conversation_message_endpoint(
     conversation_id: int,
     request_model: ConversationMessageCreate,
+    request: Request,
     context: CurrentCompanyContext = Depends(require_analysis_permission),
     db: Session = Depends(get_db),
 ):
@@ -219,6 +276,7 @@ def create_conversation_message_endpoint(
             context=context,
             content=request_model.content,
             document_ids=request_model.document_ids,
+            request_id=request.state.request_id,
         )
     except ConversationDocumentScopeError as exc:
         raise HTTPException(status_code=422, detail=str(exc))

@@ -4,72 +4,28 @@ from __future__ import annotations
 
 from app.schemas.final_analysis import (
     ConfirmedFact,
-    DataEvidence,
     DocumentCitation,
     FinalAnalysisReport,
     Hypothesis,
     Limitation,
     Recommendation,
 )
-
-
-_COLUMN_DISPLAY_NAMES = {
-    "order_count": "订单数量",
-    "total_orders": "订单数量",
-    "total_sales": "销售额",
-    "sales_amount": "销售额",
-    "revenue": "销售额",
-    "total_amount": "订单金额",
-    "average_order_value": "平均订单金额",
-    "avg_order_value": "平均订单金额",
-    "region_name": "区域",
-    "region": "区域",
-    "customer_name": "客户",
-    "customer": "客户",
-    "product_name": "产品",
-    "product": "产品",
-    "month": "月份",
-    "order_date": "下单日期",
-    "status": "订单状态",
-}
+from app.services.fact_builder import (
+    build_confirmed_facts,
+    build_data_evidence,
+    render_data_fields as _render_data_fields,
+    render_evidence_purpose as _render_evidence_purpose,
+)
 
 
 def render_evidence_purpose(purpose: object) -> str:
-    """Keep internal SQL/table terminology out of user-facing summaries."""
-    if not isinstance(purpose, str) or not purpose.strip():
-        return "已授权经营数据"
-    normalized = purpose.strip()
-    lowered = normalized.lower()
-    if any(
-        token in lowered for token in ("select ", " from ", " join ", " where ", ";")
-    ):
-        return "已授权经营数据"
-    if " 的 " in normalized and any(
-        char.isascii() and char.isalpha() for char in normalized
-    ):
-        return "已授权经营数据"
-    if "_" in normalized:
-        return "已授权经营数据"
-    return normalized
+    """Compatibility export for existing Reviewer rendering."""
+    return _render_evidence_purpose(purpose)
 
 
 def render_data_fields(columns: list[str], row: list[object]) -> str:
-    """Render query rows for business users without exposing raw field names."""
-    rendered_fields = []
-    for column, value in zip(columns, row):
-        normalized = str(column).strip().lower()
-        label = _COLUMN_DISPLAY_NAMES.get(normalized)
-        if label is None:
-            label = (
-                str(column)
-                if any("\u4e00" <= char <= "\u9fff" for char in str(column))
-                else "查询结果"
-            )
-        if value is None:
-            rendered_fields.append(f"{label}未返回")
-        else:
-            rendered_fields.append(f"{label}为{value}")
-    return "，".join(rendered_fields)
+    """Compatibility export for existing Reviewer rendering."""
+    return _render_data_fields(columns, row)
 
 
 def compose_report(
@@ -78,8 +34,8 @@ def compose_report(
     knowledge_result: dict,
     route: str | None,
 ) -> FinalAnalysisReport:
-    data_evidence = _data_evidence(data_result)
-    facts = _facts_from_data(data_evidence)
+    data_evidence = build_data_evidence(data_result)
+    facts = build_confirmed_facts(data_evidence)
     knowledge_answer = knowledge_result.get("answer")
     citations = _document_citations(knowledge_result, knowledge_answer)
     data_failed = data_result.get("status") == "failed"
@@ -109,40 +65,6 @@ def compose_report(
         document_citations=citations,
         limitations=limitations,
     )
-
-
-def _data_evidence(data_result: dict) -> list[DataEvidence]:
-    result: list[DataEvidence] = []
-    for index, evidence in enumerate(data_result.get("evidence") or [], start=1):
-        columns = evidence.get("columns") or []
-        raw_rows = evidence.get("rows") or []
-        result.append(
-            DataEvidence(
-                evidence_id=f"data-{index}",
-                purpose=evidence.get("purpose") or "受控经营数据查询",
-                sql=evidence.get("sql"),
-                columns=[str(column) for column in columns],
-                rows=[list(row) for row in raw_rows],
-            )
-        )
-    return result
-
-
-def _facts_from_data(data_evidence: list[DataEvidence]) -> list[ConfirmedFact]:
-    facts: list[ConfirmedFact] = []
-    for evidence in data_evidence:
-        for row_index, row in enumerate(evidence.rows[:5], start=1):
-            if not evidence.columns or len(row) != len(evidence.columns):
-                continue
-            fields = render_data_fields(evidence.columns, row)
-            facts.append(
-                ConfirmedFact(
-                    fact_id=f"fact-{len(facts) + 1}",
-                    statement=f"{render_evidence_purpose(evidence.purpose)}：{fields}。",
-                    data_evidence_ids=[evidence.evidence_id],
-                )
-            )
-    return facts
 
 
 def _document_citations(

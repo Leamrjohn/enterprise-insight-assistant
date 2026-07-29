@@ -17,7 +17,9 @@ def wait_for_result(result, *, timeout_seconds: int) -> None:
     deadline = time.monotonic() + timeout_seconds
     while not result.ready():
         if time.monotonic() >= deadline:
-            raise TimeoutError("Celery worker did not finish document ingestion in time")
+            raise TimeoutError(
+                "Celery worker did not finish document ingestion in time"
+            )
         time.sleep(0.5)
     result.get(timeout=1, propagate=True)
 

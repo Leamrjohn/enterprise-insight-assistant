@@ -4,8 +4,6 @@ from app.core.settings import get_settings
 from app.core.gateway.deepseek import DeepSeekGateway
 
 
-
-
 def test_gateway_factory_returns_deepseek_gateway(monkeypatch):
     monkeypatch.setenv("LLM_PROVIDER", "deepseek")
     monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
@@ -20,6 +18,7 @@ def test_gateway_factory_returns_deepseek_gateway(monkeypatch):
         get_model_gateway.cache_clear()
         get_settings.cache_clear()
 
+
 def test_gateway_factory_returns_local_gateway(monkeypatch):
     monkeypatch.setenv("LLM_PROVIDER", "local")
 
@@ -31,5 +30,3 @@ def test_gateway_factory_returns_local_gateway(monkeypatch):
     finally:
         get_model_gateway.cache_clear()
         get_settings.cache_clear()
-
-

@@ -51,5 +51,6 @@ class ConversationTaskOut(BaseModel):
     assistant_message_id: int | None
     assistant_content: str | None
     report: FinalAnalysisReport | None
+    observability: dict[str, Any] | None = None
     created_at: datetime | None
     updated_at: datetime | None

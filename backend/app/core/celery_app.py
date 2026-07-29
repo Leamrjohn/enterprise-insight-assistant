@@ -30,6 +30,10 @@ celery_app.conf.update(
         "publish-pending-analysis-task-events": {
             "task": "app.tasks.outbox_tasks.publish_pending_analysis_task_events",
             "schedule": 5.0,
-        }
+        },
+        "recover-expired-analysis-executions": {
+            "task": "app.tasks.outbox_tasks.recover_expired_analysis_executions",
+            "schedule": 10.0,
+        },
     },
 )

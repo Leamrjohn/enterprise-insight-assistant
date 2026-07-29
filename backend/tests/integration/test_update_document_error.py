@@ -7,6 +7,7 @@ from app.models.company import Company, CompanyMember
 from uuid import uuid4
 from app.db.session import get_db
 
+
 def test_unhandled_error_returns_safe_response(
     monkeypatch: pytest.MonkeyPatch, db_session
 ):
@@ -57,4 +58,4 @@ def test_unhandled_error_returns_safe_response(
         }
         assert "sensitive internal detail" not in response.text
     finally:
-        app.dependency_overrides.pop(get_db,None)
+        app.dependency_overrides.pop(get_db, None)

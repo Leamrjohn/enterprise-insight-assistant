@@ -15,8 +15,17 @@ depends_on = None
 
 def upgrade() -> None:
     op.alter_column("documents", "user_id", new_column_name="uploaded_by_user_id")
-    op.add_column("documents", sa.Column("min_view_role", sa.String(length=20), nullable=False, server_default="any"))
-    op.create_check_constraint("documents_min_view_role_values", "documents", "min_view_role IN ('any', 'admin', 'owner')")
+    op.add_column(
+        "documents",
+        sa.Column(
+            "min_view_role", sa.String(length=20), nullable=False, server_default="any"
+        ),
+    )
+    op.create_check_constraint(
+        "documents_min_view_role_values",
+        "documents",
+        "min_view_role IN ('any', 'admin', 'owner')",
+    )
 
 
 def downgrade() -> None:

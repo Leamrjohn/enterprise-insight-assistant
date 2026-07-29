@@ -173,6 +173,7 @@ def test_send_message_creates_messages_and_task_after_commit(
 
     response = client.post(
         f"/conversations/{conversation_id}/messages",
+        headers={"X-Request-ID": "create-task-correlation-id"},
         json={"content": "华东区 2025 年 8 月销售额为什么比 7 月下降？"},
     )
 
@@ -192,6 +193,7 @@ def test_send_message_creates_messages_and_task_after_commit(
     assert task is not None
     assert task.conversation_id == conversation_id
     assert task.input_message_id == payload["user_message"]["id"]
+    assert task.request_id == "create-task-correlation-id"
     assert task.context_snapshot == {
         "version": "1.0",
         "messages": [],
@@ -250,7 +252,8 @@ def test_failed_conversation_task_can_create_a_linked_retry(
     db_session.flush()
 
     retried = client.post(
-        f"/conversations/{conversation_id}/tasks/{original_task_id}/retry"
+        f"/conversations/{conversation_id}/tasks/{original_task_id}/retry",
+        headers={"X-Request-ID": "retry-task-correlation-id"},
     )
     assert retried.status_code == 202
     retry_task_id = retried.json()["task_id"]
@@ -261,6 +264,7 @@ def test_failed_conversation_task_can_create_a_linked_retry(
     assert retry is not None
     assert retry.status == "queued"
     assert retry.parent_task_id == original_task_id
+    assert retry.request_id == "retry-task-correlation-id"
     assert retry.question == original.question
     assert retry.context_snapshot == original.context_snapshot
     assert retry.schema_snapshot_id == original.schema_snapshot_id
