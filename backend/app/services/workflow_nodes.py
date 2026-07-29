@@ -1,5 +1,7 @@
 """LangGraph 工作流节点 —— 每个节点封装一个 Agent 调用"""
 
+from typing import Any
+
 from app.agents.protocol import AgentInput
 from app.agents.planner import PlannerAgent
 from app.agents.knowledge import KnowledgeAgent
@@ -472,9 +474,10 @@ def data_node(state: WorkflowState) -> dict:
     snapshot_data = state.get("schema_catalog")
     if data_source is not None and snapshot_data is not None:
         catalog = SnapshotCatalog.from_snapshot(snapshot_data)
-        if state.get("tool_runtime"):
+        tool_runtime = state.get("tool_runtime")
+        if tool_runtime is not None:
             agent = DataAgent(
-                sql_tool=state["tool_runtime"].wrap(
+                sql_tool=tool_runtime.wrap(
                     SQLTool(data_source=data_source, snapshot_catalog=catalog)
                 ),
                 data_source=data_source,
@@ -483,9 +486,10 @@ def data_node(state: WorkflowState) -> dict:
         else:
             agent = DataAgent(data_source=data_source, snapshot_catalog=catalog)
     else:
+        tool_runtime = state.get("tool_runtime")
         agent = (
-            DataAgent(sql_tool=state["tool_runtime"].wrap(SQLTool()))
-            if state.get("tool_runtime")
+            DataAgent(sql_tool=tool_runtime.wrap(SQLTool()))
+            if tool_runtime is not None
             else DataAgent()
         )
     data_context = {}
@@ -508,7 +512,7 @@ def data_node(state: WorkflowState) -> dict:
             )
         )
     if result.success:
-        update = {
+        update: dict[str, Any] = {
             "data_result": {
                 "status": "ready",
                 "evidence": result.evidence,

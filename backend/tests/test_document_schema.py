@@ -5,6 +5,7 @@ def test_document_out_allows_none_content():
 
     document_out = DocumentOut(
         id=1,
+        uploaded_by_user_id=7,
         name="pending.pdf",
         content=None,
         source="upload",

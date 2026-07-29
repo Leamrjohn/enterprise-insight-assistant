@@ -12,6 +12,7 @@ def test_upload_document_enqueues_ingestion_and_returns_pending(
 ) -> None:
     pending_document = SimpleNamespace(
         id=123,
+        uploaded_by_user_id=1,
         name="report.txt",
         content=None,
         source="upload",

@@ -1,5 +1,6 @@
 from sqlalchemy.orm import Session
 
+from app.models.documents import Documents
 from app.repositories.document_repository import (
     get_document,
     save_document,
@@ -17,8 +18,8 @@ def save_document_service(
     source: str,
     company_id: int | None = None,
     min_view_role: str = "any",
-) -> dict:
-    record = save_document(
+) -> Documents:
+    return save_document(
         db=db,
         uploaded_by_user_id=uploaded_by_user_id,
         name=name,
@@ -27,30 +28,10 @@ def save_document_service(
         company_id=company_id,
         min_view_role=min_view_role,
     )
-    return {
-        "id": record.id,
-        "company_id": record.company_id,
-        "name": record.name,
-        "content": record.content,
-        "source": record.source,
-    }
 
 
-def get_document_service(db: Session, company_id: int, role: str) -> list[dict]:
-    documents = get_document(db, company_id=company_id, role=role)
-    result = []
-    for document in documents:
-        result.append(
-            {
-                "id": document.id,
-                "company_id": document.company_id,
-                "name": document.name,
-                "content": document.content,
-                "source": document.source,
-                "min_view_role": document.min_view_role,
-            }
-        )
-    return result
+def get_document_service(db: Session, company_id: int, role: str) -> list[Documents]:
+    return get_document(db, company_id=company_id, role=role)
 
 
 def get_document_by_id_service(
@@ -61,29 +42,27 @@ def get_document_by_id_service(
     if record is None:
         return None
 
-    return {
-        "id": record.id,
-        "company_id": record.company_id,
-        "name": record.name,
-        "content": record.content,
-        "source": record.source,
-        "min_view_role": record.min_view_role,
-    }
+    return record
 
 
-def delete_document_service(db: Session, document_id: int, company_id: int, role: str):
-    record = delete_document(db, document_id, company_id=company_id, role=role)
+def delete_document_service(
+    db: Session,
+    document_id: int,
+    company_id: int,
+    role: str,
+    actor_user_id: int,
+):
+    record = delete_document(
+        db,
+        document_id,
+        company_id=company_id,
+        role=role,
+        actor_user_id=actor_user_id,
+    )
 
     if record is None:
         return None
-    return {
-        "id": record.id,
-        "company_id": record.company_id,
-        "name": record.name,
-        "content": record.content,
-        "source": record.source,
-        "min_view_role": record.min_view_role,
-    }
+    return record
 
 
 def update_document_service(
@@ -94,6 +73,7 @@ def update_document_service(
     source: str,
     company_id: int,
     role: str,
+    actor_user_id: int,
     min_view_role: str,
 ):
     record = update_document(
@@ -104,17 +84,11 @@ def update_document_service(
         source=source,
         company_id=company_id,
         role=role,
+        actor_user_id=actor_user_id,
         min_view_role=min_view_role,
     )
 
     if record is None:
         return None
 
-    return {
-        "id": record.id,
-        "company_id": record.company_id,
-        "name": record.name,
-        "content": record.content,
-        "source": record.source,
-        "min_view_role": record.min_view_role,
-    }
+    return record

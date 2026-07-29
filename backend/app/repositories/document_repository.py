@@ -27,6 +27,7 @@ def save_document(
         content=content,
         source=source,
         min_view_role=min_view_role,
+        status="pending",
     )
     db.add(record)
     db.commit()
@@ -62,9 +63,38 @@ def get_document_by_id(db: Session, document_id: int, company_id: int, role: str
     )
 
 
-def delete_document(db: Session, document_id: int, company_id: int, role: str):
+def get_document_for_mutation(
+    db: Session,
+    *,
+    document_id: int,
+    company_id: int,
+    role: str,
+    actor_user_id: int,
+):
     record = get_document_by_id(db, document_id, company_id, role)
+    if record is None:
+        return None
+    if role not in {"owner", "admin", "analyst"}:
+        return None
+    if role not in {"owner", "admin"} and record.uploaded_by_user_id != actor_user_id:
+        return None
+    return record
 
+
+def delete_document(
+    db: Session,
+    document_id: int,
+    company_id: int,
+    role: str,
+    actor_user_id: int,
+):
+    record = get_document_for_mutation(
+        db,
+        document_id=document_id,
+        company_id=company_id,
+        role=role,
+        actor_user_id=actor_user_id,
+    )
     if record is None:
         return None
 
@@ -81,17 +111,28 @@ def update_document(
     source: str,
     company_id: int,
     role: str,
+    actor_user_id: int,
     min_view_role: str,
 ):
-    record = get_document_by_id(db, document_id, company_id, role)
+    record = get_document_for_mutation(
+        db,
+        document_id=document_id,
+        company_id=company_id,
+        role=role,
+        actor_user_id=actor_user_id,
+    )
 
     if record is None:
         return None
+    if record.file_path is not None:
+        raise ValueError("uploaded document content cannot be edited")
 
     record.name = name
     record.content = content
     record.source = source
     record.min_view_role = min_view_role
+    record.status = "pending"
+    record.error_message = None
 
     db.commit()
     db.refresh(record)

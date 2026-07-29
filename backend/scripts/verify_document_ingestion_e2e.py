@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import time
+from typing import Any, cast
 from uuid import uuid4
 
 from app.core.settings import get_settings
-from app.db.session import SessionLocal
+from app.db.session import SessionLocal, set_tenant_scope
 from app.models.document_chunk import DocumentChunk
 from app.models.documents import Documents
+from app.models.company import Company, CompanyMember
 from app.models.user import User
 from app.tasks.document_tasks import process_document_task
 
@@ -29,6 +31,7 @@ def main() -> None:
     db = SessionLocal()
     document_id: int | None = None
     user_id: int | None = None
+    company_id: int | None = None
     file_path = None
 
     try:
@@ -44,15 +47,29 @@ def main() -> None:
         )
         db.add(user)
         db.flush()
+        company = Company(name=f"e2e-document-company-{suffix}")
+        db.add(company)
+        db.flush()
+        db.add(
+            CompanyMember(
+                company_id=company.id,
+                user_id=user.id,
+                role="owner",
+                status="approved",
+            )
+        )
         db.commit()
         user_id = user.id
+        company_id = company.id
+        set_tenant_scope(db, company_id)
 
         document = Documents(
-            user_id=user_id,
+            uploaded_by_user_id=user_id,
+            company_id=company_id,
             name=file_path.name,
             content=None,
             source="upload",
-            file_path=str(file_path.relative_to(settings.storage_dir)),
+            file_path=file_path.relative_to(settings.storage_dir).as_posix(),
             file_type=".txt",
             file_size=file_path.stat().st_size,
             sha256=f"e2e-document-sha-{suffix}",
@@ -62,17 +79,18 @@ def main() -> None:
         db.commit()
         document_id = document.id
 
-        first_result = process_document_task.apply_async(
-            kwargs={"document_id": document_id}
+        first_result = cast(Any, process_document_task).apply_async(
+            kwargs={"document_id": document_id, "company_id": company_id}
         )
-        second_result = process_document_task.apply_async(
-            kwargs={"document_id": document_id}
+        second_result = cast(Any, process_document_task).apply_async(
+            kwargs={"document_id": document_id, "company_id": company_id}
         )
 
         wait_for_result(first_result, timeout_seconds=180)
         wait_for_result(second_result, timeout_seconds=180)
 
         db.expire_all()
+        set_tenant_scope(db, company_id)
         stored_document = db.get(Documents, document_id)
         chunks = (
             db.query(DocumentChunk)
@@ -96,6 +114,8 @@ def main() -> None:
         )
     finally:
         db.rollback()
+        if company_id is not None:
+            set_tenant_scope(db, company_id)
         if document_id is not None:
             document = db.get(Documents, document_id)
             if document is not None:
@@ -105,6 +125,10 @@ def main() -> None:
             user = db.get(User, user_id)
             if user is not None:
                 db.delete(user)
+        if company_id is not None:
+            company = db.get(Company, company_id)
+            if company is not None:
+                db.delete(company)
         db.commit()
         db.close()
         if file_path is not None:

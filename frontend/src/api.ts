@@ -1,4 +1,4 @@
-import type { AssistantDataSource, CompanyInvitation, CompanyMember, Conversation, ConversationMessage, CreatedCompanyInvitation, CurrentUser, DataSource, DocumentChunk, DocumentItem, MembershipApplication, Snapshot, Task } from "./types";
+import type { AssistantDataSource, CompanyInvitation, CompanyMember, Conversation, ConversationMessage, CreatedCompanyInvitation, CurrentUser, DataSource, DocumentChunk, DocumentItem, MembershipApplication, ReviewRequest, Snapshot, Task, TaskMetrics } from "./types";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "/api";
 
@@ -33,7 +33,9 @@ export class ApiClient {
       const message = payload.message ?? payload.detail ?? "请求失败，请稍后重试。";
       throw new ApiError(response.status, messageMap[message] ?? message);
     }
-    return response.json() as Promise<T>;
+    if (response.status === 204) return undefined as T;
+    const text = await response.text();
+    return (text ? JSON.parse(text) : undefined) as T;
   }
 
   me = () => this.request<CurrentUser>("/auth/me");
@@ -43,6 +45,9 @@ export class ApiClient {
   dataSources = () => this.request<DataSource[]>("/company/data-sources");
   assistantDataSources = () => this.request<AssistantDataSource[]>("/company/assistant-data-sources");
   documents = () => this.request<DocumentItem[]>("/documents");
+  document = (documentId: number) => this.request<DocumentItem>(`/documents/${documentId}`);
+  createDocument = (payload: { name: string; content: string; source: string; min_view_role: "any" | "admin" | "owner" }) => this.request<DocumentItem>("/documents", { method: "POST", body: JSON.stringify(payload) });
+  updateDocument = (documentId: number, payload: { name: string; content: string; source: string; min_view_role: "any" | "admin" | "owner" }) => this.request<DocumentItem>(`/documents/${documentId}`, { method: "PUT", body: JSON.stringify(payload) });
   documentChunks = (documentId: number) => this.request<DocumentChunk[]>(`/documents/${documentId}/chunks`);
   deleteDocument = (documentId: number) => this.request<DocumentItem>(`/documents/${documentId}`, { method: "DELETE" });
   async uploadDocument(file: File): Promise<DocumentItem> {
@@ -59,16 +64,21 @@ export class ApiClient {
   conversations = () => this.request<Conversation[]>("/conversations");
   createConversation = (data_source_id: number, title?: string) => this.request<Conversation>("/conversations", { method: "POST", body: JSON.stringify({ data_source_id, title }) });
   messages = (conversationId: number) => this.request<ConversationMessage[]>(`/conversations/${conversationId}/messages`);
-  sendMessage = (conversationId: number, content: string, document_ids: number[]) => this.request<{ task_id: number }>(`/conversations/${conversationId}/messages`, { method: "POST", body: JSON.stringify({ content, document_ids }) });
+  sendMessage = (conversationId: number, content: string, document_ids: number[]) => this.request<{ task_id: number; status: "queued"; user_message: ConversationMessage; assistant_message: ConversationMessage }>(`/conversations/${conversationId}/messages`, { method: "POST", body: JSON.stringify({ content, document_ids }) });
   task = (conversationId: number, taskId: number) => this.request<Task>(`/conversations/${conversationId}/tasks/${taskId}`);
   cancelTask = (conversationId: number, taskId: number) => this.request<Task>(`/conversations/${conversationId}/tasks/${taskId}/cancel`, { method: "POST" });
   retryTask = (conversationId: number, taskId: number) => this.request<{ task_id: number }>(`/conversations/${conversationId}/tasks/${taskId}/retry`, { method: "POST" });
+  reviewRequests = () => this.request<ReviewRequest[]>("/review-requests");
+  approveReview = (requestId: number, note?: string) => this.request<{ task_id: number; status: string; review_status: string }>(`/review-requests/${requestId}/approve`, { method: "POST", body: JSON.stringify({ note: note || null }) });
+  rejectReview = (requestId: number, note?: string) => this.request<{ task_id: number; status: string; review_status: string }>(`/review-requests/${requestId}/reject`, { method: "POST", body: JSON.stringify({ note: note || null }) });
+  taskMetrics = () => this.request<TaskMetrics>("/observability/task-metrics");
   snapshots = (sourceId: number) => this.request<Snapshot[]>(`/company/data-sources/${sourceId}/schema-snapshots`);
   discover = (sourceId: number) => this.request<Snapshot>(`/company/data-sources/${sourceId}/discover-schema`, { method: "POST" });
   activateSnapshot = (sourceId: number, snapshotId: number) => this.request<Snapshot>(`/company/data-sources/${sourceId}/schema-snapshots/${snapshotId}/activate`, { method: "POST" });
   createDataSource = (payload: object) => this.request<DataSource>("/company/data-sources", { method: "POST", body: JSON.stringify(payload) });
   members = () => this.request<CompanyMember[]>("/company/members");
   updateMember = (memberId: number, payload: object) => this.request<CompanyMember>(`/company/members/${memberId}`, { method: "PATCH", body: JSON.stringify(payload) });
+  resetMemberPassword = (memberId: number, new_password: string) => this.request<void>(`/company/members/${memberId}/reset-password`, { method: "POST", body: JSON.stringify({ new_password }) });
   createInvitation = (payload: { max_uses: number; expires_at?: string }) => this.request<CreatedCompanyInvitation>("/company/invitations", { method: "POST", body: JSON.stringify(payload) });
   invitations = () => this.request<CompanyInvitation[]>("/company/invitations");
   revokeInvitation = (invitationId: number) => this.request<CompanyInvitation>(`/company/invitations/${invitationId}/revoke`, { method: "POST" });

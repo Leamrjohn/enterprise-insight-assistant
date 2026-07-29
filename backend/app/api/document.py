@@ -1,9 +1,15 @@
 """Documents are always scoped by the authenticated user's only company."""
 
+from typing import Any, cast
+
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
-from app.core.company_auth import CurrentCompanyContext, get_current_company_context
+from app.core.company_auth import (
+    CurrentCompanyContext,
+    get_current_company_context,
+    require_analysis_permission,
+)
 from app.core.exceptions import (
     DuplicateDocumentError,
     EmptyDocumentError,
@@ -37,13 +43,30 @@ def list_documents(
     return get_document_service(db, company_id=context.company.id, role=context.role)
 
 
-@router.post("/documents", response_model=DocumentOut)
+def _validate_requested_visibility(context: CurrentCompanyContext, role: str) -> None:
+    allowed = {
+        "owner": {"any", "admin", "owner"},
+        "admin": {"any", "admin"},
+        "analyst": {"any"},
+    }.get(context.role, set())
+    if role not in allowed:
+        raise HTTPException(
+            status_code=403, detail="document visibility role is not allowed"
+        )
+
+
+@router.post(
+    "/documents",
+    response_model=DocumentOut,
+    status_code=status.HTTP_202_ACCEPTED,
+)
 def create_document(
     request: DocumentCreate,
-    context: CurrentCompanyContext = Depends(get_current_company_context),
+    context: CurrentCompanyContext = Depends(require_analysis_permission),
     db: Session = Depends(get_db),
 ):
-    return save_document_service(
+    _validate_requested_visibility(context, request.min_view_role)
+    record = save_document_service(
         db=db,
         uploaded_by_user_id=context.user.id,
         company_id=context.company.id,
@@ -52,6 +75,11 @@ def create_document(
         source=request.source,
         min_view_role=request.min_view_role,
     )
+    cast(Any, process_document_task).delay(
+        document_id=record.id,
+        company_id=context.company.id,
+    )
+    return record
 
 
 def _document_or_404(db: Session, context: CurrentCompanyContext, document_id: int):
@@ -79,32 +107,49 @@ def delete_document(
     db: Session = Depends(get_db),
 ):
     record = delete_document_service(
-        db, document_id, company_id=context.company.id, role=context.role
+        db,
+        document_id,
+        company_id=context.company.id,
+        role=context.role,
+        actor_user_id=context.user.id,
     )
     if record is None:
         raise HTTPException(status_code=404, detail="document not found")
     return record
 
 
-@router.put("/documents/{document_id}", response_model=DocumentOut)
+@router.put(
+    "/documents/{document_id}",
+    response_model=DocumentOut,
+    status_code=status.HTTP_202_ACCEPTED,
+)
 def update_document(
     document_id: int,
     request: DocumentUpdate,
     context: CurrentCompanyContext = Depends(get_current_company_context),
     db: Session = Depends(get_db),
 ):
-    record = update_document_service(
-        db=db,
-        document_id=document_id,
-        company_id=context.company.id,
-        role=context.role,
-        name=request.name,
-        content=request.content,
-        source=request.source,
-        min_view_role=request.min_view_role,
-    )
+    _validate_requested_visibility(context, request.min_view_role)
+    try:
+        record = update_document_service(
+            db=db,
+            document_id=document_id,
+            company_id=context.company.id,
+            role=context.role,
+            actor_user_id=context.user.id,
+            name=request.name,
+            content=request.content,
+            source=request.source,
+            min_view_role=request.min_view_role,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     if record is None:
         raise HTTPException(status_code=404, detail="document not found")
+    cast(Any, process_document_task).delay(
+        document_id=record.id,
+        company_id=context.company.id,
+    )
     return record
 
 
@@ -115,7 +160,7 @@ def update_document(
 )
 async def upload_document(
     file: UploadFile = File(...),
-    context: CurrentCompanyContext = Depends(get_current_company_context),
+    context: CurrentCompanyContext = Depends(require_analysis_permission),
     db: Session = Depends(get_db),
 ):
     try:
@@ -127,7 +172,7 @@ async def upload_document(
             original_name=file.filename,
             settings=get_settings(),
         )
-        process_document_task.delay(
+        cast(Any, process_document_task).delay(
             document_id=record.id,
             company_id=context.company.id,
         )

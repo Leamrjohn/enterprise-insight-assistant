@@ -240,7 +240,11 @@ class ReviewerAgent(Agent):
                         data_available=bool(data_result.get("evidence")),
                         knowledge_available=bool(citation_chunk_ids),
                         citation_chunk_ids=citation_chunk_ids,
-                        limitations=semantic_review.limitations,
+                        limitations=(
+                            semantic_review.limitations
+                            if semantic_review is not None
+                            else report.limitations
+                        ),
                         **semantic_metadata,
                     )
                 ],

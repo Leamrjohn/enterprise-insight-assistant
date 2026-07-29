@@ -1,3 +1,5 @@
+from typing import Any, cast
+
 from fastapi import APIRouter, Depends, HTTPException
 
 from sqlalchemy.orm import Session
@@ -30,7 +32,7 @@ def create_task(
     )
 
     # 发送异步任务给 Celery Worker
-    process_analysis_task.delay(task_id=record.id)
+    cast(Any, process_analysis_task).delay(task_id=record.id)
 
     return record
 

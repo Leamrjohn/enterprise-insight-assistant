@@ -4,6 +4,7 @@ from app.core.auth import get_current_user
 from app.main import app
 from app.models.user import User
 from app.models.company import Company, CompanyMember
+from app.api import document as document_api
 
 
 @pytest.fixture(autouse=True)
@@ -23,6 +24,15 @@ def approved_company_for_document_api(db_session, test_user):
     return company
 
 
+@pytest.fixture(autouse=True)
+def stub_document_dispatch(monkeypatch):
+    monkeypatch.setattr(
+        document_api.process_document_task,
+        "delay",
+        lambda **_: None,
+    )
+
+
 def test_document_lifecycle(
     client: TestClient,
 ) -> None:
@@ -35,7 +45,7 @@ def test_document_lifecycle(
         },
     )
 
-    assert create_response.status_code == 200
+    assert create_response.status_code == 202
     created = create_response.json()
     document_id = created["id"]
 
@@ -51,7 +61,7 @@ def test_document_lifecycle(
             "source": "pytest",
         },
     )
-    assert update_response.status_code == 200
+    assert update_response.status_code == 202
     assert update_response.json()["name"] == "pytest-document-updated"
 
     delete_response = client.delete(f"/documents/{document_id}")
@@ -117,7 +127,7 @@ def test_update_document_rejects_blank_content(
             "source": "pytest",
         },
     )
-    assert create_response.status_code == 200
+    assert create_response.status_code == 202
     created = create_response.json()
     document_id = created["id"]
 
@@ -151,7 +161,7 @@ def test_user_cannot_access_another_users_document(
         "/documents",
         json={"name": "yuequanceshi", "content": "此次为越权测试", "source": "ceshi"},
     )
-    assert create_response.status_code == 200
+    assert create_response.status_code == 202
     created = create_response.json()
     document_id = created["id"]
     other_user = User(name="ceshiyuequan", api_key="123456")
@@ -174,3 +184,57 @@ def test_user_cannot_access_another_users_document(
     get_response = client.get(f"/documents/{document_id}")
     # 文档可见性由同公司角色控制；上传者仅承担审计责任，不是授权过滤条件。
     assert get_response.status_code == 200
+
+    update_response = client.put(
+        f"/documents/{document_id}",
+        json={
+            "name": "forbidden-update",
+            "content": "other analyst must not change this document",
+            "source": "pytest",
+        },
+    )
+    delete_response = client.delete(f"/documents/{document_id}")
+
+    assert update_response.status_code == 404
+    assert delete_response.status_code == 404
+
+
+def test_viewer_cannot_create_document(
+    db_session,
+    client: TestClient,
+    approved_company_for_document_api,
+) -> None:
+    viewer = User(name="document-viewer", api_key="viewer-key")
+    db_session.add(viewer)
+    db_session.flush()
+    db_session.add(
+        CompanyMember(
+            company_id=approved_company_for_document_api.id,
+            user_id=viewer.id,
+            role="viewer",
+            status="approved",
+        )
+    )
+    db_session.flush()
+
+    app.dependency_overrides[get_current_user] = lambda: viewer
+    response = client.post(
+        "/documents",
+        json={"name": "forbidden", "content": "not allowed", "source": "pytest"},
+    )
+
+    assert response.status_code == 403
+
+
+def test_analyst_cannot_create_owner_only_document(client: TestClient) -> None:
+    response = client.post(
+        "/documents",
+        json={
+            "name": "owner-only",
+            "content": "not allowed",
+            "source": "pytest",
+            "min_view_role": "owner",
+        },
+    )
+
+    assert response.status_code == 403

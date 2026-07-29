@@ -24,7 +24,9 @@ _model = None
 def _get_model(model_name: str):
     global _model
     if _model is None:
-        from sentence_transformers import CrossEncoder
+        from sentence_transformers import (  # pyright: ignore[reportMissingImports]
+            CrossEncoder,
+        )
 
         logger.info("Loading reranker model: %s", model_name)
         _model = CrossEncoder(model_name)
@@ -43,7 +45,7 @@ class LocalCrossEncoderReranker:
             return []
 
         try:
-            from torch.nn import Sigmoid
+            from torch.nn import Sigmoid  # pyright: ignore[reportMissingImports]
 
             scores = _get_model(self._model_name).predict(
                 [(question, passage) for passage in passages],

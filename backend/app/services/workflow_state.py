@@ -47,7 +47,7 @@ class WorkflowState(TypedDict):
     cached_knowledge_result: dict | None
     cache_scope_fingerprint: str | None
     empty_result_replanned: bool
-    tool_runtime: NotRequired[ToolRuntime]
-    stage_callback: NotRequired[Callable[[str], None]]
-    checkpoint_callback: NotRequired[Callable[[str, str | None, dict], None]]
+    tool_runtime: NotRequired[ToolRuntime | None]
+    stage_callback: NotRequired[Callable[[str], None] | None]
+    checkpoint_callback: NotRequired[Callable[[str, str | None, dict], None] | None]
     resume_next_node: str | None

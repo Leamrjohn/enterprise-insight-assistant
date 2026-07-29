@@ -3,6 +3,7 @@
 from fastapi.testclient import TestClient
 
 from app.core.auth import get_current_user
+from app.core.security import hash_password
 from app.main import app
 from app.models.company import BusinessDataSource, CompanyMember
 from app.models.user import User
@@ -206,6 +207,112 @@ def test_admin_member_list_contains_identity_and_cannot_disable_last_owner(
         f"/company/members/{owner['id']}", json={"status": "disabled"}
     )
     assert disabled.status_code == 409
+
+
+def test_owner_can_reset_admin_password_and_invalidate_existing_tokens(
+    client: TestClient, db_session, test_user: User
+) -> None:
+    company_id = _bootstrap_company(client, "Acme")
+    admin = User(
+        name="company admin",
+        username="company-admin",
+        password_hash=hash_password("old-admin-password"),
+        api_key="company-admin-api-key",
+    )
+    db_session.add(admin)
+    db_session.flush()
+    member = CompanyMember(
+        company_id=company_id,
+        user_id=admin.id,
+        role="admin",
+        status="approved",
+    )
+    db_session.add(member)
+    db_session.commit()
+
+    app.dependency_overrides.pop(get_current_user)
+    old_login = client.post(
+        "/auth/login",
+        json={"username": "company-admin", "password": "old-admin-password"},
+    )
+    assert old_login.status_code == 200
+    old_token = old_login.json()["access_token"]
+    app.dependency_overrides[get_current_user] = lambda: test_user
+
+    reset = client.post(
+        f"/company/members/{member.id}/reset-password",
+        json={"new_password": "new-admin-password"},
+    )
+    assert reset.status_code == 204
+    assert reset.content == b""
+
+    app.dependency_overrides.pop(get_current_user)
+    try:
+        assert (
+            client.post(
+                "/auth/login",
+                json={
+                    "username": "company-admin",
+                    "password": "old-admin-password",
+                },
+            ).status_code
+            == 401
+        )
+        new_login = client.post(
+            "/auth/login",
+            json={"username": "company-admin", "password": "new-admin-password"},
+        )
+        assert new_login.status_code == 200
+        invalidated = client.get(
+            "/me/company", headers={"Authorization": f"Bearer {old_token}"}
+        )
+        assert invalidated.status_code == 401
+    finally:
+        app.dependency_overrides[get_current_user] = lambda: test_user
+
+
+def test_admin_cannot_reset_another_members_password(
+    client: TestClient, db_session, test_user: User
+) -> None:
+    company_id = _bootstrap_company(client, "Acme")
+    admin = User(
+        name="company admin",
+        username="restricted-admin",
+        password_hash=hash_password("restricted-password"),
+        api_key="restricted-admin-api-key",
+    )
+    analyst = User(
+        name="analyst",
+        username="reset-target",
+        password_hash=hash_password("target-password"),
+        api_key="reset-target-api-key",
+    )
+    db_session.add_all([admin, analyst])
+    db_session.flush()
+    admin_member = CompanyMember(
+        company_id=company_id,
+        user_id=admin.id,
+        role="admin",
+        status="approved",
+    )
+    target_member = CompanyMember(
+        company_id=company_id,
+        user_id=analyst.id,
+        role="analyst",
+        status="approved",
+    )
+    db_session.add_all([admin_member, target_member])
+    db_session.commit()
+
+    app.dependency_overrides[get_current_user] = lambda: admin
+    try:
+        response = client.post(
+            f"/company/members/{target_member.id}/reset-password",
+            json={"new_password": "unauthorized-password"},
+        )
+        assert response.status_code == 403
+    finally:
+        app.dependency_overrides[get_current_user] = lambda: test_user
 
 
 def test_analyst_can_choose_a_data_source_without_reading_its_configuration(

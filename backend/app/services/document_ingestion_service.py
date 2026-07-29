@@ -1,5 +1,6 @@
+from app.models.document_chunk import DocumentChunk
 from app.repositories.chunk_repository import add_chunk
-from app.utils.document_chunk import ChunkText, chunk_file
+from app.utils.document_chunk import ChunkText, chunk_file, chunk_text_with_metadata
 from typing import BinaryIO
 from sqlalchemy.orm import Session
 from app.core.settings import Settings
@@ -74,10 +75,13 @@ def process_document_chunks(
     document.error_message = None
     db.commit()
     try:
-        if document.file_path is None:
-            raise ValueError("Document file path is missing")
-        absolute_path = settings.storage_dir / document.file_path
-        chunk_records = chunk_file(absolute_path, include_metadata=True)
+        if document.file_path is not None:
+            absolute_path = settings.storage_dir / document.file_path
+            chunk_records = chunk_file(absolute_path, include_metadata=True)
+        elif document.content:
+            chunk_records = chunk_text_with_metadata(document.content)
+        else:
+            raise ValueError("Document has neither a file nor text content")
         if not chunk_records:
             raise EmptyDocumentError("Document has no extractable text")
         chunk_records = [
@@ -94,6 +98,9 @@ def process_document_chunks(
 
         if len(embeddings) != len(chunk_texts):
             raise RuntimeError("Embedding count does not match document chunk count")
+        db.query(DocumentChunk).filter(DocumentChunk.document_id == document_id).delete(
+            synchronize_session=False
+        )
         for index, (chunk_record, embedding) in enumerate(
             zip(chunk_records, embeddings)
         ):

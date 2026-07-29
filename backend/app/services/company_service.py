@@ -419,3 +419,35 @@ def activate_schema_snapshot(
 
 def list_company_members(db: Session, *, company_id: int) -> list[CompanyMember]:
     return get_members_for_company(db, company_id=company_id)
+
+
+def reset_company_member_password(
+    db: Session, *, company_id: int, member_id: int, new_password: str
+) -> User | None:
+    """Replace a non-owner member password and invalidate all existing tokens."""
+    member = (
+        db.query(CompanyMember)
+        .filter(
+            CompanyMember.id == member_id,
+            CompanyMember.company_id == company_id,
+        )
+        .first()
+    )
+    if member is None:
+        return None
+    if member.role == "owner":
+        raise ValueError("owner passwords must be changed by the account owner")
+    user = db.get(User, member.user_id)
+    if user is None:
+        return None
+    if user.username is None:
+        raise ValueError("member must set a username before password reset")
+    user.password_hash = hash_password(new_password)
+    user.auth_version += 1
+    try:
+        db.commit()
+        db.refresh(user)
+    except Exception:
+        db.rollback()
+        raise
+    return user

@@ -338,6 +338,8 @@ def _publish_approved_draft(
     """Publish a pre-validated draft only after a separately audited approval."""
     result_data = dict(record.result_data or {})
     draft = result_data.get("report_draft")
+    if draft is None:
+        raise ValueError("approved review task is missing its report draft")
     allowed_chunk_ids = _frozen_allowed_chunk_ids(db, task_id=record.id)
     report = validate_report(draft, allowed_chunk_ids=allowed_chunk_ids)
     if report.status != "completed":
@@ -414,7 +416,7 @@ def process_analysis_task(self, task_id: int):
             .filter(AnalysisTaskDocument.task_id == record.id)
             .all()
         ]
-        workflow_kwargs = {
+        workflow_kwargs: dict[str, Any] = {
             "conversation_context": record.context_snapshot,
             "planner_memory": planner_memories(
                 db, company_id=record.company_id, user_id=record.user_id
@@ -457,16 +459,22 @@ def process_analysis_task(self, task_id: int):
             attempt=execution.attempt,
             node_name="workflow",
         ):
+            workflow_record = record
             workflow_result = run_analysis(
-                record.question,
-                record.user_id,
-                company_id=record.company_id,
+                workflow_record.question,
+                workflow_record.user_id,
+                company_id=workflow_record.company_id,
                 stage_callback=lambda stage: _update_stage(
-                    db, record, execution, stage
+                    db, workflow_record, execution, stage
                 ),
                 checkpoint_callback=lambda completed_node, next_node, patch: (
                     _checkpoint_workflow_node(
-                        db, record, execution, completed_node, next_node, patch
+                        db,
+                        workflow_record,
+                        execution,
+                        completed_node,
+                        next_node,
+                        patch,
                     )
                 ),
                 resume_next_node=execution.resume_next_node,

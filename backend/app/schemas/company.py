@@ -105,6 +105,12 @@ class CompanyMemberUpdate(BaseModel):
     status: str | None = Field(default=None, pattern="^(approved|disabled|rejected)$")
 
 
+class CompanyMemberPasswordReset(BaseModel):
+    """Owner-authorized password replacement; the old password is never exposed."""
+
+    new_password: str = Field(min_length=8, max_length=128)
+
+
 class CompanyInvitationCreate(BaseModel):
     max_uses: int = Field(default=1, ge=1, le=1000)
     expires_at: datetime | None = None

@@ -1,0 +1,8 @@
+{
+  "include": ["backend/app"],
+  "exclude": ["backend/build", "backend/scripts", "backend/tests"],
+  "venvPath": ".",
+  "venv": ".venv",
+  "pythonVersion": "3.12",
+  "typeCheckingMode": "basic"
+}

@@ -1,16 +1,69 @@
 """Company-admin review endpoints for reports held before publication."""
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from app.core.company_auth import CurrentCompanyContext, require_admin
 from app.db.session import get_db
-from app.schemas.review_request import ReviewDecisionIn, ReviewDecisionOut
+from app.models.review_request import ReviewRequest
+from app.schemas.final_analysis import FinalAnalysisReport
+from app.schemas.review_request import (
+    ReviewDecisionIn,
+    ReviewDecisionOut,
+    ReviewRequestOut,
+)
 from app.services.outbox_service import publish_analysis_task_event
 from app.services.review_service import approve_review_request, reject_review_request
 
 
 router = APIRouter()
+
+
+def _review_request_out(record: ReviewRequest) -> ReviewRequestOut:
+    raw_draft = (record.task.result_data or {}).get("report_draft")
+    report_draft = None
+    draft_error = None
+    if raw_draft is None:
+        draft_error = "missing"
+    else:
+        try:
+            report_draft = FinalAnalysisReport.model_validate(raw_draft)
+        except ValidationError:
+            draft_error = "invalid"
+    return ReviewRequestOut.model_validate(
+        {
+            "id": record.id,
+            "task_id": record.task_id,
+            "task_question": record.task.question,
+            "status": record.status,
+            "reason_code": record.reason_code,
+            "report_draft": report_draft,
+            "draft_error": draft_error,
+            "created_at": record.created_at,
+        }
+    )
+
+
+@router.get("/review-requests", response_model=list[ReviewRequestOut])
+def list_review_requests_endpoint(
+    request_status: str = "pending",
+    context: CurrentCompanyContext = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    """Return only this company's review queue, newest first."""
+    if request_status not in {"pending", "approved", "rejected"}:
+        raise HTTPException(status_code=422, detail="invalid review request status")
+    records = (
+        db.query(ReviewRequest)
+        .filter(
+            ReviewRequest.company_id == context.company.id,
+            ReviewRequest.status == request_status,
+        )
+        .order_by(ReviewRequest.created_at.desc(), ReviewRequest.id.desc())
+        .all()
+    )
+    return [_review_request_out(record) for record in records]
 
 
 @router.post(
@@ -37,10 +90,12 @@ def approve_review_request_endpoint(
     if bundle is None:
         raise HTTPException(status_code=404, detail="review request not found")
     publish_analysis_task_event(db, event_id=bundle.outbox_event_id)
-    return ReviewDecisionOut(
-        task_id=bundle.task.id,
-        status=bundle.task.status,
-        review_status="approved",
+    return ReviewDecisionOut.model_validate(
+        {
+            "task_id": bundle.task.id,
+            "status": bundle.task.status,
+            "review_status": "approved",
+        }
     )
 
 
@@ -63,6 +118,10 @@ def reject_review_request_endpoint(
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     if task is None:
         raise HTTPException(status_code=404, detail="review request not found")
-    return ReviewDecisionOut(
-        task_id=task.id, status=task.status, review_status="rejected"
+    return ReviewDecisionOut.model_validate(
+        {
+            "task_id": task.id,
+            "status": task.status,
+            "review_status": "rejected",
+        }
     )

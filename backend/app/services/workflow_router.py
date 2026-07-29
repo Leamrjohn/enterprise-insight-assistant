@@ -4,7 +4,8 @@ from __future__ import annotations
 
 import hashlib
 import json
-from typing import Literal
+from collections.abc import Mapping
+from typing import Any, Literal
 
 from app.schemas.node_outcome import NodeOutcome
 
@@ -26,7 +27,7 @@ RETRYABLE_KNOWLEDGE_CODES = frozenset({"knowledge_retrieval_failed"})
 SECURITY_VALIDATION_FAILURES = frozenset({"citations_valid"})
 
 
-def _outcome_from_state(state: dict, name: str) -> NodeOutcome | None:
+def _outcome_from_state(state: Mapping[str, Any], name: str) -> NodeOutcome | None:
     """Read the durable node contract, tolerating pre-contract workflow state."""
     raw = state.get(f"{name}_outcome")
     if not isinstance(raw, dict):
@@ -34,7 +35,7 @@ def _outcome_from_state(state: dict, name: str) -> NodeOutcome | None:
     return NodeOutcome.model_validate(raw)
 
 
-def build_scope_fingerprint(state: dict, plan: dict | None = None) -> str:
+def build_scope_fingerprint(state: Mapping[str, Any], plan: dict | None = None) -> str:
     """Bind reusable artifacts to the user, company, question, plan and documents."""
     source = state.get("business_data_source")
     payload = {
@@ -67,7 +68,7 @@ def _validation_action(review_result: dict) -> RoutingAction | None:
     return "replan"
 
 
-def choose_next_action(state: dict) -> tuple[RoutingAction, str]:
+def choose_next_action(state: Mapping[str, Any]) -> tuple[RoutingAction, str]:
     """Return a policy decision without asking an LLM or inspecting answer prose."""
     review_result = state.get("review_result") or {}
     validation_action = _validation_action(review_result)
@@ -155,7 +156,9 @@ def choose_next_action(state: dict) -> tuple[RoutingAction, str]:
     return "stop", "non_retryable_or_unknown_failure"
 
 
-def build_feedback(state: dict, action: RoutingAction, reason: str) -> dict | None:
+def build_feedback(
+    state: Mapping[str, Any], action: RoutingAction, reason: str
+) -> dict | None:
     if action == "stop":
         return None
     data_result = state.get("data_result") or {}

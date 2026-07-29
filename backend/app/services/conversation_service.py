@@ -198,6 +198,8 @@ def create_conversation_task_service(
         conversation_context_snapshot = build_conversation_context(
             messages,
         )
+        if conversation.data_source_id is None:
+            raise DataSourceNotReadyError("会话没有关联经营数据源")
         source = get_data_source(
             db,
             data_source_id=conversation.data_source_id,

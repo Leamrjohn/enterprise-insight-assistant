@@ -18,7 +18,7 @@ from app.schemas.conversation import (
     ConversationOut,
     ConversationTaskRetryAccepted,
 )
-from app.schemas.task import ConversationTaskOut, TaskOut
+from app.schemas.task import ConversationTaskOut, ConversationTaskReviewOut, TaskOut
 from app.repositories.conversation_repository import get_assistant_message_by_task_id
 from app.models.task_execution_attempt import TaskExecutionAttempt
 from app.models.workflow_checkpoint import WorkflowCheckpoint
@@ -92,6 +92,19 @@ def _task_observability(db: Session, task) -> dict:
 
 def _conversation_task_out(db: Session, task) -> ConversationTaskOut:
     assistant_message = get_assistant_message_by_task_id(db, task_id=task.id)
+    result_data = task.result_data or {}
+    review_request = task.review_request
+    review: ConversationTaskReviewOut | None = None
+    if review_request is not None:
+        review = ConversationTaskReviewOut.model_validate(
+            {
+                "id": review_request.id,
+                "status": review_request.status,
+                "reason_code": review_request.reason_code,
+                "decision_note": review_request.decision_note,
+                "reviewed_at": review_request.reviewed_at,
+            }
+        )
     return ConversationTaskOut(
         id=task.id,
         conversation_id=task.conversation_id,
@@ -105,6 +118,8 @@ def _conversation_task_out(db: Session, task) -> ConversationTaskOut:
         assistant_message_id=assistant_message.id if assistant_message else None,
         assistant_content=assistant_message.content if assistant_message else None,
         report=task.report,
+        report_draft=result_data.get("report_draft"),
+        review=review,
         observability=_task_observability(db, task),
         created_at=task.created_at,
         updated_at=task.updated_at,

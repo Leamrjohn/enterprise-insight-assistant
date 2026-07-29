@@ -26,7 +26,10 @@ def _display_matches_source(
     source_numbers: list[Decimal],
 ) -> bool:
     """Allow only exact values or the rounding implied by the displayed precision."""
-    precision = Decimal(1).scaleb(answer_number.as_tuple().exponent)
+    exponent = answer_number.as_tuple().exponent
+    if not isinstance(exponent, int):
+        return False
+    precision = Decimal(1).scaleb(exponent)
     candidates = list(source_numbers)
     if has_percent_sign:
         candidates.extend(

@@ -1,5 +1,7 @@
 """Periodic publisher for durable task creation events."""
 
+from typing import Any, cast
+
 from app.core.celery_app import celery_app
 from app.db.session import SessionLocal
 from app.services.outbox_service import pending_event_ids, publish_analysis_task_event
@@ -27,7 +29,7 @@ def recover_expired_analysis_executions() -> int:
         from app.tasks.analysis_tasks import process_analysis_task
 
         for task_id in task_ids:
-            process_analysis_task.delay(task_id=task_id)
+            cast(Any, process_analysis_task).delay(task_id=task_id)
         return len(task_ids)
     finally:
         db.close()

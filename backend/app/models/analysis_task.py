@@ -223,3 +223,4 @@ from app.models.review_request import ReviewRequest  # noqa: E402, F401
 from app.models.workflow_event import WorkflowEvent  # noqa: E402, F401
 from app.models.tool_call_record import ToolCallRecord  # noqa: E402, F401
 from app.models.memory_source import MemorySource  # noqa: E402, F401
+from app.models.analysis_memory import AnalysisMemory  # noqa: E402, F401

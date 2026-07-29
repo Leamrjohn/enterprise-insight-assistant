@@ -23,6 +23,7 @@ class DocumentUpdate(BaseModel):
 class DocumentOut(BaseModel):
     id: int
     company_id: int | None = None
+    uploaded_by_user_id: int
     name: str
     content: str | None = None
     source: str

@@ -1,8 +1,30 @@
-from pydantic import BaseModel
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
+
+from pydantic import BaseModel
 
 from app.schemas.final_analysis import FinalAnalysisReport
+
+
+TaskStatus = Literal[
+    "queued",
+    "running",
+    "retrying",
+    "awaiting_review",
+    "completed",
+    "partial",
+    "failed",
+    "cancelled",
+    "needs_clarification",
+]
+
+
+class ConversationTaskReviewOut(BaseModel):
+    id: int
+    status: Literal["pending", "approved", "rejected"]
+    reason_code: str
+    decision_note: str | None
+    reviewed_at: datetime | None
 
 
 class TaskCreate(BaseModel):
@@ -20,7 +42,7 @@ class TaskOut(BaseModel):
     conversation_id: int | None = None
     input_message_id: int | None = None
     question: str
-    status: str
+    status: TaskStatus
     stage: str
     attempt_count: int
     celery_task_id: str | None = None
@@ -41,7 +63,7 @@ class ConversationTaskOut(BaseModel):
 
     id: int
     conversation_id: int | None
-    status: str
+    status: TaskStatus
     stage: str
     attempt_count: int
     duration_ms: int | None
@@ -51,6 +73,8 @@ class ConversationTaskOut(BaseModel):
     assistant_message_id: int | None
     assistant_content: str | None
     report: FinalAnalysisReport | None
+    report_draft: FinalAnalysisReport | None = None
+    review: ConversationTaskReviewOut | None = None
     observability: dict[str, Any] | None = None
     created_at: datetime | None
     updated_at: datetime | None

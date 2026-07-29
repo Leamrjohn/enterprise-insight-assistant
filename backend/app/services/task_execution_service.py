@@ -311,10 +311,13 @@ def finish_execution(
             "await_human_review" if task_status == "awaiting_review" else "terminal"
         ),
     )
+    task = db.get(AnalysisTask, attempt.task_id)
+    if task is None:
+        raise RuntimeError("analysis task disappeared before execution completion")
     append_workflow_event(
         db,
         attempt=attempt,
-        company_id=(db.get(AnalysisTask, attempt.task_id).company_id),
+        company_id=task.company_id,
         event_type="execution_finished",
         node_name="saving_result",
         status=task_status,

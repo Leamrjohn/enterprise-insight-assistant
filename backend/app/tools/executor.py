@@ -3,8 +3,10 @@
 import logging
 import os
 import re
+from typing import LiteralString, TypedDict, cast
 
 import psycopg
+from psycopg import sql as psycopg_sql
 from app.core.settings import get_settings
 from app.models.company import BusinessDataSource
 from app.tools.snapshot_catalog import SnapshotCatalog
@@ -58,10 +60,15 @@ def execute_registered_readonly_query(
     cur = conn.cursor()
 
     try:
-        cur.execute(f"SET statement_timeout = {timeout_ms}")
-        cur.execute(sql, parameters)
+        cur.execute(
+            psycopg_sql.SQL("SET statement_timeout = {}").format(
+                psycopg_sql.Literal(timeout_ms)
+            )
+        )
+        cur.execute(psycopg_sql.SQL(cast(LiteralString, sql)), parameters)
         rows = cur.fetchall()
-        columns = [desc[0] for desc in cur.description]
+        description = cur.description
+        columns = [desc[0] for desc in description] if description is not None else []
         logger.info(
             "Registered business query executed",
             extra={"row_count": len(rows), "timeout_ms": timeout_ms},
@@ -92,7 +99,11 @@ def execute_readonly_sql(
 
     connection = _connection_details(data_source)
     conn = psycopg.connect(
-        **connection,
+        host=connection["host"],
+        port=connection["port"],
+        dbname=connection["dbname"],
+        user=connection["user"],
+        password=connection["password"],
         options="-c default_transaction_read_only=on",
     )
     cur = conn.cursor()
@@ -100,12 +111,17 @@ def execute_readonly_sql(
     try:
         cur.execute("SET TRANSACTION READ ONLY")
         # 4. 设置超时
-        cur.execute(f"SET statement_timeout = {timeout_ms}")  # type: ignore[arg-type]
+        cur.execute(
+            psycopg_sql.SQL("SET statement_timeout = {}").format(
+                psycopg_sql.Literal(timeout_ms)
+            )
+        )
 
         # 5. 执行
-        cur.execute(sql)  # type: ignore[arg-type]
+        cur.execute(psycopg_sql.SQL(cast(LiteralString, sql)))
         rows = cur.fetchall()
-        columns = [desc[0] for desc in cur.description]  # type: ignore[arg-type]
+        description = cur.description
+        columns = [desc[0] for desc in description] if description is not None else []
 
         logger.info(
             "SQL executed",
@@ -131,7 +147,17 @@ def execute_readonly_sql(
         conn.close()
 
 
-def _connection_details(data_source: BusinessDataSource | None) -> dict[str, object]:
+class _ConnectionDetails(TypedDict):
+    host: str
+    port: int
+    dbname: str
+    user: str
+    password: str
+
+
+def _connection_details(
+    data_source: BusinessDataSource | None,
+) -> _ConnectionDetails:
     """Resolve a tenant source without persisting or logging its password."""
     if data_source is None:
         settings = get_settings()

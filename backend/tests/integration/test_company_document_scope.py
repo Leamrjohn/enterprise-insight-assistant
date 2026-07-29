@@ -21,7 +21,7 @@ def test_document_routes_ignore_client_company_id(
             "company_id": 99999,
         },
     )
-    assert document.status_code == 200
+    assert document.status_code == 202
     assert document.json()["company_id"] == first_company["id"]
 
     other_user = User(name="other", api_key="other-api-key")

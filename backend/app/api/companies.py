@@ -9,6 +9,7 @@ from app.core.company_auth import (
     get_current_company_context,
     require_admin,
     require_analysis_permission,
+    require_owner,
 )
 from app.db.session import get_db
 from app.models.company import BusinessDataSource, CompanyMember
@@ -23,6 +24,7 @@ from app.schemas.company import (
     CompanyInvitationCreated,
     CompanyInvitationOut,
     CompanyMemberOut,
+    CompanyMemberPasswordReset,
     CompanyMemberUpdate,
     CompanyOut,
     CurrentCompanyOut,
@@ -41,6 +43,7 @@ from app.services.company_service import (
     list_membership_applications,
     list_company_members,
     reject_membership_application,
+    reset_company_member_password,
     revoke_company_invitation,
 )
 
@@ -464,3 +467,27 @@ def update_member(
     db.commit()
     db.refresh(member)
     return _member_out(db, member)
+
+
+@router.post(
+    "/company/members/{member_id}/reset-password",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def reset_member_password(
+    member_id: int,
+    request: CompanyMemberPasswordReset,
+    context: CurrentCompanyContext = Depends(require_owner),
+    db: Session = Depends(get_db),
+) -> None:
+    """Allow only a company owner to replace a non-owner member's password."""
+    try:
+        user = reset_company_member_password(
+            db,
+            company_id=context.company.id,
+            member_id=member_id,
+            new_password=request.new_password,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    if user is None:
+        raise HTTPException(status_code=404, detail="member not found")

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime, timezone
-from typing import Callable
+from typing import Any, Callable, cast
 
 from sqlalchemy.orm import Session
 
@@ -44,16 +44,19 @@ def publish_analysis_task_event(
     if not isinstance(task_id, int):
         raise ValueError("analysis task outbox event is missing task_id")
 
-    if enqueue is None:
+    enqueue_task = enqueue
+    if enqueue_task is None:
         # Import lazily to avoid a service <-> Celery module import cycle.
         from app.tasks.analysis_tasks import process_analysis_task
 
-        def enqueue(value: int) -> object:
-            return process_analysis_task.delay(task_id=value)
+        def _enqueue(value: int) -> object:
+            return cast(Any, process_analysis_task).delay(task_id=value)
+
+        enqueue_task = _enqueue
 
     event.publish_attempt_count += 1
     try:
-        async_result = enqueue(task_id)
+        async_result = enqueue_task(task_id)
         event.status = "published"
         event.published_at = datetime.now(timezone.utc)
         event.last_error = None

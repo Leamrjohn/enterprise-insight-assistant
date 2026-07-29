@@ -17,7 +17,9 @@ def _get_model():
     """懒加载模型，只加载一次"""
     global _model
     if _model is None:
-        from sentence_transformers import SentenceTransformer
+        from sentence_transformers import (  # pyright: ignore[reportMissingImports]
+            SentenceTransformer,
+        )
 
         logger.info("Loading embedding model: all-MiniLM-L6-v2")
         _model = SentenceTransformer("all-MiniLM-L6-v2")
