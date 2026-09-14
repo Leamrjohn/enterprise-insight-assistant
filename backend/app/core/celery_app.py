@@ -22,18 +22,24 @@ celery_app.conf.update(
     task_acks_late=True,
     worker_prefetch_multiplier=1,
     imports=[
-        "app.tasks.analysis_tasks",
-        "app.tasks.document_tasks",
-        "app.tasks.outbox_tasks",
+        "app.modules.workflow.tasks",
+        "app.modules.documents.tasks",
+        "app.modules.workflow.outbox_tasks",
+        "app.modules.input_artifacts.tasks",
+        "app.modules.input_artifacts.outbox_tasks",
     ],
     beat_schedule={
         "publish-pending-analysis-task-events": {
-            "task": "app.tasks.outbox_tasks.publish_pending_analysis_task_events",
+            "task": "app.modules.workflow.outbox_tasks.publish_pending_analysis_task_events",
             "schedule": 5.0,
         },
         "recover-expired-analysis-executions": {
-            "task": "app.tasks.outbox_tasks.recover_expired_analysis_executions",
+            "task": "app.modules.workflow.outbox_tasks.recover_expired_analysis_executions",
             "schedule": 10.0,
+        },
+        "publish-pending-artifact-processing-events": {
+            "task": "app.modules.input_artifacts.outbox_tasks.publish_pending_artifact_processing_events",
+            "schedule": 5.0,
         },
     },
 )

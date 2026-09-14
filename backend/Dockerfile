@@ -10,7 +10,14 @@ COPY requirements.txt .
 RUN pip install --upgrade pip \
     && pip install -r requirements.txt
 
-COPY . .
+RUN groupadd --gid 10001 app \
+    && useradd --uid 10001 --gid app --create-home --shell /usr/sbin/nologin app \
+    && mkdir -p /app/logs /app/storage \
+    && chown -R app:app /app
+
+COPY --chown=app:app . .
+
+USER app
 
 EXPOSE 8000
 

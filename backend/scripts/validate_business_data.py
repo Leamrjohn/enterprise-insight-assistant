@@ -28,7 +28,10 @@ def validate_document_corpus(cur) -> int:
         )
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     artifacts = manifest["artifacts"]
-    if manifest["artifact_count"] != len(artifacts) or len(artifacts) != 30:
+    # The corpus grows as new business document families are generated.  The
+    # manifest is its authoritative inventory; only reject a malformed count
+    # or a regression below the original minimum corpus.
+    if manifest["artifact_count"] != len(artifacts) or len(artifacts) < 30:
         raise RuntimeError("business knowledge-base artifact count is invalid")
     if "evaluation.scenario_truth" in json.dumps(manifest, ensure_ascii=False):
         raise RuntimeError(

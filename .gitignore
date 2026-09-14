@@ -30,3 +30,5 @@ Thumbs.db
 .claude/
 .codex/
 tmp/
+evaluation-runs/
+backend/pyright_output.json

@@ -19,8 +19,8 @@ from sqlalchemy.orm import Session
 
 from app.db.session import engine, get_db
 from app.main import app
-from app.core.auth import get_current_user
-from app.models.user import User
+from app.modules.identity.authentication import get_current_user
+from app.modules.identity.models import User
 
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]

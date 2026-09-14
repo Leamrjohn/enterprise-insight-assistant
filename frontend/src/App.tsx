@@ -1,4 +1,4 @@
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { ApiClient, ApiError, applyForMembership, bootstrapOwner, login, reapplyForMembership } from "./api";
 import type { AssistantDataSource, CompanyInvitation, CompanyMember, Conversation, ConversationMessage, CreatedCompanyInvitation, CurrentUser, DataSource, DocumentChunk, DocumentItem, MembershipApplication, Report, ReviewRequest, Snapshot, Task, TaskMetrics, TaskStatus } from "./types";
 
@@ -108,6 +108,8 @@ function AssistantPage({ api, sources, documents, conversations, refreshConversa
   const [task, setTask] = useState<Task | null>(null);
   const [error, setError] = useState("");
   const [sending, setSending] = useState(false);
+  const [attachmentUploading, setAttachmentUploading] = useState(false);
+  const [attachmentNotice, setAttachmentNotice] = useState("");
 
   const selectedSource = sources.find((source) => source.id === sourceId) ?? null;
   useEffect(() => { if (!conversation && (!selectedSource || selectedSource.status !== "ready" || selectedSource.active_schema_snapshot_id === null)) setSourceId(readySources[0]?.id ?? null); }, [conversation, readySources, selectedSource]);
@@ -126,13 +128,35 @@ function AssistantPage({ api, sources, documents, conversations, refreshConversa
     finally { setSending(false); }
   }
 
+  async function uploadAttachment(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.currentTarget.files?.[0];
+    if (!file || !sourceId) return;
+    setAttachmentUploading(true); setError(""); setAttachmentNotice("");
+    try {
+      let current = conversation;
+      if (!current || current.data_source_id !== sourceId) {
+        current = await api.createConversation(sourceId, `附件：${file.name}`.slice(0, 36));
+        setDraft(false); setConversation(current); setMessages([]); setTask(null);
+        await refreshConversations();
+      }
+      const completed = await api.uploadConversationAttachment(current.id, file);
+      event.currentTarget.value = "";
+      if (completed.upload_status !== "completed" || !completed.artifact_version) {
+        throw new Error("文件未被平台接纳，请重新选择文件后上传。");
+      }
+      setAttachmentNotice(`“${file.name}”已进入隔离处理，正在等待安全扫描和解析；当前尚不能作为分析证据。`);
+    } catch (reason) { setError(toChineseError(reason)); }
+    finally { setAttachmentUploading(false); }
+  }
+
   return <div className="assistant-layout"><aside className="conversation-rail"><div className="rail-header"><span>分析会话</span><button onClick={() => { setDraft(true); setConversation(null); setMessages([]); setTask(null); }}>新建</button></div><div className="conversation-list">{conversations.map((item) => <button key={item.id} className={item.id === conversation?.id ? "conversation active" : "conversation"} onClick={() => void loadConversation(item)}>{item.title || "未命名经营分析"}<small>{formatDate(item.updated_at)}</small></button>)}</div></aside>
     <main className="assistant-main"><header className="assistant-header"><div><p className="kicker">经营助手</p><h2>{conversation?.title || "开始一项经营分析"}</h2></div><div className="task-actions">{task && !terminal.has(task.status) && <button className="quiet-button" onClick={() => conversation && void api.cancelTask(conversation.id, task.id).then(async (cancelled) => { setTask(await api.task(conversation.id, cancelled.id)); setMessages(await api.messages(conversation.id)); }).catch((reason) => setError(toChineseError(reason)))}>取消分析</button>}{task && (task.status === "failed" || task.status === "cancelled") && <button className="quiet-button" onClick={() => conversation && void api.retryTask(conversation.id, task.id).then(async (accepted) => { setTask(await api.task(conversation.id, accepted.task_id)); setMessages(await api.messages(conversation.id)); }).catch((reason) => setError(toChineseError(reason)))}>重新发起</button>}</div></header>
       {task && <section className="task-context" aria-label="当前任务状态"><div><span>状态</span><strong className={`status status-${task.status}`}>{statusLabel(task.status)}</strong></div><div><span>当前阶段</span><strong>{statusLabel(task.stage)}</strong></div><div><span>尝试次数</span><strong>{task.attempt_count}</strong></div><div><span>关联请求</span><strong>{task.observability?.request_id || "尚未分配"}</strong></div></section>}
       <div className="message-list" aria-live="polite">{messages.map((message) => <article key={message.id} className={`message ${message.role}`}><span>{message.role === "user" ? "你" : "系统"} <time dateTime={message.created_at}>{formatDate(message.created_at)}</time></span><p>{message.content || statusLabel(message.status)}</p>{message.analysis_task_id && <small>任务 #{message.analysis_task_id} · {statusLabel(message.status)}</small>}</article>)}</div>
       <ReportView task={task} report={task?.report ?? task?.report_draft ?? null} />
       {task?.observability && <section className="task-observability"><h3>执行记录</h3><div><span>模型调用 {task.observability.model_usage.calls} 次</span><span>{task.observability.model_usage.tokens} tokens</span><span>成本 {task.observability.model_usage.cost}</span></div>{task.observability.latest_checkpoint && <p>最近检查点：{task.observability.latest_checkpoint.completed_node || "未完成节点"}{task.observability.latest_checkpoint.next_node ? `，下一节点 ${task.observability.latest_checkpoint.next_node}` : ""}</p>}</section>}
-      <form className="composer" onSubmit={send}><textarea value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="例如：华东区 6 月销售额较 5 月下降，哪些数据事实与文档资料能够说明情况？" aria-label="经营问题" /><div className="composer-bottom"><span>{selectedSource ? `数据源：${selectedSource.name}` : "请先选择一个可运行的数据源"}</span><button className="primary-button" disabled={sending || !sourceId}>{sending ? "正在提交…" : "发起分析"}</button></div></form>
+      <form className="composer" onSubmit={send}><textarea value={question} onChange={(event) => setQuestion(event.target.value)} placeholder="例如：华东区 6 月销售额较 5 月下降，哪些数据事实与文档资料能够说明情况？" aria-label="经营问题" /><div className="composer-bottom"><span>{selectedSource ? `数据源：${selectedSource.name}` : "请先选择一个可运行的数据源"}</span><label className="attachment-picker">添加附件<input type="file" onChange={(event) => void uploadAttachment(event)} disabled={sending || attachmentUploading || !sourceId} /><small>{attachmentUploading ? "正在上传附件…" : "文件会先进入隔离扫描"}</small></label><button className="primary-button" disabled={sending || !sourceId}>{sending ? "正在提交…" : "发起分析"}</button></div></form>
+      {attachmentNotice && <p className="notice" role="status">{attachmentNotice}</p>}
       {error && <p className="inline-error" role="alert">{error}</p>}
     </main>
     <aside className="evidence-inspector"><p className="kicker">本次分析范围</p><h3>证据边界</h3><label>经营数据源<select value={sourceId ?? ""} onChange={(event) => { setSourceId(Number(event.target.value)); setConversation(null); setTask(null); }}><option value="" disabled>选择数据源</option>{sources.map((source) => <option key={source.id} value={source.id} disabled={source.status !== "ready" || source.active_schema_snapshot_id === null}>{source.name}{source.status !== "ready" || source.active_schema_snapshot_id === null ? "（暂不可运行）" : ""}</option>)}</select></label>{!readySources.length && <p className="inline-error">当前没有可运行的数据源。请由管理员发现并启用契约快照后再发起分析。</p>}<div className="scope-item"><span>运行契约快照</span><strong>{selectedSource?.active_schema_snapshot_id ? `版本 #${selectedSource.active_schema_snapshot_id}` : "尚未选择"}</strong><small>当前任务将使用此版本限制可查询的表、字段和关联。</small></div><fieldset><legend>文档检索范围</legend>{documents.length ? documents.map((document) => <label className="check-row" key={document.id}><input type="checkbox" checked={documentIds.includes(document.id)} disabled={document.status !== "completed"} onChange={() => setDocumentIds((selected) => selected.includes(document.id) ? selected.filter((id) => id !== document.id) : [...selected, document.id])} /><span>{document.name}<small>{document.status === "completed" ? "可检索" : statusLabel(document.status)}</small></span></label>) : <p className="muted">当前没有可选择的已处理文档。</p>}</fieldset></aside>

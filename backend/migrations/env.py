@@ -5,21 +5,25 @@ from alembic import context
 from sqlalchemy import create_engine
 from app.db.base import Base
 from app.db.session import database_url
-from app.models.user import User  # noqa: F401
-from app.models.documents import Documents  # noqa: F401
-from app.models.document_chunk import DocumentChunk  # noqa: F401
-from app.models.analysis_task import AnalysisTask, AnalysisTaskDocument  # noqa: F401
-from app.models.conversation import Conversation, ConversationMessage  # noqa: F401
-from app.models.todo_items import TodoItem  # noqa: F401
-from app.models.labels import Label  # noqa: F401
-from app.models.prompt_templates import PromptTemplate  # noqa: F401
-from app.models import company  # noqa: F401
-from app.models.outbox import AnalysisTaskOutboxEvent  # noqa: F401
-from app.models.task_execution_attempt import TaskExecutionAttempt  # noqa: F401
-from app.models.workflow_checkpoint import WorkflowCheckpoint  # noqa: F401
-from app.models.review_request import ReviewRequest  # noqa: F401
-from app.models.analysis_memory import AnalysisMemory  # noqa: F401
-from app.models.workflow_event import WorkflowEvent  # noqa: F401
+from app.modules.identity.models import User  # noqa: F401
+from app.modules.documents.models import Documents  # noqa: F401
+from app.modules.documents.chunks import DocumentChunk  # noqa: F401
+from app.modules.workflow.models import AnalysisTask, AnalysisTaskDocument  # noqa: F401
+from app.modules.conversations.models import Conversation, ConversationMessage  # noqa: F401
+from app.modules.organizations import models as company  # noqa: F401
+from app.modules.workflow.outbox_models import AnalysisTaskOutboxEvent  # noqa: F401
+from app.modules.workflow.execution_attempt import TaskExecutionAttempt  # noqa: F401
+from app.modules.workflow.checkpoint import WorkflowCheckpoint  # noqa: F401
+from app.modules.reviews.models import ReviewRequest  # noqa: F401
+from app.modules.memory.models import AnalysisMemory  # noqa: F401
+from app.modules.workflow.events_models import WorkflowEvent  # noqa: F401
+from app.modules.input_artifacts.models import (  # noqa: F401
+    ArtifactParseResult,
+    ArtifactProcessingJob,
+    ArtifactProcessingOutboxEvent,
+    InputArtifact,
+    InputArtifactVersion,
+)
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.

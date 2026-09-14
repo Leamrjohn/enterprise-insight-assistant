@@ -1,189 +1,193 @@
 # Enterprise Insight Assistant（企业经营洞察助手）
 
-面向企业内部经营分析场景的 Multi-Agent AI 平台。用户提出经营问题，系统从已授权的只读经营数据库和当前用户文档知识库中取证，输出可追溯的结构化经营分析报告——包含事实、原因假设、建议行动、数据证据、文档引用和限制。
+面向中小型公司的证据驱动经营分析系统。用户用自然语言提出经营问题，系统在当前公司授权范围内查询只读经营数据库、检索内部文档，并生成可追溯的结构化报告。
 
-> 当前为教学/演示项目，第一版支持四类固定场景：区域销售下降、毛利下降、客诉上升、应收风险。
+本仓库定位为可在单机验证的生产风格原型，不宣称已经证明大规模并发、高可用或真实客户数据效果。
 
-## 架构
+## 核心能力
+
+- 公司级身份与权限：JWT 登录、成员角色、资源隔离和管理审批。
+- 文档知识库：TXT、Markdown、PDF 上传，异步解析、分块、向量化和 pgvector 检索。
+- 受控经营查询：Schema 快照、查询契约、`sqlglot` AST 校验、只读事务和结果约束。
+- Agent 工作流：Planner → Data / Knowledge → Reviewer，支持条件路由、澄清和证据不足分支。
+- 可信报告：事实、假设、建议、数据证据、文档引用和限制分别建模并交叉校验。
+- 异步可靠性：Celery、Redis、Outbox、执行租约、Checkpoint、分类重试、取消和幂等发布。
+- 人工审核与治理：待审核报告、模型调用记录、Tool 调用审计、任务事件和运行指标。
+- React 工作台：经营问答、证据范围、文档库、数据源、成员管理和任务状态展示。
+
+## 系统边界
+
+系统只接受经营问题，不接受用户提交的原始 SQL，也不允许 LLM 决定权限或写入经营数据库。
 
 ```text
-                    ┌──────────────┐
-                    │   React SPA   │
-                    │ (Vite + TS)  │
-                    └──────┬───────┘
-                           │ HTTP / JWT
-                    ┌──────▼───────┐
-                    │   FastAPI    │
-                    │  (REST API) │
-                    └──┬───────┬───┘
-                       │       │
-              ┌────────▼──┐ ┌──▼─────────┐
-              │ PostgreSQL │ │   Redis     │
-              │ (pgvector) │ │ (Celery Q) │
-              └────────────┘ └──┬─────────┘
-                                │
-                        ┌───────▼────────┐
-                        │  Celery Worker  │
-                        │  ┌─────────────┐│
-                        │  │  LangGraph   ││
-                        │  │  Planner     ││
-                        │  │  Data Agent  ││
-                        │  │  Knowledge   ││
-                        │  │  Reviewer    ││
-                        │  └─────────────┘│
-                        └───────┬─────────┘
-                                │
-                    ┌───────────┼───────────┐
-                    │           │           │
-            ┌───────▼──┐ ┌─────▼────┐ ┌────▼──────┐
-            │ Business │ │ pgvector │ │   Model    │
-            │   DB     │ │  (RAG)   │ │  Gateway   │
-            │ (只读)   │ └──────────┘ │(DeepSeek等)│
-            └──────────┘             └───────────┘
+React / TypeScript
+        │ HTTP + JWT
+        ▼
+FastAPI ── PostgreSQL + pgvector
+        │ commit + Outbox
+        ▼
+Redis ── Celery Worker ── LangGraph
+                           ├─ Planner
+                           ├─ Data Agent ── 只读经营数据库
+                           ├─ Knowledge Agent ── 当前公司文档
+                           └─ Reviewer + 确定性校验器
+                                      │
+                                      ▼
+                              持久化结构化报告
 ```
 
-核心设计原则：
-- **API 不执行长分析** — 仅校验、创建任务、提交 Celery
-- **Data Agent 只执行固定查询模板** — 用户和 LLM 不能输入原始 SQL
-- **Knowledge Agent 只检索当前用户文档** — 不访问经营数据库
-- **LLM 不计算数字** — 由确定性代码从查询结果构建事实
-- **引用和数字经确定性校验** — Reviewer 不替代 Pydantic 校验器
+关键约束：
 
-## 当前能力
-
-### 已实现
-
-- **FastAPI 应用** — 分层架构：API → Service → Repository → Model，带依赖注入、请求 ID 追踪、结构化日志
-- **JWT 认证** — 用户名密码登录、密码哈希（argon2）、公司隔离、角色授权（owner/admin/analyst/viewer）
-- **公司成员管理** — 邀请码入职、成员申请审核、角色变更、禁启用、最后一位所有者保护
-- **文档知识库** — TXT/PDF/Markdown 上传、异步解析分块、Embedding（sentence-transformers）、pgvector 向量检索 + Reranker
-- **经营数据源** — 多公司只读数据库连接、Schema 快照发现、契约版本管理、凭据环境变量隔离
-- **受控 SQL 查询** — 固定查询模板（TemplateQueryTool）+ 业务语义目录 + SQL AST 校验（sqlglot）+ 只读事务
-- **LangGraph 工作流** — Planner → Data Agent → Knowledge Agent → Reviewer，含条件路由、重试、空结果重规划
-- **Celery 异步分析** — 原子认领任务、独立数据库 Session、阶段持久化、重试/取消、幂等保护
-- **结构化报告** — `FinalAnalysisReport`（Pydantic），包含 ConfirmedFact、Hypothesis、Recommendation、DataEvidence、DocumentCitation、Limitation 及交叉校验
-- **Docker Compose** — 一键启动 11 个服务（PostgreSQL + Redis + API + Worker + Beat + 业务数据库 + 前端）
-- **216 个非 E2E 测试通过**（2 个需要 Docker 业务数据库的测试标记跳过）
-
-### 规划中
-
-- 完成四类场景的端到端验收数据
-- E2E 测试（真实 Redis + Worker + 业务库链路）
-- 场景评测集（Recall@K、引用有效率、数字一致率）
-- 限流、脱敏、Prompt 注入防护
-- 部署 Runbook 和备份恢复
+- API 只负责校验、鉴权、持久化和任务投递，不在 HTTP 请求中执行长分析。
+- Worker 只接收 `task_id`，从数据库恢复冻结的公司、数据源、Schema 和文档范围。
+- Data Agent 生成的候选 SQL 必须通过查询契约、Schema、AST 和只读执行边界。
+- Knowledge Agent 只能引用本次任务允许访问的文档分块。
+- Reviewer 只能组织已验证证据，最终发布仍由确定性校验和持久化门控制。
+- 数据确认的是事实；文档支持的是原因假设。证据不足时返回限制或澄清，不伪造归因。
 
 ## 技术栈
 
-| 层 | 技术 |
-|---|---|
-| Web 框架 | FastAPI (Python 3.10+) |
-| ORM / 迁移 | SQLAlchemy 2.0 + Alembic |
-| 向量数据库 | pgvector |
-| 向量模型 | sentence-transformers / BAAI/bge-reranker-base |
-| 异步任务 | Celery + Redis |
-| Agent 编排 | LangGraph |
-| SQL 校验 | sqlglot |
-| LLM 网关 | OpenAI / DeepSeek 兼容接口 |
-| 认证 | PyJWT + argon2-cffi |
-| 前端 | React + TypeScript + Vite |
-| 容器化 | Docker Compose |
+| 模块 | 技术 |
+| --- | --- |
+| API | Python 3.10+、FastAPI、Pydantic |
+| 数据与迁移 | PostgreSQL、SQLAlchemy 2、Alembic、pgvector |
+| 异步执行 | Celery、Redis、Outbox |
+| Agent 编排 | LangGraph、结构化模型输出 |
+| 检索 | sentence-transformers、向量检索、Reranker |
+| 经营查询 | `sqlglot`、Schema Snapshot、只读 PostgreSQL |
+| 认证 | JWT、Argon2、角色权限 |
+| 前端 | React、TypeScript、Vite |
+| 本地部署 | Docker Compose、PowerShell 运维脚本 |
 
 ## 快速开始
 
-### 环境要求
+### 前置条件
 
-- Python 3.10+
-- Docker Desktop（或 Node.js 20+ 用于前端）
-- PostgreSQL（用于本地开发，Docker 内已包含）
+- Docker Desktop（推荐）
+- 或 Python 3.10+、Node.js 20+、PostgreSQL、Redis
 
-### Docker 一键启动
+### Docker Compose
 
 ```powershell
-docker compose up -d
+Copy-Item backend/.env.example backend/.env
+# 编辑 backend/.env：至少设置模型 Provider/API Key，并更换生产环境密码与 JWT_SECRET。
+
+docker compose up -d --build
+docker compose ps
 ```
 
-启动后：
-- API: http://localhost:8000
-- API 文档: http://localhost:8000/docs
-- 前端: http://localhost:5173
-- PostgreSQL 平台库: localhost:5433
-- 业务演示库 (Acme): localhost:5435
-- 业务演示库 (Beta): localhost:5436
+Compose uses a lightweight core image for the API, migrations, Beat, and report
+Worker. The analysis Worker uses a separate CPU-only local-model image because
+document embedding and reranking require PyTorch. A GPU embedding service is
+not enabled by default; it requires a separately versioned internal call
+contract and is not substituted by `gpus: all`.
+
+服务入口：
+
+- 前端：http://localhost:5173
+- API：http://localhost:8000
+- OpenAPI：http://localhost:8000/docs
+- 平台 PostgreSQL：`localhost:5433`
+- Redis：`localhost:6380`
+- 演示经营库：`localhost:5434`、`5435`、`5436`
+
+首次使用可通过 `POST /auth/bootstrap-owner` 创建首个公司所有者；请求结构以 OpenAPI 页面为准。
+
+停止服务：
+
+```powershell
+docker compose down
+```
+
+`docker compose down -v` 会删除本地数据库卷，不应作为普通停止命令使用。
 
 ### 本地开发
 
 ```powershell
-# 1. 创建虚拟环境
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 
-# 2. 安装依赖
-cd backend
+Set-Location backend
 pip install -e ".[dev]"
-
-# 3. 配置环境变量
+# 仅在本机运行真实 RAG/slow 测试时安装本地 CPU 模型依赖；普通 API
+# 开发和测试不需要它。
+pip install --index-url https://download.pytorch.org/whl/cpu torch==2.6.0
+pip install -r requirements-ml.txt
 Copy-Item .env.example .env
-# 编辑 .env 填入数据库密码等
+python -m alembic upgrade head
+python -m uvicorn app.main:app --reload
+```
 
-# 4. 初始化数据库
-..\.venv\Scripts\python.exe -m alembic upgrade head
+新终端启动 Worker：
 
-# 5. 启动 API
-..\.venv\Scripts\python.exe -m uvicorn app.main:app --reload
+```powershell
+Set-Location backend
+..\.venv\Scripts\python.exe -m celery -A app.core.celery_app:celery_app worker --loglevel=INFO
+```
 
-# 6. 启动 Worker（新终端）
-..\.venv\Scripts\python.exe -m celery -A app.core.celery_app worker --loglevel=INFO
+新终端启动前端：
 
-# 7. 启动前端（新终端）
-cd frontend
+```powershell
+Set-Location frontend
 npm ci
 npm run dev
 ```
 
-### 运行测试
+## 验证
 
 ```powershell
-cd backend
-
-# 快速测试（跳过需要 Docker 的 E2E 和慢速测试）
-..\.venv\Scripts\python.exe -m pytest tests/ -q -m "not e2e and not slow"
-
-# 代码检查
+Set-Location backend
 ..\.venv\Scripts\python.exe -m ruff check app tests
+..\.venv\Scripts\python.exe -m pytest tests -q -m "not e2e and not slow"
+
+Set-Location ..\frontend
+npm test
+npm run build
+
+Set-Location ..
+docker compose config --quiet
 ```
+
+普通单元/集成测试不能证明真实 Redis、独立 Celery Worker、经营数据库和模型 Provider 的完整链路。需要真实依赖时，按测试标记和 [单机运行与恢复 Runbook](docs/single_node_runbook.md) 执行对应 E2E。
+
+## 主要 API
+
+- `/auth/*`：登录、当前用户、密码和成员申请。
+- `/documents/*`：文档上传、编辑、处理状态和分块查询。
+- `/conversations/*`：会话、消息、分析任务创建与结果读取。
+- `/tasks/*`：任务查询、取消和兼容入口。
+- `/company/*`：公司、成员、邀请、数据源和 Schema 快照。
+- `/review-requests/*`：报告审核。
+- `/observability/*`：任务指标。
+- `/health/live`、`/health/ready`：存活与就绪检查。
+
+完整契约以运行时 OpenAPI 为准。
 
 ## 仓库结构
 
 ```text
-.
-├── backend/
-│   ├── app/
-│   │   ├── api/          # HTTP 接口（auth, documents, conversations, companies, tasks）
-│   │   ├── schemas/      # Pydantic 输入输出和结构化报告契约
-│   │   ├── models/       # SQLAlchemy ORM 模型
-│   │   ├── repositories/ # 数据访问层
-│   │   ├── services/     # 业务逻辑（文档处理、工作流、校验器）
-│   │   ├── agents/       # Planner, Data, Knowledge, Reviewer Agent
-│   │   ├── tools/        # 受控 SQL、RAG、TemplateQuery、校验器
-│   │   ├── tasks/        # Celery 任务入口
-│   │   ├── core/         # 配置、日志、中间件、Model Gateway
-│   │   └── db/           # 数据库会话（平台 + 业务只读）
-│   ├── migrations/       # Alembic 迁移
-│   ├── scripts/          # 种子数据、业务库初始化
-│   └── tests/            # 216 个通过的测试
-├── frontend/
-│   └── src/              # React SPA（经营助手、文档库、数据源管理、用户中心）
-├── docs/                 # 产品规划、教学计划、设计系统
-├── docker-compose.yml    # 11 个服务的编排
-└── AGENTS.md             # AI Agent 教学与协作规则
+backend/
+  app/                  FastAPI、领域模型、Agent、Tool、工作流与 Worker
+  migrations/           Alembic 迁移链
+  scripts/              数据初始化和端到端验证脚本
+  tests/                单元、集成、E2E 与评测测试
+frontend/
+  src/                  React 工作台
+docs/
+  business_knowledge_base/  可复现演示语料
+  single_node_runbook.md     单机运行与故障恢复
+scripts/ops/            备份、恢复、队列和权限检查
+docker-compose.yml      本地服务编排
 ```
 
-## 设计文档
+## 项目文档
 
-详见 `docs/` 目录：
-- [项目计划](docs/项目计划.md) — 9 阶段交付计划
-- [后端产品交付](docs/backend_product_delivery_plan.md) — 架构、Schema、API、数据库规划
-- [产品目标](docs/project_goal_enterprise_insight_assistant.md) — MVP 范围与验收标准
-- [设计系统](DESIGN.md) — 前端色彩、排版、组件规范
-- [产品定位](PRODUCT.md) — 用户角色、能力边界、品牌承诺
+- [产品定义与边界](PRODUCT.md)
+- [前端设计系统](DESIGN.md)
+- [单机运行与故障恢复](docs/single_node_runbook.md)
+- [贡献指南](CONTRIBUTING.md)
+- [安全策略](SECURITY.md)
+
+## 许可证
+
+当前仓库尚未声明开源许可证。除非仓库所有者补充 LICENSE，否则默认不授予复制、修改或分发许可。

@@ -106,11 +106,23 @@ class DuplicateDocumentError(DocumentUploadError):
     pass
 
 
-class DuplicateLabelError(Exception):
+class InputArtifactUploadError(Exception):
     pass
 
 
-class DuplicatePromptTemplateError(Exception):
+class EmptyInputArtifactError(InputArtifactUploadError):
+    pass
+
+
+class UnsupportedInputArtifactTypeError(InputArtifactUploadError):
+    pass
+
+
+class InputArtifactTooLargeError(InputArtifactUploadError):
+    pass
+
+
+class InvalidInputArtifactNameError(InputArtifactUploadError):
     pass
 
 

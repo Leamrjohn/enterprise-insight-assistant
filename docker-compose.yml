@@ -109,6 +109,7 @@ services:
   worker:
     build:
       context: ./backend
+      dockerfile: Dockerfile.worker
     command:
       [
         "celery",
@@ -121,7 +122,6 @@ services:
       - ./backend/.env
     environment:
       <<: *backend-environment
-    gpus: all
     volumes:
       - ./backend/logs:/app/logs
       - ./backend/storage:/app/storage
@@ -172,6 +172,7 @@ services:
     profiles: ["test"]
     build:
       context: ./backend
+      dockerfile: Dockerfile.worker
     command:
       [
         "celery",
@@ -199,6 +200,24 @@ services:
       redis:
         condition: service_healthy
 
+  evaluation:
+    profiles: ["evaluation"]
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.evaluation
+    env_file:
+      - ./backend/.env
+    environment:
+      <<: *backend-environment
+      APP_ENV: test
+      DATABASE_NAME: agent_platform_test
+      LOG_LEVEL: WARNING
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
 
   report-worker:
     build:
@@ -216,7 +235,6 @@ services:
     env_file:
       - ./backend/.env
     environment: *backend-environment
-    gpus: all
     volumes:
       - ./backend/logs:/app/logs
       - ./backend/storage:/app/storage

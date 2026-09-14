@@ -112,4 +112,58 @@ describe("ApiClient response and mutation contracts", () => {
       new ApiError(403, "当前用户没有发起经营分析的权限。"),
     );
   });
+
+  it("uploads a conversation attachment directly to quarantine before completion", async () => {
+    const initiated = {
+      upload_session_id: "a1d798cb-d9a7-4453-b3b2-fd526d18cfa1",
+      upload_status: "awaiting_upload",
+      upload: {
+        method: "POST",
+        url: "https://storage.example.test/quarantine",
+        fields: { key: "input-artifacts/quarantine/1/payload", policy: "signed" },
+        expires_at: "2026-09-13T00:00:00Z",
+      },
+      artifact_version: null,
+      error_code: null,
+    };
+    const completed = {
+      ...initiated,
+      upload_status: "completed",
+      upload: null,
+      artifact_version: { version_id: 11, status: "received" },
+    };
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify(initiated), { status: 201 }))
+      .mockResolvedValueOnce(new Response(null, { status: 201 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify(completed), { status: 201 }));
+    vi.stubGlobal("fetch", fetchMock);
+    vi.stubGlobal("crypto", {
+      randomUUID: () => "upload-operation-1",
+      subtle: { digest: vi.fn().mockResolvedValue(new Uint8Array(32).buffer) },
+    });
+    const api = new ApiClient("token");
+    const file = new File(["sales"], "sales.csv", { type: "text/csv" });
+
+    await expect(api.uploadConversationAttachment(7, file)).resolves.toEqual(completed);
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "/api/conversations/7/attachment-upload-sessions",
+      expect.objectContaining({
+        method: "POST",
+        headers: expect.objectContaining({ "Idempotency-Key": "upload-operation-1" }),
+      }),
+    );
+    const uploadRequest = fetchMock.mock.calls[1][1];
+    expect(fetchMock.mock.calls[1][0]).toBe("https://storage.example.test/quarantine");
+    expect(uploadRequest.headers).toBeUndefined();
+    expect(uploadRequest.body).toBeInstanceOf(FormData);
+    expect((uploadRequest.body as FormData).get("key")).toBe("input-artifacts/quarantine/1/payload");
+    expect((uploadRequest.body as FormData).get("file")).toBe(file);
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      "/api/conversations/7/attachment-upload-sessions/a1d798cb-d9a7-4453-b3b2-fd526d18cfa1/complete",
+      expect.objectContaining({ method: "POST" }),
+    );
+  });
 });

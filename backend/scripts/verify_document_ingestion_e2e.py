@@ -8,11 +8,11 @@ from uuid import uuid4
 
 from app.core.settings import get_settings
 from app.db.session import SessionLocal, set_tenant_scope
-from app.models.document_chunk import DocumentChunk
-from app.models.documents import Documents
-from app.models.company import Company, CompanyMember
-from app.models.user import User
-from app.tasks.document_tasks import process_document_task
+from app.modules.documents.chunks import DocumentChunk
+from app.modules.documents.models import Documents
+from app.modules.organizations.models import Company, CompanyMember
+from app.modules.identity.models import User
+from app.modules.documents.tasks import process_document_task
 
 
 def wait_for_result(result, *, timeout_seconds: int) -> None:

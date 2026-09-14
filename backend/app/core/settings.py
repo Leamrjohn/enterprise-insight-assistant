@@ -33,6 +33,20 @@ class Settings(BaseSettings):
     max_upload_size_mb: int = 20
     allowed_document_extensions: list[str] = [".txt", ".pdf", ".md", ".markdown"]
     upload_chunk_size_bytes: int = 1048576
+    input_artifact_upload_lease_seconds: int = 120
+    input_artifact_direct_upload_ttl_seconds: int = 900
+    input_artifact_document_max_size_mb: int = 20
+    input_artifact_table_max_size_mb: int = 50
+    input_artifact_image_max_size_mb: int = 10
+    input_artifact_clamd_host: str = "clamd"
+    input_artifact_clamd_port: int = 3310
+    input_artifact_clamd_timeout_seconds: int = 30
+    input_artifact_clamd_processor_version: str = "unverified"
+    input_artifact_object_storage_endpoint_url: str | None = None
+    input_artifact_object_storage_region: str = "us-east-1"
+    input_artifact_object_storage_bucket: str | None = None
+    input_artifact_object_storage_access_key_id: SecretStr | None = None
+    input_artifact_object_storage_secret_access_key: SecretStr | None = None
     redis_url: str = "redis://127.0.0.1:6379/0"
     jwt_secret: SecretStr = SecretStr("development-only-change-before-production")
     jwt_algorithm: str = "HS256"
@@ -78,6 +92,27 @@ class Settings(BaseSettings):
             == "development-only-change-before-production"
         ):
             raise ValueError("JWT_SECRET must be configured in production")
+
+        object_storage_values = (
+            self.input_artifact_object_storage_endpoint_url,
+            self.input_artifact_object_storage_bucket,
+            (
+                self.input_artifact_object_storage_access_key_id.get_secret_value()
+                if self.input_artifact_object_storage_access_key_id is not None
+                else None
+            ),
+            (
+                self.input_artifact_object_storage_secret_access_key.get_secret_value()
+                if self.input_artifact_object_storage_secret_access_key is not None
+                else None
+            ),
+        )
+        if any(value is not None for value in object_storage_values) and not all(
+            isinstance(value, str) and value.strip() for value in object_storage_values
+        ):
+            raise ValueError(
+                "input artifact object storage settings must be configured together"
+            )
         return self
 
     @field_validator("log_dir", "storage_dir", mode="before")
@@ -91,6 +126,13 @@ class Settings(BaseSettings):
     @field_validator(
         "max_upload_size_mb",
         "upload_chunk_size_bytes",
+        "input_artifact_document_max_size_mb",
+        "input_artifact_upload_lease_seconds",
+        "input_artifact_direct_upload_ttl_seconds",
+        "input_artifact_table_max_size_mb",
+        "input_artifact_image_max_size_mb",
+        "input_artifact_clamd_port",
+        "input_artifact_clamd_timeout_seconds",
         "rag_retrieval_top_k",
         "rag_rerank_top_k",
     )
@@ -110,6 +152,10 @@ class Settings(BaseSettings):
     @property
     def upload_dir(self) -> Path:
         return self.storage_dir / "uploads"
+
+    @property
+    def input_artifact_quarantine_dir(self) -> Path:
+        return self.storage_dir / "input-artifacts" / "quarantine"
 
     @property
     def knowledge_dir(self) -> Path:

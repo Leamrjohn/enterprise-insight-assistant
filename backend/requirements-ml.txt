@@ -1,0 +1,3 @@
+# Installed only by the CPU model-worker image.  Keep the runtime image free
+# of local model dependencies.
+sentence-transformers==5.7.0

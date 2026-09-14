@@ -5,7 +5,7 @@ from openai import OpenAI
 from tiktoken import encoding_for_model
 from app.core.gateway.base import ModelGateway, ModelCallRecord
 from app.core.exceptions import PermanentModelError, RetryableModelError
-from app.services.model_governance import (
+from app.modules.runtime.model_governance import (
     fallback_chain_scope,
     next_fallback_model,
     record_model_call,

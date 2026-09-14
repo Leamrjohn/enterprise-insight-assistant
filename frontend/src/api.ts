@@ -20,6 +20,27 @@ const messageMap: Record<string, string> = {
 
 export class ApiError extends Error { constructor(public status: number, message: string) { super(message); } }
 
+export interface DirectUploadForm {
+  method: "POST";
+  url: string;
+  fields: Record<string, string>;
+  expires_at: string;
+}
+
+export interface AttachmentUploadSession {
+  upload_session_id: string;
+  upload_status: "awaiting_upload" | "finalizing" | "completed" | "rejected" | "expired" | "failed";
+  upload: DirectUploadForm | null;
+  artifact_version: { version_id: number; status: "received" | "scanning" | "parsing" | "ready" | "rejected" | "failed" } | null;
+  error_code: string | null;
+}
+
+async function sha256Hex(file: File): Promise<string> {
+  if (!globalThis.crypto?.subtle) throw new Error("当前浏览器不支持安全文件校验，请更换现代浏览器后重试。");
+  const digest = await globalThis.crypto.subtle.digest("SHA-256", await file.arrayBuffer());
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
 export class ApiClient {
   constructor(private readonly accessToken: string) {}
 
@@ -60,6 +81,29 @@ export class ApiClient {
       throw new ApiError(response.status, messageMap[message] ?? message);
     }
     return response.json() as Promise<DocumentItem>;
+  }
+  initiateConversationAttachmentUpload = async (conversationId: number, file: File, idempotencyKey: string): Promise<AttachmentUploadSession> => {
+    const sha256 = await sha256Hex(file);
+    return this.request<AttachmentUploadSession>(`/conversations/${conversationId}/attachment-upload-sessions`, {
+      method: "POST",
+      headers: { "Idempotency-Key": idempotencyKey },
+      body: JSON.stringify({ filename: file.name, byte_size: file.size, mime_type: file.type || null, sha256 }),
+    });
+  };
+  async uploadAttachmentToQuarantine(upload: DirectUploadForm, file: File): Promise<void> {
+    const formData = new FormData();
+    for (const [name, value] of Object.entries(upload.fields)) formData.append(name, value);
+    formData.append("file", file);
+    const response = await fetch(upload.url, { method: upload.method, body: formData });
+    if (!response.ok) throw new Error("文件未能上传到隔离存储，请重新选择文件后重试。");
+  }
+  completeConversationAttachmentUpload = (conversationId: number, uploadSessionId: string) => this.request<AttachmentUploadSession>(`/conversations/${conversationId}/attachment-upload-sessions/${uploadSessionId}/complete`, { method: "POST" });
+  async uploadConversationAttachment(conversationId: number, file: File): Promise<AttachmentUploadSession> {
+    const idempotencyKey = crypto.randomUUID();
+    const session = await this.initiateConversationAttachmentUpload(conversationId, file, idempotencyKey);
+    if (!session.upload || session.upload_status !== "awaiting_upload") throw new Error("文件上传会话未进入可上传状态，请重新选择文件后重试。");
+    await this.uploadAttachmentToQuarantine(session.upload, file);
+    return this.completeConversationAttachmentUpload(conversationId, session.upload_session_id);
   }
   conversations = () => this.request<Conversation[]>("/conversations");
   createConversation = (data_source_id: number, title?: string) => this.request<Conversation>("/conversations", { method: "POST", body: JSON.stringify({ data_source_id, title }) });

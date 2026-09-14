@@ -1,7 +1,7 @@
 {
-  "version": "1.0",
+  "version": "1.0+llm",
   "seed": 20260718,
-  "artifact_count": 30,
+  "artifact_count": 153,
   "artifacts": [
     {
       "path": "events/2025-05-06-quality-review.md",
@@ -608,6 +608,1271 @@
         "purchase_orders",
         "purchase_order_items"
       ]
+    },
+    {
+      "path": "crm/DOC-CRM-0001.md",
+      "sha256": "5b6d84a3bb71df8d13c2a9658f6a90cffab79755397f7f5e8f6019832af62ddb",
+      "kind": "crm",
+      "source_tables": [
+        "customers",
+        "crm_notes",
+        "sales_orders"
+      ]
+    },
+    {
+      "path": "crm/DOC-CRM-0002.md",
+      "sha256": "885313c2c6c27522ccb36057531fcb099a238150b50ffae57b994cf03dcc98aa",
+      "kind": "crm",
+      "source_tables": [
+        "customers",
+        "crm_notes",
+        "sales_orders"
+      ]
+    },
+    {
+      "path": "crm/DOC-CRM-0003.md",
+      "sha256": "5041cbe70001326929a1c5d63f19abe9236ce7934451ac1a7597a4dce86f4059",
+      "kind": "crm",
+      "source_tables": [
+        "customers",
+        "crm_notes",
+        "sales_orders"
+      ]
+    },
+    {
+      "path": "crm/DOC-CRM-0004.md",
+      "sha256": "e4823db0619dcde2eddea235a48d3c3e648ca1f718b3b77007c6f4a5f2e19ac7",
+      "kind": "crm",
+      "source_tables": [
+        "customers",
+        "crm_notes",
+        "sales_orders"
+      ]
+    },
+    {
+      "path": "crm/DOC-CRM-0005.md",
+      "sha256": "58e340ebc83c39b9a914f4f0604b69b77080f7961798883cabcb4bfbb5e68966",
+      "kind": "crm",
+      "source_tables": [
+        "customers",
+        "crm_notes",
+        "sales_orders"
+      ]
+    },
+    {
+      "path": "crm/DOC-CRM-0006.md",
+      "sha256": "6e7236bd9f5d6be04af467ac36012bbdf7930db18527ca2dc1e777b4ea2c1eb3",
+      "kind": "crm",
+      "source_tables": [
+        "customers",
+        "crm_notes",
+        "sales_orders"
+      ]
+    },
+    {
+      "path": "crm/DOC-CRM-0007.md",
+      "sha256": "1e25ba5761d62908dafef47c3a6ee431f16b674b9378ee833a40a5667dc62428",
+      "kind": "crm",
+      "source_tables": [
+        "customers",
+        "crm_notes",
+        "sales_orders"
+      ]
+    },
+    {
+      "path": "crm/DOC-CRM-0008.md",
+      "sha256": "c3a3ba783347c73dffb2d1ded277f7491733a5b8ba9682f9ba7ed11d92d3992f",
+      "kind": "crm",
+      "source_tables": [
+        "customers",
+        "crm_notes",
+        "sales_orders"
+      ]
+    },
+    {
+      "path": "crm/DOC-CRM-0009.md",
+      "sha256": "d0669a78428d68e09d33a2ca8cc90889edc953765f4d7ba9801f6802e998ca12",
+      "kind": "crm",
+      "source_tables": [
+        "customers",
+        "crm_notes",
+        "sales_orders"
+      ]
+    },
+    {
+      "path": "crm/DOC-CRM-0010.md",
+      "sha256": "f59f0cbffd192262c0bc63e0a6fef49ba1c8a8763da06eb098342ef33c651491",
+      "kind": "crm",
+      "source_tables": [
+        "customers",
+        "crm_notes",
+        "sales_orders"
+      ]
+    },
+    {
+      "path": "crm/DOC-CRM-0011.md",
+      "sha256": "3f2ff6ed2aa1ef0364b4188f7914b72067f9820193ae52418f6c18c468f63443",
+      "kind": "crm",
+      "source_tables": [
+        "customers",
+        "crm_notes",
+        "sales_orders"
+      ]
+    },
+    {
+      "path": "crm/DOC-CRM-0012.md",
+      "sha256": "daa9539751a34cad54fe5cad2fa067a380b6bd25647ea241eaf87ff75d3a477d",
+      "kind": "crm",
+      "source_tables": [
+        "customers",
+        "crm_notes",
+        "sales_orders"
+      ]
+    },
+    {
+      "path": "crm/DOC-CRM-0013.md",
+      "sha256": "d5df80b09eebf074cb8fa4e968fe9a527a049dd2d119d6eb933bf9661580a970",
+      "kind": "crm",
+      "source_tables": [
+        "customers",
+        "crm_notes",
+        "sales_orders"
+      ]
+    },
+    {
+      "path": "crm/DOC-CRM-0014.md",
+      "sha256": "39c29a970a2a8ba38f42413c858c72ad57206f11eec2e16aa6591f44ef68f0cc",
+      "kind": "crm",
+      "source_tables": [
+        "customers",
+        "crm_notes",
+        "sales_orders"
+      ]
+    },
+    {
+      "path": "crm/DOC-CRM-0015.md",
+      "sha256": "0e26ede649bfaf16996c1eee49588590a428163d1df26e916846a1f2f75d450d",
+      "kind": "crm",
+      "source_tables": [
+        "customers",
+        "crm_notes",
+        "sales_orders"
+      ]
+    },
+    {
+      "path": "crm/DOC-CRM-0016.md",
+      "sha256": "2761fede0865240f680172cae4b9095f2ee56b1c8db521b89ac472cef460abe5",
+      "kind": "crm",
+      "source_tables": [
+        "customers",
+        "crm_notes",
+        "sales_orders"
+      ]
+    },
+    {
+      "path": "crm/DOC-CRM-0017.md",
+      "sha256": "50bb4d0ec1b64df5c10c027cbabdaf29f0283aad14f010db33ab0e5dc6866cd0",
+      "kind": "crm",
+      "source_tables": [
+        "customers",
+        "crm_notes",
+        "sales_orders"
+      ]
+    },
+    {
+      "path": "crm/DOC-CRM-0018.md",
+      "sha256": "c1a1d2e59ee1241d179425fd340ef68805d43fe8353a34ee2687e8870634160f",
+      "kind": "crm",
+      "source_tables": [
+        "customers",
+        "crm_notes",
+        "sales_orders"
+      ]
+    },
+    {
+      "path": "crm/DOC-CRM-0019.md",
+      "sha256": "5b34b6db94ea930478e4c5126641af77ed51302258efa9fae4cc96d24ceed6e7",
+      "kind": "crm",
+      "source_tables": [
+        "customers",
+        "crm_notes",
+        "sales_orders"
+      ]
+    },
+    {
+      "path": "crm/DOC-CRM-0020.md",
+      "sha256": "168bce85f2f3eaf5eff9049317e1a6a4f16d10f5c1eab6f11f3cbc814119a8ea",
+      "kind": "crm",
+      "source_tables": [
+        "customers",
+        "crm_notes",
+        "sales_orders"
+      ]
+    },
+    {
+      "path": "crm/DOC-CRM-0021.md",
+      "sha256": "e493f88697e8598549ed4e32ae016029bb1167fbde5e32a5b3a6c41616b73dc2",
+      "kind": "crm",
+      "source_tables": [
+        "customers",
+        "crm_notes",
+        "sales_orders"
+      ]
+    },
+    {
+      "path": "crm/DOC-CRM-0022.md",
+      "sha256": "44419410b55c425cd6c053d8bdf2df8b4e393b9110729d64fa115a989b6aefc3",
+      "kind": "crm",
+      "source_tables": [
+        "customers",
+        "crm_notes",
+        "sales_orders"
+      ]
+    },
+    {
+      "path": "crm/DOC-CRM-0023.md",
+      "sha256": "c4ea92b1c062b0763d328f29b12d0596a3e08abb7ce7a5c43c0e1746574f3b0a",
+      "kind": "crm",
+      "source_tables": [
+        "customers",
+        "crm_notes",
+        "sales_orders"
+      ]
+    },
+    {
+      "path": "crm/DOC-CRM-0024.md",
+      "sha256": "ba07be4d2ec6cac389b3a93e1e545b410fe1451bffe7e792dfd1ab79532a7c70",
+      "kind": "crm",
+      "source_tables": [
+        "customers",
+        "crm_notes",
+        "sales_orders"
+      ]
+    },
+    {
+      "path": "crm/DOC-CRM-0025.md",
+      "sha256": "454f9a207109f8b0b71fc19991fbd934737cb5104aa7d9a5f0bacc5c38fb3631",
+      "kind": "crm",
+      "source_tables": [
+        "customers",
+        "crm_notes",
+        "sales_orders"
+      ]
+    },
+    {
+      "path": "crm/DOC-CRM-0026.md",
+      "sha256": "b73c57719d0afbc66f0b3ad227c494c7f5f743b06372dd75b4f5f193a2f84a3d",
+      "kind": "crm",
+      "source_tables": [
+        "customers",
+        "crm_notes",
+        "sales_orders"
+      ]
+    },
+    {
+      "path": "crm/DOC-CRM-0027.md",
+      "sha256": "39f19a6ef1eec98642eea0bb08b3e19d7de0ffcb77c0ebd11f2784eb84b17cf9",
+      "kind": "crm",
+      "source_tables": [
+        "customers",
+        "crm_notes",
+        "sales_orders"
+      ]
+    },
+    {
+      "path": "crm/DOC-CRM-0028.md",
+      "sha256": "282a32dc7f2758a862f0e5562fe81095daff562bea79f442b9f52248c4629127",
+      "kind": "crm",
+      "source_tables": [
+        "customers",
+        "crm_notes",
+        "sales_orders"
+      ]
+    },
+    {
+      "path": "crm/DOC-CRM-0029.md",
+      "sha256": "73986c7074ea33ef1b177eef55e66350ba5c048b9d05343e9ae22dcb987fd5e1",
+      "kind": "crm",
+      "source_tables": [
+        "customers",
+        "crm_notes",
+        "sales_orders"
+      ]
+    },
+    {
+      "path": "crm/DOC-CRM-0030.md",
+      "sha256": "8ff1ca57e298432dcb907bfd213db70b11c18d8d69d5991f7d80963a564cdd3f",
+      "kind": "crm",
+      "source_tables": [
+        "customers",
+        "crm_notes",
+        "sales_orders"
+      ]
+    },
+    {
+      "path": "crm/DOC-CRM-0031.md",
+      "sha256": "9e5156c599c4a022a3cf433cb51a575187df76508acbdb351a964178b7f55c99",
+      "kind": "crm",
+      "source_tables": [
+        "customers",
+        "crm_notes",
+        "sales_orders"
+      ]
+    },
+    {
+      "path": "crm/DOC-CRM-0032.md",
+      "sha256": "c8021366b2af3ac60c7930757cb66374bac1f47f6a4f2cf376ae465b62f37901",
+      "kind": "crm",
+      "source_tables": [
+        "customers",
+        "crm_notes",
+        "sales_orders"
+      ]
+    },
+    {
+      "path": "crm/DOC-CRM-0033.md",
+      "sha256": "72cd0daca9c5491908b9b8207a181e221d97bd63de8b42d08691c6e102ef58f6",
+      "kind": "crm",
+      "source_tables": [
+        "customers",
+        "crm_notes",
+        "sales_orders"
+      ]
+    },
+    {
+      "path": "crm/DOC-CRM-0034.md",
+      "sha256": "2f0f42be29a8a94706d466da3bef05d0d4f33390ae32eaf8888cf524fcf1784f",
+      "kind": "crm",
+      "source_tables": [
+        "customers",
+        "crm_notes",
+        "sales_orders"
+      ]
+    },
+    {
+      "path": "crm/DOC-CRM-0035.md",
+      "sha256": "e3c7687d14c17ab9e7504b2d373c45ff32c5bb6233d4ae1918da971ca1fe890a",
+      "kind": "crm",
+      "source_tables": [
+        "customers",
+        "crm_notes",
+        "sales_orders"
+      ]
+    },
+    {
+      "path": "crm/DOC-CRM-0036.md",
+      "sha256": "872574b024519b53e68331e03a4c975bbb14fcb23ded52b44fa58076e580bc9a",
+      "kind": "crm",
+      "source_tables": [
+        "customers",
+        "crm_notes",
+        "sales_orders"
+      ]
+    },
+    {
+      "path": "crm/DOC-CRM-0037.md",
+      "sha256": "ec6f66d8a46056ea0cf732e56cbafd9880eacce91d88b3a9ae1e36fae600f489",
+      "kind": "crm",
+      "source_tables": [
+        "customers",
+        "crm_notes",
+        "sales_orders"
+      ]
+    },
+    {
+      "path": "crm/DOC-CRM-0038.md",
+      "sha256": "ca94c585386a0a0e9826b8f43a50da178741cdcd32d231024d4dd2e48e36f351",
+      "kind": "crm",
+      "source_tables": [
+        "customers",
+        "crm_notes",
+        "sales_orders"
+      ]
+    },
+    {
+      "path": "crm/DOC-CRM-0039.md",
+      "sha256": "df0c6514d76b113bb69959685959ab741a305a6840a7a3946aca3aa27c55e065",
+      "kind": "crm",
+      "source_tables": [
+        "customers",
+        "crm_notes",
+        "sales_orders"
+      ]
+    },
+    {
+      "path": "crm/DOC-CRM-0040.md",
+      "sha256": "0f8b9ccd8de2d9813a82ec798496125a0c7c04ba4746274f1c2e4b2ecd1c5970",
+      "kind": "crm",
+      "source_tables": [
+        "customers",
+        "crm_notes",
+        "sales_orders"
+      ]
+    },
+    {
+      "path": "crm/DOC-CRM-0041.md",
+      "sha256": "0b8973e5d4144d5ab69779ca3b812089b3134652e9e9e02f0ecc18d4022d9059",
+      "kind": "crm",
+      "source_tables": [
+        "customers",
+        "crm_notes",
+        "sales_orders"
+      ]
+    },
+    {
+      "path": "crm/DOC-CRM-0042.md",
+      "sha256": "f4ff3f959505542784c6d74c0c0afa9f6e909e96812e58409f8681f8fab3bed9",
+      "kind": "crm",
+      "source_tables": [
+        "customers",
+        "crm_notes",
+        "sales_orders"
+      ]
+    },
+    {
+      "path": "crm/DOC-CRM-0043.md",
+      "sha256": "150091519fd9bbf0cfeae9d5264449b1d12068ef211fb892749fb7cf4cbc13e9",
+      "kind": "crm",
+      "source_tables": [
+        "customers",
+        "crm_notes",
+        "sales_orders"
+      ]
+    },
+    {
+      "path": "crm/DOC-CRM-0044.md",
+      "sha256": "9631cda096e6dd99f7ae39b0cd4a590f282622ec84a28e8058c3c0e5cdaea52f",
+      "kind": "crm",
+      "source_tables": [
+        "customers",
+        "crm_notes",
+        "sales_orders"
+      ]
+    },
+    {
+      "path": "crm/DOC-CRM-0045.md",
+      "sha256": "5fb3de1ec5c255a6a9b65475e72fd379edf0cce4a3b75cbad7696f12e08cf385",
+      "kind": "crm",
+      "source_tables": [
+        "customers",
+        "crm_notes",
+        "sales_orders"
+      ]
+    },
+    {
+      "path": "crm/DOC-CRM-0046.md",
+      "sha256": "19bb4c54fded62e54d64273895884e4e9bee40a99e4d42e796b7c5c576280be8",
+      "kind": "crm",
+      "source_tables": [
+        "customers",
+        "crm_notes",
+        "sales_orders"
+      ]
+    },
+    {
+      "path": "crm/DOC-CRM-0047.md",
+      "sha256": "0e6f76ffab3fdaf62f02b8fdebfdc171c0e5dc42c12a3a7f0c7e1b2dfec1f514",
+      "kind": "crm",
+      "source_tables": [
+        "customers",
+        "crm_notes",
+        "sales_orders"
+      ]
+    },
+    {
+      "path": "crm/DOC-CRM-0048.md",
+      "sha256": "6e46e09270fb87c8bf3393fcc7ed68d12a4660366806189c588afdb99b77329e",
+      "kind": "crm",
+      "source_tables": [
+        "customers",
+        "crm_notes",
+        "sales_orders"
+      ]
+    },
+    {
+      "path": "crm/DOC-CRM-0049.md",
+      "sha256": "4abc99ca6a3f9bdfedfab013d5a9624f610644b6b89a566b3df0da3c8e8a65d4",
+      "kind": "crm",
+      "source_tables": [
+        "customers",
+        "crm_notes",
+        "sales_orders"
+      ]
+    },
+    {
+      "path": "crm/DOC-CRM-0050.md",
+      "sha256": "388663dd263fe1b05b3f598e0b2143046653ca63bca8d97b540fff61ef83ebcb",
+      "kind": "crm",
+      "source_tables": [
+        "customers",
+        "crm_notes",
+        "sales_orders"
+      ]
+    },
+    {
+      "path": "sales/DOC-AR-0001.md",
+      "sha256": "6082cad2ecff3679bd4b0f8d951a996e94735335b67b046d0aeaa4741f90a3e1",
+      "kind": "sales",
+      "source_tables": [
+        "customers",
+        "sales_orders",
+        "invoices",
+        "payments"
+      ]
+    },
+    {
+      "path": "sales/DOC-AR-0002.md",
+      "sha256": "7f68db3773629fa6186b894ee5a97c98f73bdb0110f541f27e16037723ce1d8a",
+      "kind": "sales",
+      "source_tables": [
+        "customers",
+        "sales_orders",
+        "invoices",
+        "payments"
+      ]
+    },
+    {
+      "path": "sales/DOC-AR-0003.md",
+      "sha256": "209510442a85bf1bc93e63839d6e8f523f79332f13f871baa9417833a79b4555",
+      "kind": "sales",
+      "source_tables": [
+        "customers",
+        "sales_orders",
+        "invoices",
+        "payments"
+      ]
+    },
+    {
+      "path": "sales/DOC-AR-0004.md",
+      "sha256": "e9419c53a65100fe03cdb3691d2b545bddbb37370a38decd7bcba0ae67f323a9",
+      "kind": "sales",
+      "source_tables": [
+        "customers",
+        "sales_orders",
+        "invoices",
+        "payments"
+      ]
+    },
+    {
+      "path": "sales/DOC-AR-0005.md",
+      "sha256": "cec86c64a6a69079092fa69bfd9f35208a8f49cf0e9cbfaaeebf2d51027fa0c7",
+      "kind": "sales",
+      "source_tables": [
+        "customers",
+        "sales_orders",
+        "invoices",
+        "payments"
+      ]
+    },
+    {
+      "path": "sales/DOC-AR-0006.md",
+      "sha256": "8fc91aa58d0789e74c129882067c4643252e6fe0d924c947457cdbd156c001ae",
+      "kind": "sales",
+      "source_tables": [
+        "customers",
+        "sales_orders",
+        "invoices",
+        "payments"
+      ]
+    },
+    {
+      "path": "sales/DOC-AR-0007.md",
+      "sha256": "6302a67b8dd57e5920819b8b3cfcc7656602c8dca6d013e35736ca91dd2bf4fb",
+      "kind": "sales",
+      "source_tables": [
+        "customers",
+        "sales_orders",
+        "invoices",
+        "payments"
+      ]
+    },
+    {
+      "path": "sales/DOC-AR-0008.md",
+      "sha256": "fea8b621e2abc74ca582df9404ff72dd711299d5ee5af1e24fe1ce7dcae3a490",
+      "kind": "sales",
+      "source_tables": [
+        "customers",
+        "sales_orders",
+        "invoices",
+        "payments"
+      ]
+    },
+    {
+      "path": "sales/DOC-AR-0009.md",
+      "sha256": "fedd1a5d096bfc6c2831dd2c6a0e26d63cadd4dfbcb245543f96db8fd6271c37",
+      "kind": "sales",
+      "source_tables": [
+        "customers",
+        "sales_orders",
+        "invoices",
+        "payments"
+      ]
+    },
+    {
+      "path": "sales/DOC-AR-0010.md",
+      "sha256": "8a62f161e09a7432d1244c2acf4bcac4d54d579b89885eee435b45d343fc5b11",
+      "kind": "sales",
+      "source_tables": [
+        "customers",
+        "sales_orders",
+        "invoices",
+        "payments"
+      ]
+    },
+    {
+      "path": "sales/DOC-AR-0011.md",
+      "sha256": "67230aa0dfab560789f2106af8563c1dd2fe3130a5ce4ec5fbd833cd52a72ae5",
+      "kind": "sales",
+      "source_tables": [
+        "customers",
+        "sales_orders",
+        "invoices",
+        "payments"
+      ]
+    },
+    {
+      "path": "sales/DOC-AR-0012.md",
+      "sha256": "da51fd722b28a816d7b7c8dee2e1f2b6652f02e08a80496d652d245a703db07e",
+      "kind": "sales",
+      "source_tables": [
+        "customers",
+        "sales_orders",
+        "invoices",
+        "payments"
+      ]
+    },
+    {
+      "path": "sales/DOC-AR-0013.md",
+      "sha256": "727fdc95b17b45cf605ce88d124785f85137d5ed77e93ec2d7692464906d1482",
+      "kind": "sales",
+      "source_tables": [
+        "customers",
+        "sales_orders",
+        "invoices",
+        "payments"
+      ]
+    },
+    {
+      "path": "sales/DOC-AR-0014.md",
+      "sha256": "c35e6467284ebce4c02ec2aee7b033623b9887e5bdc0072e24e37a8aeb5a091a",
+      "kind": "sales",
+      "source_tables": [
+        "customers",
+        "sales_orders",
+        "invoices",
+        "payments"
+      ]
+    },
+    {
+      "path": "sales/DOC-AR-0015.md",
+      "sha256": "eef4cfa914af11d4b51dd8822fa86e1aa678827522fc6f14ef12a0a0116884b8",
+      "kind": "sales",
+      "source_tables": [
+        "customers",
+        "sales_orders",
+        "invoices",
+        "payments"
+      ]
+    },
+    {
+      "path": "sales/DOC-AR-0016.md",
+      "sha256": "6c258d30ef7963c46882fee7b3144f8d46ae38bc0f376616dc95ed4f9660f0df",
+      "kind": "sales",
+      "source_tables": [
+        "customers",
+        "sales_orders",
+        "invoices",
+        "payments"
+      ]
+    },
+    {
+      "path": "sales/DOC-AR-0017.md",
+      "sha256": "2c4d13ddba44883e865571a30e67cb3a1bc936593b591a54eb4f29e1f178bf96",
+      "kind": "sales",
+      "source_tables": [
+        "customers",
+        "sales_orders",
+        "invoices",
+        "payments"
+      ]
+    },
+    {
+      "path": "sales/DOC-AR-0018.md",
+      "sha256": "8fa3404e15e204b194a80395a084de4c2ccc35e2b3426fbb322c9d06cb954b22",
+      "kind": "sales",
+      "source_tables": [
+        "customers",
+        "sales_orders",
+        "invoices",
+        "payments"
+      ]
+    },
+    {
+      "path": "sales/DOC-AR-0019.md",
+      "sha256": "bf35ea9331e7347aeeb1ae8cdf434aa1791bc4bde02a535b0181922916a647d1",
+      "kind": "sales",
+      "source_tables": [
+        "customers",
+        "sales_orders",
+        "invoices",
+        "payments"
+      ]
+    },
+    {
+      "path": "sales/DOC-AR-0020.md",
+      "sha256": "dd691d80245397910bc1d8ae83e1afb2dfd44d009d9dcab5ee5175787fc5e3a9",
+      "kind": "sales",
+      "source_tables": [
+        "customers",
+        "sales_orders",
+        "invoices",
+        "payments"
+      ]
+    },
+    {
+      "path": "procurement/DOC-SE-0001.md",
+      "sha256": "1efe22e61486cdec66db74cc332ee98ffa5c7be8b09b72098e478f746b2652fb",
+      "kind": "procurement",
+      "source_tables": [
+        "suppliers",
+        "purchase_orders",
+        "purchase_order_items"
+      ]
+    },
+    {
+      "path": "procurement/DOC-SE-0002.md",
+      "sha256": "d0378ae23121910ecdb7d0d3a27096fda3709277d8592155f5c4cdeb8a8966d2",
+      "kind": "procurement",
+      "source_tables": [
+        "suppliers",
+        "purchase_orders",
+        "purchase_order_items"
+      ]
+    },
+    {
+      "path": "procurement/DOC-SE-0003.md",
+      "sha256": "4121f2855ba2e168acfaca5a5b188fb043a3c36af54dcdf001077cb55a588fec",
+      "kind": "procurement",
+      "source_tables": [
+        "suppliers",
+        "purchase_orders",
+        "purchase_order_items"
+      ]
+    },
+    {
+      "path": "procurement/DOC-SE-0004.md",
+      "sha256": "8dd0d6a6b1b182774f3fe24dc10199cbf012e92fae20407fced630d30c7b2f8a",
+      "kind": "procurement",
+      "source_tables": [
+        "suppliers",
+        "purchase_orders",
+        "purchase_order_items"
+      ]
+    },
+    {
+      "path": "procurement/DOC-SE-0005.md",
+      "sha256": "e4f7434e8acf2edc7ccf71146594e137c809a951a398639979014da298d4647f",
+      "kind": "procurement",
+      "source_tables": [
+        "suppliers",
+        "purchase_orders",
+        "purchase_order_items"
+      ]
+    },
+    {
+      "path": "procurement/DOC-SE-0006.md",
+      "sha256": "d88e68c75cd40296dd25392fadea02b88b4e87180e9250b073a62b2c88e15e21",
+      "kind": "procurement",
+      "source_tables": [
+        "suppliers",
+        "purchase_orders",
+        "purchase_order_items"
+      ]
+    },
+    {
+      "path": "procurement/DOC-SE-0007.md",
+      "sha256": "33d7d69b9484fa39b4861a9e384e4aa202a5ef20df8f98e22862c6cc38c25b20",
+      "kind": "procurement",
+      "source_tables": [
+        "suppliers",
+        "purchase_orders",
+        "purchase_order_items"
+      ]
+    },
+    {
+      "path": "procurement/DOC-SE-0008.md",
+      "sha256": "e0b74590d1fdaf69214dfe070984931f5e12a7db731d7ee9b26fffbb8f8aa17d",
+      "kind": "procurement",
+      "source_tables": [
+        "suppliers",
+        "purchase_orders",
+        "purchase_order_items"
+      ]
+    },
+    {
+      "path": "procurement/DOC-SE-0009.md",
+      "sha256": "6508e39783f85aef21aa586ca7e29bb92f9ac087511991faacc365485f9e1472",
+      "kind": "procurement",
+      "source_tables": [
+        "suppliers",
+        "purchase_orders",
+        "purchase_order_items"
+      ]
+    },
+    {
+      "path": "procurement/DOC-SE-0010.md",
+      "sha256": "95235652abbf33bc9fa2b6fe3adf0ee541967aaee83ca1fe14a9a407aa57270b",
+      "kind": "procurement",
+      "source_tables": [
+        "suppliers",
+        "purchase_orders",
+        "purchase_order_items"
+      ]
+    },
+    {
+      "path": "procurement/DOC-SE-0011.md",
+      "sha256": "4c6009b75e9509eeae001c4e42e710b3adaa2c0669cde20e94fd54a7dec6dfce",
+      "kind": "procurement",
+      "source_tables": [
+        "suppliers",
+        "purchase_orders",
+        "purchase_order_items"
+      ]
+    },
+    {
+      "path": "procurement/DOC-SE-0012.md",
+      "sha256": "9c5532065bef6a87d0bf892afd7b51f71d28cb78937f68886530b61b6bf627ce",
+      "kind": "procurement",
+      "source_tables": [
+        "suppliers",
+        "purchase_orders",
+        "purchase_order_items"
+      ]
+    },
+    {
+      "path": "procurement/DOC-SE-0013.md",
+      "sha256": "7e6580ba581cc352072d0d51327abf1610085c381550356a26dfbb79fcb038bf",
+      "kind": "procurement",
+      "source_tables": [
+        "suppliers",
+        "purchase_orders",
+        "purchase_order_items"
+      ]
+    },
+    {
+      "path": "procurement/DOC-SE-0014.md",
+      "sha256": "3c9d1832a70e70a9238946d02fef450d3712a07bb359d1ebcfcce2cdaf9004fd",
+      "kind": "procurement",
+      "source_tables": [
+        "suppliers",
+        "purchase_orders",
+        "purchase_order_items"
+      ]
+    },
+    {
+      "path": "procurement/DOC-SE-0015.md",
+      "sha256": "b9796e6487b82d0aab0beceb5383edb50eba222be965f16b71c678209572e68c",
+      "kind": "procurement",
+      "source_tables": [
+        "suppliers",
+        "purchase_orders",
+        "purchase_order_items"
+      ]
+    },
+    {
+      "path": "quality/DOC-QR-0001.md",
+      "sha256": "fb650d351408437b173707bd5283d99bb9ed4f195e2a5c0f5360f502f7c6cbad",
+      "kind": "quality",
+      "source_tables": [
+        "returns",
+        "service_tickets",
+        "products",
+        "suppliers"
+      ]
+    },
+    {
+      "path": "quality/DOC-QR-0002.md",
+      "sha256": "51e8278f7ceb87845522b3e8528dd3472c944e8213a7fd6babc6a832d3e279d5",
+      "kind": "quality",
+      "source_tables": [
+        "returns",
+        "service_tickets",
+        "products",
+        "suppliers"
+      ]
+    },
+    {
+      "path": "quality/DOC-QR-0003.md",
+      "sha256": "91cc1f08a2ef0f8f869463c323ea757b3b231407b606708bf84096afe627786a",
+      "kind": "quality",
+      "source_tables": [
+        "returns",
+        "service_tickets",
+        "products",
+        "suppliers"
+      ]
+    },
+    {
+      "path": "quality/DOC-QR-0004.md",
+      "sha256": "784a3cc124a74997769c682e0548f5038a906901f6691b2cf1a1b69cb15e5538",
+      "kind": "quality",
+      "source_tables": [
+        "returns",
+        "service_tickets",
+        "products",
+        "suppliers"
+      ]
+    },
+    {
+      "path": "quality/DOC-QR-0005.md",
+      "sha256": "de7113ae459361a1d9647fade34aacd35e0538284980ca09926f27f159a21e27",
+      "kind": "quality",
+      "source_tables": [
+        "returns",
+        "service_tickets",
+        "products",
+        "suppliers"
+      ]
+    },
+    {
+      "path": "finance/DOC-FR-0001.md",
+      "sha256": "266af191608624853d3e9c8b57693b3ca4fe9a57d59740cda89e038b7c7f51e7",
+      "kind": "finance",
+      "source_tables": [
+        "invoices",
+        "payments",
+        "customers"
+      ]
+    },
+    {
+      "path": "finance/DOC-FR-0002.md",
+      "sha256": "9c8de2f2cd81479725f184569f6173df7cfc71f239d507bf8d11c819a48969f3",
+      "kind": "finance",
+      "source_tables": [
+        "invoices",
+        "payments",
+        "customers"
+      ]
+    },
+    {
+      "path": "finance/DOC-FR-0003.md",
+      "sha256": "8cb82fe5d8465a4360173bdb94344fd238a9ee5d1318f111da8eaa8d11d8f5bc",
+      "kind": "finance",
+      "source_tables": [
+        "invoices",
+        "payments",
+        "customers"
+      ]
+    },
+    {
+      "path": "finance/DOC-FR-0004.md",
+      "sha256": "9de91c95f2c4dda5fdb1dbaced73d291ff3d57d6e6b50393335e72e95f86be4c",
+      "kind": "finance",
+      "source_tables": [
+        "invoices",
+        "payments",
+        "customers"
+      ]
+    },
+    {
+      "path": "finance/DOC-FR-0005.md",
+      "sha256": "1f84e5c17a63461a877797721d4fbd1b073853177c6e1573103c3690567e9b16",
+      "kind": "finance",
+      "source_tables": [
+        "invoices",
+        "payments",
+        "customers"
+      ]
+    },
+    {
+      "path": "finance/DOC-FR-0006.md",
+      "sha256": "a765f5b46fb76764cc8b26db14a550c8de78bf3209bbf5991ce68b69bd66a288",
+      "kind": "finance",
+      "source_tables": [
+        "invoices",
+        "payments",
+        "customers"
+      ]
+    },
+    {
+      "path": "finance/DOC-FR-0007.md",
+      "sha256": "9962edd9903af87f8b3b9649922d27efe29444c6bc1f018ff3548a283d5f2e0a",
+      "kind": "finance",
+      "source_tables": [
+        "invoices",
+        "payments",
+        "customers"
+      ]
+    },
+    {
+      "path": "finance/DOC-FR-0008.md",
+      "sha256": "beff9c00b77817e19d5f3ea1c34daaf6e18a859838d283047d372d0b51b60de0",
+      "kind": "finance",
+      "source_tables": [
+        "invoices",
+        "payments",
+        "customers"
+      ]
+    },
+    {
+      "path": "finance/DOC-FR-0009.md",
+      "sha256": "516ca413c72576a0b0535900ac6c988aa1749ae961c534d65ec63a88a262201f",
+      "kind": "finance",
+      "source_tables": [
+        "invoices",
+        "payments",
+        "customers"
+      ]
+    },
+    {
+      "path": "finance/DOC-FR-0010.md",
+      "sha256": "559219a0e29724db7ffa13f6ebaaf094aeec0f7bfe7322aa93c4d7660fe9d213",
+      "kind": "finance",
+      "source_tables": [
+        "invoices",
+        "payments",
+        "customers"
+      ]
+    },
+    {
+      "path": "finance/DOC-FR-0011.md",
+      "sha256": "1b1a822199b6ea41177ebca159f34c6d36ce0806ee29436fef8f222a2d9d0920",
+      "kind": "finance",
+      "source_tables": [
+        "invoices",
+        "payments",
+        "customers"
+      ]
+    },
+    {
+      "path": "finance/DOC-FR-0012.md",
+      "sha256": "5705c5f50ea05c5a4f6ce6154e949a8cb1ace89e1fa57749ef662b63f1919996",
+      "kind": "finance",
+      "source_tables": [
+        "invoices",
+        "payments",
+        "customers"
+      ]
+    },
+    {
+      "path": "finance/DOC-FR-0013.md",
+      "sha256": "50658b1d9e2846cc554523b8407f29f504071fe3ceedf8693b2a1d09ea2225be",
+      "kind": "finance",
+      "source_tables": [
+        "invoices",
+        "payments",
+        "customers"
+      ]
+    },
+    {
+      "path": "finance/DOC-FR-0014.md",
+      "sha256": "d99c85d4ca012d2e0e0d1332c3e192b34367ce85e84972ce2348199545e753ce",
+      "kind": "finance",
+      "source_tables": [
+        "invoices",
+        "payments",
+        "customers"
+      ]
+    },
+    {
+      "path": "finance/DOC-FR-0015.md",
+      "sha256": "fde0b161b2e294282837c20b0c015ef4d2a375bd30bf10b99128f4343c1a4851",
+      "kind": "finance",
+      "source_tables": [
+        "invoices",
+        "payments",
+        "customers"
+      ]
+    },
+    {
+      "path": "sales/DOC-QR-Q1.md",
+      "sha256": "bef1889d52d57a05ac96f5ab2eff6231f74ef763ebcfa854ee5dc76bfaa32f0f",
+      "kind": "sales",
+      "source_tables": [
+        "sales_orders",
+        "sales_order_items",
+        "customers",
+        "regions",
+        "products",
+        "product_categories"
+      ]
+    },
+    {
+      "path": "sales/DOC-QR-Q2.md",
+      "sha256": "9cbdec44a1e4d1b4256da8da6ea7602a1f8f246d5e402a4c7e94ea22597d825d",
+      "kind": "sales",
+      "source_tables": [
+        "sales_orders",
+        "sales_order_items",
+        "customers",
+        "regions",
+        "products",
+        "product_categories"
+      ]
+    },
+    {
+      "path": "sales/DOC-QR-Q3.md",
+      "sha256": "d48aa4a67f3d92bd8125518ae74b94bea978ad632623d98a0c2b6d8186ab1c48",
+      "kind": "sales",
+      "source_tables": [
+        "sales_orders",
+        "sales_order_items",
+        "customers",
+        "regions",
+        "products",
+        "product_categories"
+      ]
+    },
+    {
+      "path": "sales/DOC-QR-Q4.md",
+      "sha256": "902e5c562ae697d0ba52e074901e5e0a9f26e1cc94773e91281afd68286cd71d",
+      "kind": "sales",
+      "source_tables": [
+        "sales_orders",
+        "sales_order_items",
+        "customers",
+        "regions",
+        "products",
+        "product_categories"
+      ]
+    },
+    {
+      "path": "sales/DOC-RS-EAST.md",
+      "sha256": "13647ada096ef02c437e4b6becf5689c20def6c46246f89faf5798caaa423e70",
+      "kind": "sales",
+      "source_tables": [
+        "regions",
+        "customers",
+        "sales_orders"
+      ]
+    },
+    {
+      "path": "sales/DOC-RS-NORTH.md",
+      "sha256": "ce1769924a9da6d3253a7bd0bea99273d61160723be0cb6e869b1f28c257afd9",
+      "kind": "sales",
+      "source_tables": [
+        "regions",
+        "customers",
+        "sales_orders"
+      ]
+    },
+    {
+      "path": "sales/DOC-RS-SOUTH.md",
+      "sha256": "73da511ae5f4399f585dd17c54bd48edfe3118884412681a1379133b319f3eb1",
+      "kind": "sales",
+      "source_tables": [
+        "regions",
+        "customers",
+        "sales_orders"
+      ]
+    },
+    {
+      "path": "sales/DOC-RS-WEST.md",
+      "sha256": "29bd19497ca8f015f9c8a901ed8855764c2c0461f2ad429726ce9a84902f710b",
+      "kind": "sales",
+      "source_tables": [
+        "regions",
+        "customers",
+        "sales_orders"
+      ]
+    },
+    {
+      "path": "operations/DOC-IV-0001.md",
+      "sha256": "eb4f8e98ec0b4b38d7fe568eccbd3ea8e760286e48a66f61a816d751fd77c575",
+      "kind": "operations",
+      "source_tables": [
+        "inventory_movements",
+        "shipments",
+        "products"
+      ]
+    },
+    {
+      "path": "operations/DOC-IV-0002.md",
+      "sha256": "12caa45903893bfa6fc2c45557c9b9062cfae070029bc0fc26b98704a26aee2e",
+      "kind": "operations",
+      "source_tables": [
+        "inventory_movements",
+        "shipments",
+        "products"
+      ]
+    },
+    {
+      "path": "operations/DOC-IV-0003.md",
+      "sha256": "369d0f7f197c83dd3786a5f2843ce96ae20614d25c7f11abcf0f993747ccd4f5",
+      "kind": "operations",
+      "source_tables": [
+        "inventory_movements",
+        "shipments",
+        "products"
+      ]
+    },
+    {
+      "path": "operations/DOC-IV-0004.md",
+      "sha256": "69deab4924d4e111d92aca8d4c456373997a3f6f225456ac1a985dce522a7a87",
+      "kind": "operations",
+      "source_tables": [
+        "inventory_movements",
+        "shipments",
+        "products"
+      ]
+    },
+    {
+      "path": "operations/DOC-IV-0005.md",
+      "sha256": "6a37b9d94b2a5f82b625237139698f0c78f43888613db123f9f4e6661c579173",
+      "kind": "operations",
+      "source_tables": [
+        "inventory_movements",
+        "shipments",
+        "products"
+      ]
+    },
+    {
+      "path": "operations/DOC-IV-0006.md",
+      "sha256": "704564b72ad2b1e6c251a36cc1accac5afffcf6d3bdda9531daacf9ede9c312e",
+      "kind": "operations",
+      "source_tables": [
+        "inventory_movements",
+        "shipments",
+        "products"
+      ]
+    },
+    {
+      "path": "operations/DOC-IV-0007.md",
+      "sha256": "291881c7e8ef03ee804bc08ce89dcbf9ee01c3b60a1f1d0d11ed85e439397e7f",
+      "kind": "operations",
+      "source_tables": [
+        "inventory_movements",
+        "shipments",
+        "products"
+      ]
+    },
+    {
+      "path": "operations/DOC-IV-0008.md",
+      "sha256": "dd2d59a29f9da6633b317d0071e2957fd4c0ced8eda885a1726cfe72db369f3a",
+      "kind": "operations",
+      "source_tables": [
+        "inventory_movements",
+        "shipments",
+        "products"
+      ]
+    },
+    {
+      "path": "operations/DOC-CS-0001.md",
+      "sha256": "d1df72df6dbfc518032cf3e68add09b9a1c3d8f0c7e97746b0d0e68052cc9cc2",
+      "kind": "operations",
+      "source_tables": [
+        "service_tickets",
+        "returns"
+      ]
+    },
+    {
+      "path": "operations/DOC-CS-0002.md",
+      "sha256": "96c9ea9ff513aaff268c3bf8b8a48bca72a0ab350f3b7629a948377f351e4447",
+      "kind": "operations",
+      "source_tables": [
+        "service_tickets",
+        "returns"
+      ]
     }
   ],
   "test_profiles": {
@@ -664,7 +1929,130 @@
       "monthly/2025-11.md",
       "monthly/2025-12.md",
       "reference/master_data_catalog.md",
-      "reference/metric_dictionary.md"
+      "reference/metric_dictionary.md",
+      "crm/DOC-CRM-0001.md",
+      "crm/DOC-CRM-0002.md",
+      "crm/DOC-CRM-0003.md",
+      "crm/DOC-CRM-0004.md",
+      "crm/DOC-CRM-0005.md",
+      "crm/DOC-CRM-0006.md",
+      "crm/DOC-CRM-0007.md",
+      "crm/DOC-CRM-0008.md",
+      "crm/DOC-CRM-0009.md",
+      "crm/DOC-CRM-0010.md",
+      "crm/DOC-CRM-0011.md",
+      "crm/DOC-CRM-0012.md",
+      "crm/DOC-CRM-0013.md",
+      "crm/DOC-CRM-0014.md",
+      "crm/DOC-CRM-0015.md",
+      "crm/DOC-CRM-0016.md",
+      "crm/DOC-CRM-0017.md",
+      "crm/DOC-CRM-0018.md",
+      "crm/DOC-CRM-0019.md",
+      "crm/DOC-CRM-0020.md",
+      "crm/DOC-CRM-0021.md",
+      "crm/DOC-CRM-0022.md",
+      "crm/DOC-CRM-0023.md",
+      "crm/DOC-CRM-0024.md",
+      "crm/DOC-CRM-0025.md",
+      "crm/DOC-CRM-0026.md",
+      "crm/DOC-CRM-0027.md",
+      "crm/DOC-CRM-0028.md",
+      "crm/DOC-CRM-0029.md",
+      "crm/DOC-CRM-0030.md",
+      "crm/DOC-CRM-0031.md",
+      "crm/DOC-CRM-0032.md",
+      "crm/DOC-CRM-0033.md",
+      "crm/DOC-CRM-0034.md",
+      "crm/DOC-CRM-0035.md",
+      "crm/DOC-CRM-0036.md",
+      "crm/DOC-CRM-0037.md",
+      "crm/DOC-CRM-0038.md",
+      "crm/DOC-CRM-0039.md",
+      "crm/DOC-CRM-0040.md",
+      "crm/DOC-CRM-0041.md",
+      "crm/DOC-CRM-0042.md",
+      "crm/DOC-CRM-0043.md",
+      "crm/DOC-CRM-0044.md",
+      "crm/DOC-CRM-0045.md",
+      "crm/DOC-CRM-0046.md",
+      "crm/DOC-CRM-0047.md",
+      "crm/DOC-CRM-0048.md",
+      "crm/DOC-CRM-0049.md",
+      "crm/DOC-CRM-0050.md",
+      "sales/DOC-AR-0001.md",
+      "sales/DOC-AR-0002.md",
+      "sales/DOC-AR-0003.md",
+      "sales/DOC-AR-0004.md",
+      "sales/DOC-AR-0005.md",
+      "sales/DOC-AR-0006.md",
+      "sales/DOC-AR-0007.md",
+      "sales/DOC-AR-0008.md",
+      "sales/DOC-AR-0009.md",
+      "sales/DOC-AR-0010.md",
+      "sales/DOC-AR-0011.md",
+      "sales/DOC-AR-0012.md",
+      "sales/DOC-AR-0013.md",
+      "sales/DOC-AR-0014.md",
+      "sales/DOC-AR-0015.md",
+      "sales/DOC-AR-0016.md",
+      "sales/DOC-AR-0017.md",
+      "sales/DOC-AR-0018.md",
+      "sales/DOC-AR-0019.md",
+      "sales/DOC-AR-0020.md",
+      "procurement/DOC-SE-0001.md",
+      "procurement/DOC-SE-0002.md",
+      "procurement/DOC-SE-0003.md",
+      "procurement/DOC-SE-0004.md",
+      "procurement/DOC-SE-0005.md",
+      "procurement/DOC-SE-0006.md",
+      "procurement/DOC-SE-0007.md",
+      "procurement/DOC-SE-0008.md",
+      "procurement/DOC-SE-0009.md",
+      "procurement/DOC-SE-0010.md",
+      "procurement/DOC-SE-0011.md",
+      "procurement/DOC-SE-0012.md",
+      "procurement/DOC-SE-0013.md",
+      "procurement/DOC-SE-0014.md",
+      "procurement/DOC-SE-0015.md",
+      "quality/DOC-QR-0001.md",
+      "quality/DOC-QR-0002.md",
+      "quality/DOC-QR-0003.md",
+      "quality/DOC-QR-0004.md",
+      "quality/DOC-QR-0005.md",
+      "finance/DOC-FR-0001.md",
+      "finance/DOC-FR-0002.md",
+      "finance/DOC-FR-0003.md",
+      "finance/DOC-FR-0004.md",
+      "finance/DOC-FR-0005.md",
+      "finance/DOC-FR-0006.md",
+      "finance/DOC-FR-0007.md",
+      "finance/DOC-FR-0008.md",
+      "finance/DOC-FR-0009.md",
+      "finance/DOC-FR-0010.md",
+      "finance/DOC-FR-0011.md",
+      "finance/DOC-FR-0012.md",
+      "finance/DOC-FR-0013.md",
+      "finance/DOC-FR-0014.md",
+      "finance/DOC-FR-0015.md",
+      "sales/DOC-QR-Q1.md",
+      "sales/DOC-QR-Q2.md",
+      "sales/DOC-QR-Q3.md",
+      "sales/DOC-QR-Q4.md",
+      "sales/DOC-RS-EAST.md",
+      "sales/DOC-RS-NORTH.md",
+      "sales/DOC-RS-SOUTH.md",
+      "sales/DOC-RS-WEST.md",
+      "operations/DOC-IV-0001.md",
+      "operations/DOC-IV-0002.md",
+      "operations/DOC-IV-0003.md",
+      "operations/DOC-IV-0004.md",
+      "operations/DOC-IV-0005.md",
+      "operations/DOC-IV-0006.md",
+      "operations/DOC-IV-0007.md",
+      "operations/DOC-IV-0008.md",
+      "operations/DOC-CS-0001.md",
+      "operations/DOC-CS-0002.md"
     ]
   }
 }

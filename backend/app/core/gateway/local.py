@@ -10,7 +10,7 @@ import json
 import re
 import time
 from app.core.gateway.base import ModelGateway, ModelCallRecord
-from app.services.model_governance import record_model_call, reserve_model_call
+from app.modules.runtime.model_governance import record_model_call, reserve_model_call
 
 logger = logging.getLogger(__name__)
 

@@ -18,7 +18,7 @@ from openai import (
     UnprocessableEntityError,
 )
 from app.core.exceptions import PermanentModelError, RetryableModelError
-from app.services.model_governance import (
+from app.modules.runtime.model_governance import (
     fallback_chain_scope,
     next_fallback_model,
     record_model_call,
