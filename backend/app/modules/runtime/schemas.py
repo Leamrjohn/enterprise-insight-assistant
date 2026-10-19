@@ -1,6 +1,6 @@
 """Frozen, machine-enforced contracts for workflow tool access."""
 
-from app.modules.analysis.data_request import DataRequest
+from app.modules.analysis.data.data_request import DataRequest
 from pydantic import BaseModel, Field, field_validator
 
 

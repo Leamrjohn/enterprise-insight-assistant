@@ -35,4 +35,4 @@
 
 ## 支持范围
 
-安全修复以当前维护分支为准。本项目以生产级设计与工程要求为目标，在单机环境验证且不上线；尚未完成整体生产级验收，不提供生产 SLA。当前改造必须遵循 [主路线图第 0.5 节](docs/single_node_production_style_ai_application_roadmap.md) 的授权竞态、数据外发、审计、供应链和故障门禁。
+安全修复以当前维护分支为准。本项目以生产级设计与工程要求为目标，在单机环境验证且不上线；尚未完成整体生产级验收，不提供生产 SLA。当前改造必须遵循 [主路线图第 0.5 节](docs/plans/single_node_production_style_ai_application_roadmap.md) 的授权竞态、数据外发、审计、供应链和故障门禁。

@@ -5,18 +5,18 @@ from collections import Counter
 from decimal import Decimal
 
 from app.db.session import set_tenant_scope
-from app.modules.analysis.query_contract import ClarificationSpec
+from app.modules.analysis.data.query_contract import ClarificationSpec
 from app.modules.documents.chunks import DocumentChunk
 from app.modules.documents.models import Documents
 from app.modules.evaluation.business_schemas import CheckStatus, EvaluationObservation
 from app.modules.observability.rejection_audit import AnalysisRequestRejection
 from app.modules.reporting.schemas import FinalAnalysisReport
 from app.modules.reviews.models import ReviewRequest
-from app.modules.workflow.events_models import WorkflowEvent
-from app.modules.workflow.execution_attempt import TaskExecutionAttempt
-from app.modules.workflow.model_call import ModelCallRecord
+from app.modules.workflow.audit.events_models import WorkflowEvent
+from app.modules.workflow.lifecycle.execution_attempt import TaskExecutionAttempt
+from app.modules.workflow.audit.model_call import ModelCallRecord
 from app.modules.workflow.models import AnalysisTask, AnalysisTaskDocument
-from app.modules.workflow.tool_call import ToolCallRecord
+from app.modules.workflow.audit.tool_call import ToolCallRecord
 from pydantic import ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.exc import SQLAlchemyError

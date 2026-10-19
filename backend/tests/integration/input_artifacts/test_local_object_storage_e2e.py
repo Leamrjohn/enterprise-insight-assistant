@@ -19,16 +19,16 @@ from app.db.session import set_tenant_scope
 from app.modules.conversations.models import Conversation
 from app.modules.identity.models import User
 from app.modules.input_artifacts.attachment_context import build_task_attachment_context
-from app.modules.input_artifacts.direct_upload_storage import S3DirectUploadStorage
+from app.modules.input_artifacts.upload.direct_upload_storage import S3DirectUploadStorage
 from app.modules.input_artifacts.models import (
     ArtifactProcessingJob,
     InputArtifactVersion,
 )
-from app.modules.input_artifacts.parse_worker import execute_parse_job
-from app.modules.input_artifacts.processing_storage import S3ArtifactProcessingStorage
-from app.modules.input_artifacts.scan_worker import execute_scan_job
-from app.modules.input_artifacts.scanner import ScanResult
-from app.modules.input_artifacts.upload_sessions import (
+from app.modules.input_artifacts.processing.parse_worker import execute_parse_job
+from app.modules.input_artifacts.processing.processing_storage import S3ArtifactProcessingStorage
+from app.modules.input_artifacts.processing.scan_worker import execute_scan_job
+from app.modules.input_artifacts.processing.scanner import ScanResult
+from app.modules.input_artifacts.upload.upload_sessions import (
     CompleteAttachmentUploadCommand,
     InitiateAttachmentUploadCommand,
     complete_conversation_attachment_upload,

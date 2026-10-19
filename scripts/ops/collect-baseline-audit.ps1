@@ -288,8 +288,11 @@ New-Item -ItemType Directory -Force -Path $Output | Out-Null
 Copy-Item -LiteralPath $Prediction -Destination (Join-Path $Output 'prediction.md')
 
 $dependencyHashes = @(
-    Get-ChildItem -LiteralPath (Join-Path $RunRoot 'backend') -File |
-        Where-Object { $_.Name -eq 'pyproject.toml' -or $_.Name -like 'requirements*.txt' } |
+    @(
+        Get-ChildItem -LiteralPath (Join-Path $RunRoot 'backend') -File |
+            Where-Object { $_.Name -eq 'pyproject.toml' }
+        Get-ChildItem -LiteralPath (Join-Path $RunRoot 'backend\requirements') -File -Filter '*.txt'
+    ) |
         Sort-Object Name |
         ForEach-Object {
             [ordered]@{
@@ -441,8 +444,8 @@ if ($FreezeP0CandidateSnapshot) {
                 $_ -like 'backend/app/*' -or $_ -in @(
                     'backend/alembic.ini',
                     'backend/pyproject.toml',
-                    'backend/requirements.txt',
-                    'backend/requirements-ml.txt'
+                    'backend/requirements/base.txt',
+                    'backend/requirements/ml.txt'
                 )
             } |
             Sort-Object -Unique

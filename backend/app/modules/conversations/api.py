@@ -29,10 +29,10 @@ from app.modules.organizations.access import (
     get_current_company_context,
     require_analysis_permission,
 )
-from app.modules.workflow.checkpoint import WorkflowCheckpoint
-from app.modules.workflow.execution_attempt import TaskExecutionAttempt
-from app.modules.workflow.model_call import ModelCallRecord
-from app.modules.workflow.outbox import publish_analysis_task_event
+from app.modules.workflow.lifecycle.checkpoint import WorkflowCheckpoint
+from app.modules.workflow.lifecycle.execution_attempt import TaskExecutionAttempt
+from app.modules.workflow.audit.model_call import ModelCallRecord
+from app.modules.workflow.delivery.outbox import publish_analysis_task_event
 from app.modules.workflow.schemas import (
     ConversationTaskOut,
     ConversationTaskReviewOut,

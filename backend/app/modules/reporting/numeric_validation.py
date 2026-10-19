@@ -3,7 +3,7 @@
 import re
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 
-from app.modules.analysis.facts import render_evidence_purpose
+from app.modules.analysis.metrics.facts import render_evidence_purpose
 
 _NUMBER_PATTERN = re.compile(r"-?\d+(?:\.\d+)?%?")
 

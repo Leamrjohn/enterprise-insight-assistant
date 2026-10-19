@@ -6,7 +6,7 @@ from sqlalchemy import Integer, cast, func
 from sqlalchemy.orm import Session
 
 from app.modules.workflow.models import AnalysisTask
-from app.modules.workflow.tool_call import ToolCallRecord
+from app.modules.workflow.audit.tool_call import ToolCallRecord
 from app.modules.evaluation.workflow_schemas import WorkflowEvaluation
 
 

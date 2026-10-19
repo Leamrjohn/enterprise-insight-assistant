@@ -3,7 +3,7 @@
 from decimal import Decimal, InvalidOperation
 from math import ceil
 
-from app.modules.analysis.semantic_catalog import FILTER_VALUE_DEFINITIONS
+from app.modules.analysis.catalog.semantic_catalog import FILTER_VALUE_DEFINITIONS
 from app.modules.evaluation.business_schemas import (
     CheckStatus,
     EvaluationCase,

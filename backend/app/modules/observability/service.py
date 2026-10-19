@@ -7,7 +7,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.modules.workflow.models import AnalysisTask
-from app.modules.workflow.model_call import ModelCallRecord
+from app.modules.workflow.audit.model_call import ModelCallRecord
 from app.modules.observability.schemas import TaskMetricsOut
 
 

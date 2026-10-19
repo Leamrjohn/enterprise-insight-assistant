@@ -12,7 +12,7 @@ from app.core.exceptions import (
 )
 from app.core.settings import get_settings
 from app.db.session import get_db
-from app.modules.input_artifacts.direct_upload_storage import (
+from app.modules.input_artifacts.upload.direct_upload_storage import (
     DirectUploadStorageUnavailableError,
     get_direct_upload_storage,
 )
@@ -27,11 +27,11 @@ from app.modules.input_artifacts.schemas import (
     InputArtifactUploadOut,
     InputArtifactVersionReceiptOut,
 )
-from app.modules.input_artifacts.upload_service import (
+from app.modules.input_artifacts.upload.upload_service import (
     UploadAttachmentCommand,
     process_conversation_attachment_upload,
 )
-from app.modules.input_artifacts.upload_sessions import (
+from app.modules.input_artifacts.upload.upload_sessions import (
     CompleteAttachmentUploadCommand,
     InitiateAttachmentUploadCommand,
     UploadSessionCompletionOutcome,
@@ -40,7 +40,7 @@ from app.modules.input_artifacts.upload_sessions import (
     complete_conversation_attachment_upload,
     initiate_conversation_attachment_upload,
 )
-from app.modules.input_artifacts.upload_requests import (
+from app.modules.input_artifacts.upload.upload_requests import (
     UploadRequestFencedError,
     UploadRequestFingerprintConflictError,
 )

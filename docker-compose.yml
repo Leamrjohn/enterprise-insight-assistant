@@ -43,7 +43,7 @@ services:
       - "5433:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./backend/scripts/bootstrap_postgres.sql:/docker-entrypoint-initdb.d/bootstrap.sql
+      - ./backend/scripts/db/bootstrap_postgres.sql:/docker-entrypoint-initdb.d/bootstrap.sql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U agent_app"]
       interval: 5s
@@ -69,7 +69,8 @@ services:
   capacity-signal:
     build:
       context: ./backend
-    command: ["python", "scripts/capacity_signal_server.py"]
+      dockerfile: docker/api.Dockerfile
+    command: ["python", "scripts/ops/capacity_signal_server.py"]
     user: "10001:10001"
     environment:
       CAPACITY_SIGNAL_TOKEN: ${ANALYSIS_TASK_CAPACITY_SIGNAL_TOKEN:-local-capacity-signal-development-only}
@@ -156,6 +157,7 @@ services:
   migrate:
     build:
       context: ./backend
+      dockerfile: docker/api.Dockerfile
     command: ["python", "-m", "alembic", "upgrade", "head"]
     logging: *default-logging
     env_file:
@@ -171,6 +173,7 @@ services:
   api:
     build:
       context: ./backend
+      dockerfile: docker/api.Dockerfile
     logging: *default-logging
     env_file:
       - ./backend/.env
@@ -194,7 +197,7 @@ services:
   worker:
     build:
       context: ./backend
-      dockerfile: Dockerfile.worker
+      dockerfile: docker/worker.Dockerfile
     logging: *default-logging
     command:
       [
@@ -242,6 +245,7 @@ services:
   beat:
     build:
       context: ./backend
+      dockerfile: docker/api.Dockerfile
     logging: *default-logging
     command:
       [
@@ -267,7 +271,7 @@ services:
     profiles: ["test"]
     build:
       context: ./backend
-      dockerfile: Dockerfile.worker
+      dockerfile: docker/worker.Dockerfile
     logging: *default-logging
     command:
       [
@@ -300,7 +304,7 @@ services:
     profiles: ["evaluation"]
     build:
       context: ./backend
-      dockerfile: Dockerfile.evaluation
+      dockerfile: docker/evaluation.Dockerfile
     logging: *default-logging
     env_file:
       - ./backend/.env
@@ -319,6 +323,7 @@ services:
   report-worker:
     build:
       context: ./backend
+      dockerfile: docker/api.Dockerfile
     logging: *default-logging
     command:
       [
@@ -397,7 +402,8 @@ services:
   demo_seed_acme:
     build:
       context: ./backend
-    command: ["python", "scripts/seed_demo_business_database.py"]
+      dockerfile: docker/api.Dockerfile
+    command: ["python", "scripts/data/seed_demo_business_database.py"]
     environment:
       BUSINESS_DB_HOST: demo_business_acme
       BUSINESS_DB_PORT: 5432
@@ -414,7 +420,8 @@ services:
   demo_seed_beta:
     build:
       context: ./backend
-    command: ["python", "scripts/seed_demo_business_database.py"]
+      dockerfile: docker/api.Dockerfile
+    command: ["python", "scripts/data/seed_demo_business_database.py"]
     environment:
       BUSINESS_DB_HOST: demo_business_beta
       BUSINESS_DB_PORT: 5432

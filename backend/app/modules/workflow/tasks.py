@@ -33,7 +33,7 @@ from app.modules.identity.models import User  # noqa: F401
 from app.modules.input_artifacts.attachment_context import (
     build_task_attachment_context,
 )
-from app.modules.input_artifacts.processing_storage import (
+from app.modules.input_artifacts.processing.processing_storage import (
     get_artifact_processing_storage,
 )
 from app.modules.memory.service import persist_report_memory, select_planner_memories
@@ -42,8 +42,8 @@ from app.modules.reporting.validation import validate_report
 from app.modules.reviews.service import create_review_request
 from app.modules.runtime.model_governance import ModelBudgetExceeded, model_call_scope
 from app.modules.runtime.tool_runtime import ToolRuntime, ToolRuntimeContext
-from app.modules.workflow.events import append_workflow_event
-from app.modules.workflow.execution import (
+from app.modules.workflow.audit.events import append_workflow_event
+from app.modules.workflow.lifecycle.execution import (
     ClaimedExecution,
     checkpoint_stage,
     checkpoint_workflow_state,
@@ -54,13 +54,13 @@ from app.modules.workflow.execution import (
     retry_resume_node,
     transition_execution,
 )
-from app.modules.workflow.graph import run_analysis
+from app.modules.workflow.orchestration.graph import run_analysis
 from app.modules.workflow.models import (
     AnalysisTask,
     AnalysisTaskDocument,
     AnalysisTaskInputArtifactVersion,
 )
-from app.modules.workflow.publication import decide_completion
+from app.modules.workflow.lifecycle.publication import decide_completion
 from fastapi.encoders import jsonable_encoder
 
 logger = logging.getLogger(__name__)

@@ -5,7 +5,7 @@ from pathlib import Path
 from uuid import uuid4
 
 import pytest
-import scripts.prepare_business_evaluation as evaluation_harness
+import scripts.evaluation.prepare_business_evaluation as evaluation_harness
 from app.core.settings import get_settings
 from app.db.session import SessionLocal, set_tenant_scope
 from app.modules.documents.models import Documents
@@ -17,7 +17,7 @@ from app.modules.organizations.models import (
     SchemaSnapshot,
 )
 from app.modules.workflow.models import AnalysisTask
-from scripts.prepare_business_evaluation import (
+from scripts.evaluation.prepare_business_evaluation import (
     DEFAULT_SOURCE_CONNECTION,
     DEFAULT_SOURCE_CREDENTIAL_ENV,
     HarnessError,

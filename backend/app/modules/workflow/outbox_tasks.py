@@ -4,8 +4,8 @@ from typing import Any, cast
 
 from app.core.celery_app import celery_app
 from app.db.session import SessionLocal
-from app.modules.workflow.outbox import pending_event_ids, publish_analysis_task_event
-from app.modules.workflow.execution import recover_expired_executions
+from app.modules.workflow.delivery.outbox import pending_event_ids, publish_analysis_task_event
+from app.modules.workflow.lifecycle.execution import recover_expired_executions
 
 
 @celery_app.task(name="app.modules.workflow.outbox_tasks.publish_pending_analysis_task_events")

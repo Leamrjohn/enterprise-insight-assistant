@@ -2,7 +2,7 @@ import hmac
 from hashlib import sha256
 from types import SimpleNamespace
 
-from scripts import capacity_signal_server
+from scripts.ops import capacity_signal_server
 
 
 def test_capacity_payload_reports_only_live_filesystem_measurements(

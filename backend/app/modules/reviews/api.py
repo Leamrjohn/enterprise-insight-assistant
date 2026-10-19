@@ -13,7 +13,7 @@ from app.modules.reviews.schemas import (
     ReviewDecisionOut,
     ReviewRequestOut,
 )
-from app.modules.workflow.outbox import publish_analysis_task_event
+from app.modules.workflow.delivery.outbox import publish_analysis_task_event
 from app.modules.reviews.service import approve_review_request, reject_review_request
 
 

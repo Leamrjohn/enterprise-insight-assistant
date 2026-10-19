@@ -1,2 +1,0 @@
--r requirements-evaluation.txt
-sentence-transformers==5.7.0

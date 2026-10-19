@@ -4,7 +4,7 @@ from types import SimpleNamespace
 import pytest
 from app.modules.organizations.models import Company
 from app.modules.workflow.models import AnalysisTask
-from scripts.render_task_trace import load_trace, render_trace_html
+from scripts.evaluation.render_task_trace import load_trace, render_trace_html
 
 
 def test_trace_html_excludes_payloads_and_escapes_audit_metadata() -> None:

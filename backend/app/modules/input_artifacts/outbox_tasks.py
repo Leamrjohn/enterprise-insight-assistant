@@ -4,7 +4,7 @@ from typing import Any, cast
 
 from app.core.celery_app import celery_app
 from app.db.session import SessionLocal, set_tenant_scope
-from app.modules.input_artifacts.processing_outbox import (
+from app.modules.input_artifacts.processing.processing_outbox import (
     pending_artifact_processing_event_ids,
     publish_artifact_processing_event,
 )

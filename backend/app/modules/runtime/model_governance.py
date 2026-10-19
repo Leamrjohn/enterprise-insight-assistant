@@ -10,8 +10,8 @@ from uuid import uuid4
 
 from app.core.settings import MAX_LLM_TIMEOUT_SECONDS
 from app.db.clock import database_now
-from app.modules.workflow.execution_attempt import TaskExecutionAttempt
-from app.modules.workflow.model_call import ModelCallRecord
+from app.modules.workflow.lifecycle.execution_attempt import TaskExecutionAttempt
+from app.modules.workflow.audit.model_call import ModelCallRecord
 from app.modules.workflow.models import AnalysisTask
 from sqlalchemy.orm import Session
 

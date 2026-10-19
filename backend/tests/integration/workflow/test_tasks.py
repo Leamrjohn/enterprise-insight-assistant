@@ -4,7 +4,7 @@ import time
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
-import app.modules.workflow.execution as execution_module
+import app.modules.workflow.lifecycle.execution as execution_module
 import app.modules.workflow.tasks as analysis_tasks
 import pytest
 from app.core.exceptions import RetryableModelError
@@ -23,15 +23,15 @@ from app.modules.runtime.model_governance import (
     record_model_call,
     reserve_model_call,
 )
-from app.modules.workflow.checkpoint import WorkflowCheckpoint
-from app.modules.workflow.events_models import WorkflowEvent
-from app.modules.workflow.execution import (
+from app.modules.workflow.lifecycle.checkpoint import WorkflowCheckpoint
+from app.modules.workflow.audit.events_models import WorkflowEvent
+from app.modules.workflow.lifecycle.execution import (
     checkpoint_workflow_state,
     claim_execution,
     recover_expired_executions,
 )
-from app.modules.workflow.execution_attempt import TaskExecutionAttempt
-from app.modules.workflow.model_call import ModelCallRecord
+from app.modules.workflow.lifecycle.execution_attempt import TaskExecutionAttempt
+from app.modules.workflow.audit.model_call import ModelCallRecord
 from app.modules.workflow.models import AnalysisTask, AnalysisTaskInputArtifactVersion
 from app.modules.workflow.tasks import process_analysis_task
 from fastapi.testclient import TestClient

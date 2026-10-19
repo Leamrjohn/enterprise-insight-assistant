@@ -8,7 +8,7 @@
 
 ## 已有模块与能力基础
 
-以下是实现构成，不代表各项已通过完整生产级门禁；当前缺口与验证范围见 [项目审计](docs/project_core_audit_20260915.md)。
+以下是实现构成，不代表各项已通过完整生产级门禁；当前缺口与验证范围见 [项目审计](docs/audits/project_core_audit_20260915.md)。
 
 - 公司级身份与权限：JWT 登录、成员角色、资源隔离和管理审批。
 - 文档知识库：TXT、Markdown、PDF 上传，异步解析、分块、向量化和 pgvector 检索。
@@ -116,7 +116,7 @@ pip install -e ".[dev]"
 # 仅在本机运行真实 RAG/slow 测试时安装本地 CPU 模型依赖；普通 API
 # 开发和测试不需要它。
 pip install --index-url https://download.pytorch.org/whl/cpu torch==2.6.0
-pip install -r requirements-ml.txt
+pip install -r requirements/ml.txt
 Copy-Item .env.example .env
 python -m alembic upgrade head
 python -m uvicorn app.main:app --reload
@@ -152,7 +152,7 @@ Set-Location ..
 docker compose config --quiet
 ```
 
-普通单元/集成测试不能证明真实 Redis、独立 Celery Worker、经营数据库和模型 Provider 的完整链路。需要真实依赖时，按测试标记和 [单机运行与恢复 Runbook](docs/single_node_runbook.md) 执行对应 E2E。
+普通单元/集成测试不能证明真实 Redis、独立 Celery Worker、经营数据库和模型 Provider 的完整链路。需要真实依赖时，按测试标记和 [单机运行与恢复 Runbook](docs/operations/single_node_runbook.md) 执行对应 E2E。
 
 ## 主要 API
 
@@ -172,29 +172,34 @@ docker compose config --quiet
 
 ```text
 backend/
-  app/                  FastAPI、领域模型、Agent、Tool、工作流与 Worker
+  app/
+    api/ core/ db/      路由组合、配置/网关/Celery、数据库会话
+    modules/<领域>/     业务领域：api / schemas / service / repository / models / tasks
+                        大模块按职责分子包，如 workflow/{orchestration,lifecycle,delivery,audit}
   migrations/           Alembic 迁移链
-  scripts/              数据初始化和端到端验证脚本
-  tests/                单元、集成、E2E 与评测测试
-frontend/
-  src/                  React 工作台
-docs/
-  business_knowledge_base/  可复现演示语料
-  single_node_runbook.md     单机运行与故障恢复
+  tests/{unit,integration,scripts,fixtures}
+  scripts/{data,evaluation,ops,db}
+  docker/               api / worker / evaluation 镜像定义
+  requirements/         base / ml / evaluation 依赖
+frontend/src/           React 工作台
+data/business_knowledge_base/  可复现演示语料
+docs/                   计划、架构、设计稿、运维、审计、证据（见 docs/README.md）
 scripts/ops/            备份、恢复、队列和权限检查
 docker-compose.yml      本地服务编排
 ```
 
+完整说明见 [目录结构与模块边界](docs/architecture/modular_monolith_structure.md)。
+
 ## 项目文档
 
-- [阅读导航：目标、计划、当前进度与操作资料](docs/README.md)
-- [全项目生产级改造路线图](docs/single_node_production_style_ai_application_roadmap.md)
-- [已确认目标设计](docs/confirmed_production_design.md)
-- [当前代码审计与验证边界](docs/project_core_audit_20260915.md)
-
+- [文档索引](docs/README.md)
+- [当前执行计划：改进与学习计划](docs/plans/improvement_and_learning_plan.md)
+- [目录结构与模块边界](docs/architecture/modular_monolith_structure.md)
+- [证据记录](docs/evidence.md)
+- [最终设计范围路线图](docs/plans/single_node_production_style_ai_application_roadmap.md)
 - [产品定义与边界](PRODUCT.md)
 - [前端设计系统](DESIGN.md)
-- [单机运行与故障恢复](docs/single_node_runbook.md)
+- [单机运行与故障恢复](docs/operations/single_node_runbook.md)
 - [贡献指南](CONTRIBUTING.md)
 - [安全策略](SECURITY.md)
 

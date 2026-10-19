@@ -11,12 +11,12 @@ from app.modules.documents.chunks import DocumentChunk  # noqa: F401
 from app.modules.workflow.models import AnalysisTask, AnalysisTaskDocument  # noqa: F401
 from app.modules.conversations.models import Conversation, ConversationMessage  # noqa: F401
 from app.modules.organizations import models as company  # noqa: F401
-from app.modules.workflow.outbox_models import AnalysisTaskOutboxEvent  # noqa: F401
-from app.modules.workflow.execution_attempt import TaskExecutionAttempt  # noqa: F401
-from app.modules.workflow.checkpoint import WorkflowCheckpoint  # noqa: F401
+from app.modules.workflow.delivery.outbox_models import AnalysisTaskOutboxEvent  # noqa: F401
+from app.modules.workflow.lifecycle.execution_attempt import TaskExecutionAttempt  # noqa: F401
+from app.modules.workflow.lifecycle.checkpoint import WorkflowCheckpoint  # noqa: F401
 from app.modules.reviews.models import ReviewRequest  # noqa: F401
 from app.modules.memory.models import AnalysisMemory  # noqa: F401
-from app.modules.workflow.events_models import WorkflowEvent  # noqa: F401
+from app.modules.workflow.audit.events_models import WorkflowEvent  # noqa: F401
 from app.modules.input_artifacts.models import (  # noqa: F401
     ArtifactParseResult,
     ArtifactProcessingJob,

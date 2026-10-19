@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from app.modules.analysis.facts import (
+from app.modules.analysis.metrics.facts import (
     build_confirmed_facts,
     build_data_evidence,
 )
-from app.modules.analysis.facts import (
+from app.modules.analysis.metrics.facts import (
     render_data_fields as _render_data_fields,
 )
-from app.modules.analysis.facts import (
+from app.modules.analysis.metrics.facts import (
     render_evidence_purpose as _render_evidence_purpose,
 )
 from app.modules.reporting.schemas import (

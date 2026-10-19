@@ -34,7 +34,7 @@ from app.modules.organizations.repository import (
     get_membership,
     get_snapshot,
 )
-from app.modules.analysis.schema_discovery import discover_postgres_schema
+from app.modules.analysis.catalog.schema_discovery import discover_postgres_schema
 
 
 @dataclass(frozen=True)

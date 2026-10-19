@@ -24,7 +24,7 @@ from app.modules.organizations.repository import (
     get_snapshot,
 )
 from app.modules.workflow.models import AnalysisTask
-from app.modules.workflow.outbox import create_analysis_task_event
+from app.modules.workflow.delivery.outbox import create_analysis_task_event
 from app.modules.workflow.repository import (
     cancel_task,
     create_task,

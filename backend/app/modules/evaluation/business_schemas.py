@@ -4,7 +4,7 @@ import re
 from datetime import datetime
 from typing import Any, Literal
 
-from app.modules.analysis.query_contract import ClarificationSlot
+from app.modules.analysis.data.query_contract import ClarificationSlot
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 Outcome = Literal[

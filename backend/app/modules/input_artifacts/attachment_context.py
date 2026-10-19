@@ -15,7 +15,7 @@ from app.modules.input_artifacts.models import (
     InputArtifact,
     InputArtifactVersion,
 )
-from app.modules.input_artifacts.processing_storage import ArtifactProcessingStorage
+from app.modules.input_artifacts.processing.processing_storage import ArtifactProcessingStorage
 from app.modules.workflow.models import AnalysisTaskInputArtifactVersion
 from sqlalchemy.orm import Session
 

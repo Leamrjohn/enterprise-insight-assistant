@@ -3,17 +3,17 @@ from copy import deepcopy
 from app.core.exceptions import TaskAdmissionLimitError
 from app.core.settings import get_settings
 from app.db.clock import database_now
-from app.modules.workflow.capacity import require_task_capacity
-from app.modules.workflow.execution_attempt import TaskExecutionAttempt
+from app.modules.workflow.lifecycle.capacity import require_task_capacity
+from app.modules.workflow.lifecycle.execution_attempt import TaskExecutionAttempt
 from app.modules.workflow.models import (
     AnalysisTask,
     AnalysisTaskDocument,
     AnalysisTaskInputArtifactVersion,
 )
-from app.modules.workflow.model_budget import configured_model_budget
-from app.modules.workflow.outbox import cancel_unclaimed_analysis_task_event
-from app.modules.workflow.task_state import require_task_transition
-from app.modules.workflow.versioning import workflow_policy_snapshot
+from app.modules.workflow.lifecycle.model_budget import configured_model_budget
+from app.modules.workflow.delivery.outbox import cancel_unclaimed_analysis_task_event
+from app.modules.workflow.lifecycle.task_state import require_task_transition
+from app.modules.workflow.lifecycle.versioning import workflow_policy_snapshot
 from sqlalchemy import text
 from sqlalchemy.orm import Session
 

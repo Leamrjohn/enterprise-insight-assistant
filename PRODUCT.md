@@ -1,6 +1,6 @@
 # Enterprise Insight Assistant 产品说明
 
-> 本文维护产品用途与业务边界。生产级目标与验收以 [主路线图](docs/single_node_production_style_ai_application_roadmap.md) 为准；当前实现证据见 [项目审计](docs/project_core_audit_20260915.md)。
+> 本文维护产品用途与业务边界。生产级目标与验收以 [主路线图](docs/plans/single_node_production_style_ai_application_roadmap.md) 为准；当前实现证据见 [项目审计](docs/audits/project_core_audit_20260915.md)。
 
 ## 产品定位
 

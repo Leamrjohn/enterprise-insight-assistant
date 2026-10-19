@@ -17,10 +17,10 @@ from app.modules.runtime.schemas import (
     ToolBudget,
     ToolPolicy,
 )
-from app.modules.workflow.events import append_workflow_event
-from app.modules.workflow.execution_attempt import TaskExecutionAttempt
+from app.modules.workflow.audit.events import append_workflow_event
+from app.modules.workflow.lifecycle.execution_attempt import TaskExecutionAttempt
 from app.modules.workflow.models import AnalysisTask
-from app.modules.workflow.tool_call import ToolCallRecord
+from app.modules.workflow.audit.tool_call import ToolCallRecord
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
 

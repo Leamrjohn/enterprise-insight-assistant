@@ -27,7 +27,7 @@ try {
     Invoke-ComposeCheck -ComposeArguments @("exec", "-T", "capacity-signal", "python", "-c", "from urllib.request import urlopen; assert urlopen('http://127.0.0.1:8081/health/live', timeout=1).status == 200") -FailureMessage "Capacity signal is not live."
     Invoke-ComposeCheck -ComposeArguments @("exec", "-T", "localstack", "awslocal", "s3api", "head-bucket", "--bucket", "agent-artifacts") -FailureMessage "Object storage bucket is not ready."
     Invoke-ComposeCheck -ComposeArguments @("exec", "-T", "api", "alembic", "current") -FailureMessage "Alembic revision cannot be read from the API image."
-    Invoke-ComposeCheck -ComposeArguments @("exec", "-T", "api", "python", "-c", "from app.core.settings import get_settings; from app.modules.workflow.capacity import require_task_capacity; require_task_capacity(get_settings())") -FailureMessage "Task capacity admission is not ready."
+    Invoke-ComposeCheck -ComposeArguments @("exec", "-T", "api", "python", "-c", "from app.core.settings import get_settings; from app.modules.workflow.lifecycle.capacity import require_task_capacity; require_task_capacity(get_settings())") -FailureMessage "Task capacity admission is not ready."
     Invoke-ComposeCheck -ComposeArguments @("exec", "-T", "worker", "celery", "-A", "app.core.celery_app:celery_app", "inspect", "ping") -FailureMessage "No Celery Worker replied to the control ping."
     $response = Invoke-WebRequest -UseBasicParsing "http://localhost:8000/health/ready"
     if ($response.StatusCode -ne 200) {

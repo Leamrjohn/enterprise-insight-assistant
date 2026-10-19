@@ -1,6 +1,6 @@
 from app.core.exceptions import TaskCapacityAdmissionError
 from app.core.settings import get_settings
-from app.modules.workflow.capacity import require_task_capacity
+from app.modules.workflow.lifecycle.capacity import require_task_capacity
 from botocore.config import Config
 from botocore.exceptions import BotoCoreError, ClientError
 from redis import Redis

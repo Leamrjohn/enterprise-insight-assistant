@@ -1,47 +1,45 @@
-# 文档阅读导航
+# 文档索引
 
-当前先读 [Agent 核心优先执行计划](agent_core_first_execution_plan.md)：五层任务、退出标准、面试价值和前两周日程。下文完整路线图用于查询最终设计，旧M阶段不再决定实施顺序。
+## 先读
 
-## 先读这三份
-
-| 顺序 | 文档 | 主要回答什么 |
+| 顺序 | 文档 | 回答什么 |
 |---|---|---|
-| 1 | [全项目生产级改造路线图](single_node_production_style_ai_application_roadmap.md) | 整个项目要达到什么要求、各模块怎么改、按什么顺序实施、怎样验收 |
-| 2 | [已确认的目标设计](confirmed_production_design.md) | 输入、任务、权限、记忆、工具、数据与报告采用什么具体契约 |
-| 3 | [当前项目审计](project_core_audit_20260915.md) | 现在实现了什么、实际验证了什么、还缺什么，以及计划再审发现的问题 |
+| 1 | [改进与学习计划](plans/improvement_and_learning_plan.md) | **当前执行计划**：每个模块改成什么样、按什么顺序、怎么教与学 |
+| 2 | [目录结构与模块边界](architecture/modular_monolith_structure.md) | 文件在哪里、模块之间怎么调用 |
+| 3 | [证据记录](evidence.md) | 做过什么、验证了什么、哪些未证明（唯一的证据台账） |
 
-路线图较长，第一次按以下顺序读，不必从头逐行阅读：
+## 目录
 
-1. **0.3–0.5**：上下文/记忆目标、全模块改造矩阵、生产级强制门禁。
-2. **16**：当前五层执行入口；上传冻结，基础设施后移。
-3. **21**：全项目最终完成定义。
-4. 做到具体模块时，再查 **5–15** 的详细设计和 **18–19** 的实施/教学协议。
+| 目录 | 内容 |
+|---|---|
+| `plans/` | 当前计划、最终设计范围路线图、架构重构需求；`plans/history/` 存放被取代的计划 |
+| `architecture/` | 目录结构、已确认的目标设计契约 |
+| `design/` | 每个模块的生产级设计稿（按 12 问模板，见 [design/README.md](design/README.md)） |
+| `operations/` | 单机运行、故障恢复、备份恢复手册 |
+| `evaluation/` | 评测前预测模板等评测方法文档 |
+| `audits/` | 带日期的代码审计与外部评审材料（快照，不代表当前状态） |
+| `evidence.md` | 证据台账，只追加不改写历史 |
 
-三份文档的职责不同：路线图是目标与门禁，设计账本是目标契约，审计是带日期的源码与验证快照。目标写进文档不等于实现完成；审计结果也不自动适用于之后的新提交。
-
-## 开发或运行时再查
+## 全部文档
 
 | 文档 | 用途 |
 |---|---|
-| [模块化单体目录约束](modular_monolith_structure.md) | 代码放哪里、模块之间如何调用 |
-| [单机运行与故障恢复](single_node_runbook.md) | 启动、检查任务、队列、备份和恢复工具；注意其中的验证限制 |
-| [评测前预测模板](evaluation/baseline_prediction_template.md) | 每次评测前明确候选范围、环境与预期；不是旧基线结果 |
-| [项目总览与启动入口](../README.md) | 仓库说明、技术栈、启动与常用入口 |
-| [产品说明](../PRODUCT.md) | 产品用途、用户、业务边界 |
-| [协作规则](../AGENTS.md) / [贡献指南](../CONTRIBUTING.md) | 教学分工、变更与验证要求 |
-| [安全策略](../SECURITY.md) | 安全问题、秘密和运行安全要求 |
-| [前端设计规范](../DESIGN.md) | 界面视觉与交互规范；不是后端架构方案 |
+| [plans/improvement_and_learning_plan.md](plans/improvement_and_learning_plan.md) | 当前执行计划（2026-10-19 起） |
+| [plans/single_node_production_style_ai_application_roadmap.md](plans/single_node_production_style_ai_application_roadmap.md) | 最终设计范围与验收门禁（查询用） |
+| [plans/agent_architecture_refactor_requirements.md](plans/agent_architecture_refactor_requirements.md) | 架构重构需求与上线蓝图 |
+| [plans/history/agent_core_first_execution_plan.md](plans/history/agent_core_first_execution_plan.md) | 已被取代的“核心优先”计划 |
+| [architecture/modular_monolith_structure.md](architecture/modular_monolith_structure.md) | 目录结构与依赖规则 |
+| [architecture/confirmed_production_design.md](architecture/confirmed_production_design.md) | 已确认的目标设计契约 |
+| [design/README.md](design/README.md) | 模块设计稿模板 |
+| [operations/single_node_runbook.md](operations/single_node_runbook.md) | 启动、任务检查、队列、备份与恢复 |
+| [evaluation/baseline_prediction_template.md](evaluation/baseline_prediction_template.md) | 评测前预测模板 |
+| [audits/project_core_audit_20260915.md](audits/project_core_audit_20260915.md) | 2026-09-15 代码审计快照 |
+| [audits/for_external_review.md](audits/for_external_review.md) | 外部评审材料 |
 
-规则冲突时按当前用户要求和 AGENTS.md 的优先级处理；主路线图约束目标和验收，当前代码/测试决定实现事实。其他文档不另设一套阶段计划。
+根目录：[README](../README.md)（总览与启动）、[PRODUCT](../PRODUCT.md)（产品边界）、[AGENTS](../AGENTS.md)（协作规则）、[CONTRIBUTING](../CONTRIBUTING.md)、[SECURITY](../SECURITY.md)、[DESIGN](../DESIGN.md)（前端设计系统）。演示语料在 [`data/business_knowledge_base/`](../data/business_knowledge_base/README.md)。
 
-## 本次清理（2026-09-15）
+## 规则
 
-删除三份已经被当前审计与路线图替代的文档：
-
-- `evaluation/candidate_scope_v1.md`：绑定旧提交、旧目录和旧检索候选。
-- `evaluation/p0_0_prediction_20260908.md`：旧环境与旧候选预测，不能代表当前评测。
-- `evaluation/p0_0_worktree_classification.md`：旧工作区分类及测试数字，当前工作区已发生变化。
-
-同时移除主路线图中的旧实现状态和旧平铺目录地图，修正 README 的定位与未挂载路由说明、产品说明的授权边界、运行手册的验证声明。已删除的跟踪文档仍可从 Git 历史查看，未清理提交历史。
-
-`business_knowledge_base/` 是业务语料；`evaluation-runs/` 是历史评测证据；它们不属于过时设计文件，本次保留。现有代码、测试、迁移及个人输出文件也未在文档清理中删除。
+- 规则冲突时按 AGENTS.md 优先级处理；当前代码与测试决定实现事实。
+- 审计与评审材料是带日期的快照，不自动适用于之后的提交。
+- 证据只写入 `evidence.md`，不另建台账。
