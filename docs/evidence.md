@@ -3009,4 +3009,5 @@
 - **基线提交**：`140007c1` 将此前累积的未提交改动（147 个文件）提交为重构前基线；提交前 `tests/modules + tests/scripts`（not e2e/slow）730 passed / 2 skipped。本地评测运行产物（`.evaluation-runs/`）改为忽略；个人简历文件移出仓库并停止跟踪（已推送的历史中仍存在）。
 - **目录调整**：`backend/requirements/`、`backend/docker/`、`backend/scripts/{data,evaluation,ops,db}`、`backend/tests/unit`（原 `tests/modules`）、`data/business_knowledge_base`（原 `docs/` 下）、`docs/{plans,architecture,design,operations,audits}`；`workflow` 拆为 `orchestration/lifecycle/delivery/audit`，`analysis` 拆为 `planner/data/catalog/metrics`，`input_artifacts` 拆为 `upload/processing`。Celery 任务模块（`tasks.py`、`outbox_tasks.py`）保持原位，任务名不变。说明见 `docs/architecture/modular_monolith_structure.md`。
 - **验证**：全部 `app` 模块逐个导入 0 失败；旧模块路径扫描 0 残留；`tests/unit + tests/scripts` 730 passed / 2 skipped / 2 deselected（与调整前一致）；`tests/integration` 90 passed / 2 skipped / 5 deselected（隔离库 `agent_platform_test`，与 10-19 先前记录一致）；`docker compose config -q` 通过。
-- **未证明**：未重新构建 Docker 镜像，正在运行的容器仍是旧镜像，需 `docker compose build` 后重启才会使用新路径；E2E/slow 测试未运行；ruff 在调整前即有 343 项问题，本次未处理（属阶段 1 工程基础）；evidence 历史条目中的旧路径文本保留原样，作为历史记录。
+- **镜像**：`docker compose build api worker` 使用新 `backend/docker/*.Dockerfile` 与 `requirements/` 构建成功（退出码 0）。
+- **未证明**：正在运行的容器尚未用新镜像重启，未做重启后的全链冒烟；evaluation 镜像未构建；E2E/slow 测试未运行；ruff 在调整前即有 343 项问题，本次未处理（属阶段 1 工程基础）；evidence 历史条目中的旧路径文本保留原样，作为历史记录。
