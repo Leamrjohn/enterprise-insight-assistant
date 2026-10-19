@@ -1,0 +1,28 @@
+{
+  "schema_version": "1.0",
+  "dataset_version": "business-data-no-match-development-v6",
+  "cases": [
+    {
+      "case_id": "data-known-region-empty-month-v6",
+      "scenario": "empty_time_window",
+      "complexity": "simple",
+      "split": "development",
+      "coverage_tags": ["data_sql", "no_matching_records", "insufficient_refusal"],
+      "question": "华东区2020年2月销售额是多少？",
+      "company_scope": "acme-demo",
+      "document_scope": [],
+      "expected_route": "data_only",
+      "expected_entities": ["华东区"],
+      "expected_period": "2020-02",
+      "expected_query_requirements": ["按区域与月份过滤", "无匹配记录时不得编造数值"],
+      "expected_result_fingerprint": {
+        "algorithm": "sha256",
+        "value": "4012d5a713b509655890e39fbc864ab4054cbd784178f3a0485e882309860ded"
+      },
+      "expected_outcome": "insufficient_evidence",
+      "expected_limitations": ["经营数据未返回可确认的数字或记录"],
+      "max_model_calls": 6,
+      "max_tokens": 12000
+    }
+  ]
+}

@@ -43,4 +43,13 @@ def assess_query_result(
                 status="invalid_result_shape",
                 reason="查询未返回约定的业务结果列：" + "、".join(missing_columns),
             )
+        if (
+            contract.result_kind == "aggregate"
+            and len(normalized_rows) == 1
+            and all(value is None for value in normalized_rows[0])
+        ):
+            return QueryResultAssessment(
+                status="no_matching_records",
+                reason="在当前筛选范围内未找到可聚合的匹配记录。",
+            )
     return QueryResultAssessment(status="supported", reason="查询结果满足证据契约。")

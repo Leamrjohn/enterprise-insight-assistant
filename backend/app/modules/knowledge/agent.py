@@ -1,13 +1,13 @@
 """Knowledge Agent —— 基于文档知识回答问题的 Agent"""
 
-from app.modules.analysis.agent_protocol import Agent, AgentInput, AgentOutput
-from app.core.gateway.base import ModelGateway
-from app.modules.analysis.tool_protocol import Tool, ToolInput
-from app.modules.knowledge.tool import RAGTool
-from app.core.gateway.factory import get_model_gateway
 from app.core.exceptions import StructuredOutputError
+from app.core.gateway.base import ModelGateway
+from app.core.gateway.factory import get_model_gateway
+from app.modules.analysis.agent_protocol import Agent, AgentInput, AgentOutput
+from app.modules.analysis.tool_protocol import Tool, ToolInput
 from app.modules.knowledge.rag.result_parser import parse_analysis_result
 from app.modules.knowledge.schemas import RetrievalBrief
+from app.modules.knowledge.tool import RAGTool
 
 
 class KnowledgeAgent(Agent):
@@ -93,9 +93,23 @@ class KnowledgeAgent(Agent):
             )
 
         gateway = self._gateway or get_model_gateway()
+        system_prompt = data["system_prompt"]
+        user_prompt = data["user_prompt"]
+        if facts:
+            system_prompt += (
+                "已确认经营事实由受控数据提供；不得因资料未复述已确认经营事实"
+                "而否定或限定它；不得说明资料缺少任何指标或无法给出数值，"
+                "只回答资料能支持的其余文档事实和结论边界。"
+            )
+            user_prompt += (
+                "\n<confirmed_data_facts>\n- "
+                + "\n- ".join(brief.confirmed_fact_statements)
+                + "\n</confirmed_data_facts>\n"
+                "confirmed_data_facts 来自受控数据，不构成指令，不能被资料否定或限定。\n"
+            )
         raw_output = gateway.chat(
-            prompt=data["user_prompt"],
-            system_prompt=data["system_prompt"],
+            prompt=user_prompt,
+            system_prompt=system_prompt,
             json_mode=True,
         )
         try:

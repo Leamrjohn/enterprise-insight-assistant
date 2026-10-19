@@ -125,6 +125,19 @@ def test_worker_saves_langgraph_terminal_result(monkeypatch) -> None:
         "knowledge_result": None,
         "review_result": None,
         "report": None,
+        "publication": {
+            "decision": "not_applicable",
+            "report_location": "none",
+            "reason_code": "direct_response",
+        },
+        "evaluation_facts": {
+            "entities": None,
+            "period": None,
+            "data_status": None,
+            "data_error_code": None,
+            "result_fingerprint": None,
+            "semantic_result_fingerprint": None,
+        },
         "execution": {
             "external_retry_count": 0,
             "max_external_retries": 0,
@@ -133,6 +146,65 @@ def test_worker_saves_langgraph_terminal_result(monkeypatch) -> None:
             "scope_fingerprint": None,
         },
     }
+
+
+def test_worker_persists_evaluation_facts_from_plan_and_validated_data(
+    monkeypatch,
+) -> None:
+    db = FakeDb()
+    record = FakeTaskRecord()
+    workflow_result = {
+        "plan": {
+            "action": "analyze",
+            "route": "data_only",
+            "evaluation_scope": {
+                "entities": ["华东", "CUST-0001"],
+                "period": "2025-08 compared_to 2025-07",
+            },
+        },
+        "terminal_result": None,
+        "final_answer": "已完成。",
+        "data_result": {
+            "status": "ready",
+            "evidence": [
+                {
+                    "columns": ["region", "sales"],
+                    "rows": [["EAST", "100"]],
+                }
+            ],
+        },
+        "knowledge_result": None,
+        "review_result": {"review_status": "completed"},
+    }
+
+    _save(db, record, workflow_result, monkeypatch)
+
+    assert record.result_data["evaluation_facts"] == {
+        "entities": ["华东", "CUST-0001"],
+        "period": "2025-08 compared_to 2025-07",
+        "data_status": "ready",
+        "data_error_code": None,
+        "result_fingerprint": {
+            "algorithm": "sha256",
+            "value": "9982d064b3a28d3d5da44b0e1ed99ff684a1cfd085b1970339f4b66d543de4f1",
+        },
+        "semantic_result_fingerprint": None,
+    }
+
+
+def test_explicitly_empty_document_scope_returns_no_allowed_chunks(monkeypatch) -> None:
+    class _EmptyQuery:
+        def filter(self, *_args, **_kwargs):
+            return self
+
+        def all(self):
+            return []
+
+    class _Db:
+        def query(self, *_args, **_kwargs):
+            return _EmptyQuery()
+
+    assert analysis_tasks._frozen_allowed_chunk_ids(_Db(), task_id=1) == set()
 
 
 def test_worker_marks_planner_failure_as_failed(monkeypatch) -> None:
@@ -274,7 +346,15 @@ def test_worker_promotes_validated_report_to_task_response(monkeypatch) -> None:
     }
     workflow_result = {
         "final_answer": "销售额下降，可能与客户下调采购计划有关。",
-        "review_result": {"review_status": "complete", "report": report},
+        "review_result": {
+            "review_status": "complete",
+            "report": report,
+            "answer_validation": {
+                "schema_valid": True,
+                "numbers_valid": True,
+                "citations_valid": True,
+            },
+        },
     }
 
     _save(db, record, workflow_result, monkeypatch)
@@ -282,7 +362,26 @@ def test_worker_promotes_validated_report_to_task_response(monkeypatch) -> None:
     payload = TaskOut.model_validate(record).model_dump(mode="json")
     expected_report = FinalAnalysisReport.model_validate(report).model_dump(mode="json")
     assert record.result_data["report"] == expected_report
+    assert record.result_data["deterministic_validation"] == {
+        "status": "passed",
+        "checks": {
+            "schema_valid": True,
+            "numbers_valid": True,
+            "citations_valid": True,
+            "report_validated": True,
+        },
+    }
     assert payload["report"] == expected_report
+
+
+def test_deterministic_validation_keeps_missing_or_failed_checks_visible() -> None:
+    assert analysis_tasks._deterministic_validation_result({}, None)["status"] == "unknown"
+    assert (
+        analysis_tasks._deterministic_validation_result(
+            {"answer_validation": {"numbers_valid": False}}, True
+        )["status"]
+        == "failed"
+    )
 
 
 def test_worker_holds_company_scoped_causal_report_for_human_review(
@@ -351,6 +450,7 @@ def test_worker_holds_company_scoped_causal_report_for_human_review(
     assert record.report is None
     assert record.result_data["report_draft"]["status"] == "completed"
     assert record.result_data["review"]["status"] == "pending"
+    assert record.result_data["publication"]["decision"] == "awaiting_human_review"
     assert created == [record.id]
 
 

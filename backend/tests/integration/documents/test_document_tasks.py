@@ -1,27 +1,31 @@
 from uuid import uuid4
 
-import pytest
-
-from app.core.settings import get_settings
-from app.modules.knowledge.rag.embeddings_local import LocalEmbeddingProvider
-from app.modules.knowledge.rag.retrieval import retrieve_evidence
-from app.db.session import SessionLocal, set_tenant_scope
-from app.modules.organizations.models import Company, CompanyMember
-from app.modules.documents.chunks import DocumentChunk
-from app.modules.documents.models import Documents
-from app.modules.identity.models import User
-from app.modules.documents.tasks import process_document_task
 import app.modules.documents.ingestion as document_ingestion_service
 import app.modules.documents.tasks as document_tasks
+import pytest
+from app.core.settings import get_settings
+from app.db.session import SessionLocal, set_tenant_scope
+from app.modules.documents.chunks import DocumentChunk
+from app.modules.documents.models import Documents
+from app.modules.documents.tasks import process_document_task
+from app.modules.identity.models import User
+from app.modules.knowledge.rag.embeddings_local import LocalEmbeddingProvider
+from app.modules.knowledge.rag.retrieval import retrieve_evidence
+from app.modules.organizations.models import Company, CompanyMember
+from app.utils.document_chunk import (
+    PARAGRAPH_CHUNK_STRATEGY,
+    SLIDING_WINDOW_CHUNK_STRATEGY,
+)
 
 
 def test_document_worker_persists_mocked_ingestion_output(monkeypatch) -> None:
     chunk_texts = ["first chunk", "second chunk"]
-    embeddings = [[0.1] * 384, [0.2] * 384]
+    indexed_texts = [*chunk_texts, "first chunk\n\nsecond chunk"]
+    embeddings = [[0.1] * 384, [0.2] * 384, [0.3] * 384]
 
     class FakeEmbeddingProvider:
         def embed_batch(self, texts: list[str]) -> list[list[float]]:
-            assert texts == chunk_texts
+            assert texts == indexed_texts
             return embeddings
 
     monkeypatch.setattr(
@@ -86,16 +90,22 @@ def test_document_worker_persists_mocked_ingestion_output(monkeypatch) -> None:
         chunks = (
             db.query(DocumentChunk)
             .filter(DocumentChunk.document_id == document_id)
-            .order_by(DocumentChunk.chunk_index)
+            .order_by(DocumentChunk.chunk_strategy, DocumentChunk.chunk_index)
             .all()
         )
 
         assert stored_document is not None
         assert stored_document.status == "completed"
-        assert [chunk.content for chunk in chunks] == chunk_texts
-        assert [len(chunk.embedding) for chunk in chunks] == [384, 384]
+        assert [chunk.chunk_strategy for chunk in chunks] == [
+            PARAGRAPH_CHUNK_STRATEGY,
+            PARAGRAPH_CHUNK_STRATEGY,
+            SLIDING_WINDOW_CHUNK_STRATEGY,
+        ]
+        assert [chunk.content for chunk in chunks] == indexed_texts
+        assert [len(chunk.embedding) for chunk in chunks] == [384, 384, 384]
         assert chunks[0].embedding[0] == 0.1
         assert chunks[1].embedding[0] == 0.2
+        assert chunks[2].embedding[0] == 0.3
     finally:
         db.rollback()
         if document_id is not None:
@@ -189,7 +199,7 @@ def test_document_worker_indexes_and_retrieves_real_text_file(
         chunks = (
             db.query(DocumentChunk)
             .filter(DocumentChunk.document_id == document_id)
-            .order_by(DocumentChunk.chunk_index)
+            .order_by(DocumentChunk.chunk_strategy, DocumentChunk.chunk_index)
             .all()
         )
 
@@ -198,10 +208,16 @@ def test_document_worker_indexes_and_retrieves_real_text_file(
         assert stored_document.content == (
             "Revenue decreased because operating costs increased."
         )
-        assert len(chunks) == 1
-        assert chunks[0].content == stored_document.content
-        assert chunks[0].embedding is not None
-        assert len(chunks[0].embedding) == 384
+        assert [chunk.chunk_strategy for chunk in chunks] == [
+            PARAGRAPH_CHUNK_STRATEGY,
+            SLIDING_WINDOW_CHUNK_STRATEGY,
+        ]
+        assert [chunk.content for chunk in chunks] == [
+            stored_document.content,
+            stored_document.content,
+        ]
+        assert all(chunk.embedding is not None for chunk in chunks)
+        assert all(len(chunk.embedding) == 384 for chunk in chunks)
 
         evidences = retrieve_evidence(
             db=db,

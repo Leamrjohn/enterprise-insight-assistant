@@ -1,14 +1,16 @@
+import errno
+import hashlib
 from dataclasses import dataclass
 from pathlib import Path
-import hashlib
 from typing import BinaryIO
 from uuid import uuid4
 
 from app.core.exceptions import (
-    EmptyDocumentError,
-    UnsupportedDocumentTypeError,
     DocumentTooLargeError,
+    EmptyDocumentError,
+    InsufficientStorageError,
     InvalidDocumentNameError,
+    UnsupportedDocumentTypeError,
 )
 from app.core.settings import Settings
 
@@ -54,7 +56,12 @@ def save_document_file(
         original_name, settings.allowed_document_extensions
     )
 
-    settings.upload_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        settings.upload_dir.mkdir(parents=True, exist_ok=True)
+    except OSError as exc:
+        if exc.errno == errno.ENOSPC:
+            raise InsufficientStorageError("application storage is full") from exc
+        raise
     stored_name = f"{uuid4().hex}{extension}"
     absolute_path = settings.upload_dir / stored_name
     relative_path = absolute_path.relative_to(settings.storage_dir).as_posix()
@@ -83,6 +90,12 @@ def save_document_file(
 
         if size_bytes == 0:
             raise EmptyDocumentError("Document file is empty")
+    except OSError as exc:
+        if file_created:
+            absolute_path.unlink(missing_ok=True)
+        if exc.errno == errno.ENOSPC:
+            raise InsufficientStorageError("application storage is full") from exc
+        raise
     except Exception:
         if file_created:
             absolute_path.unlink(missing_ok=True)

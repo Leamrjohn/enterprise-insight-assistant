@@ -5,12 +5,14 @@
 """
 
 import logging
+
 from app.modules.knowledge.rag.embeddings import EmbeddingProvider
 
 logger = logging.getLogger(__name__)
 
 # 全局缓存模型实例（避免每次调用都重新加载）
 _model = None
+LOCAL_EMBEDDING_MODEL_NAME = "paraphrase-multilingual-MiniLM-L12-v2"
 
 
 def _get_model():
@@ -24,9 +26,8 @@ def _get_model():
         # The corpus and user questions are primarily Chinese.  Keep the 384-d
         # output contract required by the existing pgvector column while using
         # a multilingual encoder rather than an English-only MiniLM model.
-        model_name = "paraphrase-multilingual-MiniLM-L12-v2"
-        logger.info("Loading embedding model: %s", model_name)
-        _model = SentenceTransformer(model_name)
+        logger.info("Loading embedding model: %s", LOCAL_EMBEDDING_MODEL_NAME)
+        _model = SentenceTransformer(LOCAL_EMBEDDING_MODEL_NAME)
         logger.info("Embedding model loaded")
     return _model
 

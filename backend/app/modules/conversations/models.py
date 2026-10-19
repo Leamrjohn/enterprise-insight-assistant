@@ -53,8 +53,8 @@ class ConversationMessage(Base):
         ),
         CheckConstraint(
             "status IN ("
-            "'queued', 'running', 'completed', 'partial', 'failed', 'cancelled', "
-            "'needs_clarification'"
+            "'queued', 'running', 'awaiting_review', 'completed', 'partial', "
+            "'failed', 'cancelled', 'needs_clarification'"
             ")",
             name="status_values",
         ),

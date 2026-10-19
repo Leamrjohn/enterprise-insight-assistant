@@ -21,7 +21,7 @@ class ModelCallRecord:
     response: str | None
     prompt_tokens: int = 0
     completion_tokens: int = 0
-    cost: float = 0.0
+    cost: float | None = None
     success: bool = True
     error_message: str | None = None
     duration_ms: float = 0.0

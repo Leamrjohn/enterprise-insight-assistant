@@ -1,7 +1,7 @@
-from app.modules.workflow.models import AnalysisTask
+from app.modules.observability.service import get_company_task_metrics
 from app.modules.organizations.models import Company, CompanyMember
 from app.modules.workflow.model_call import ModelCallRecord
-from app.modules.observability.service import get_company_task_metrics
+from app.modules.workflow.models import AnalysisTask
 
 
 def test_company_task_metrics_are_scoped_and_aggregate_persisted_values(

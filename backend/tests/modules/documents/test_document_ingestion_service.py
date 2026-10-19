@@ -1,14 +1,17 @@
+import app.modules.documents.ingestion as document_ingestion_service
 import pytest
-from sqlalchemy.orm import Session
-
 from app.core.settings import get_settings
 from app.db.session import set_tenant_scope
-from app.modules.organizations.models import Company, CompanyMember
 from app.modules.documents.chunks import DocumentChunk
+from app.modules.documents.ingestion import process_document_chunks
 from app.modules.documents.models import Documents
 from app.modules.identity.models import User
-from app.modules.documents.ingestion import process_document_chunks
-import app.modules.documents.ingestion as document_ingestion_service
+from app.modules.organizations.models import Company, CompanyMember
+from app.utils.document_chunk import (
+    PARAGRAPH_CHUNK_STRATEGY,
+    SLIDING_WINDOW_CHUNK_STRATEGY,
+)
+from sqlalchemy.orm import Session
 
 
 def _create_pending_document(db: Session, user: User, suffix: str) -> Documents:
@@ -42,18 +45,19 @@ def _create_pending_document(db: Session, user: User, suffix: str) -> Documents:
     return document
 
 
-def test_process_document_chunks_saves_one_embedding_per_chunk(
+def test_process_document_chunks_saves_embeddings_for_both_chunk_strategies(
     db_session: Session,
     test_user: User,
     monkeypatch,
 ) -> None:
     document = _create_pending_document(db_session, test_user, "success")
     chunk_texts = ["first chunk", "second chunk"]
-    embeddings = [[0.1] * 384, [0.2] * 384]
+    indexed_texts = [*chunk_texts, "first chunk\n\nsecond chunk"]
+    embeddings = [[0.1] * 384, [0.2] * 384, [0.3] * 384]
 
     class FakeEmbeddingProvider:
         def embed_batch(self, texts: list[str]) -> list[list[float]]:
-            assert texts == chunk_texts
+            assert texts == indexed_texts
             return embeddings
 
     monkeypatch.setattr(
@@ -74,19 +78,26 @@ def test_process_document_chunks_saves_one_embedding_per_chunk(
     chunks = (
         db_session.query(DocumentChunk)
         .filter(DocumentChunk.document_id == document.id)
-        .order_by(DocumentChunk.chunk_index)
+        .order_by(DocumentChunk.chunk_strategy, DocumentChunk.chunk_index)
         .all()
     )
 
     assert result.status == "completed"
     assert result.content == "first chunk\n\nsecond chunk"
-    assert [chunk.content for chunk in chunks] == chunk_texts
-    assert [len(chunk.embedding) for chunk in chunks] == [384, 384]
+    assert [chunk.chunk_strategy for chunk in chunks] == [
+        PARAGRAPH_CHUNK_STRATEGY,
+        PARAGRAPH_CHUNK_STRATEGY,
+        SLIDING_WINDOW_CHUNK_STRATEGY,
+    ]
+    assert [chunk.content for chunk in chunks] == indexed_texts
+    assert [len(chunk.embedding) for chunk in chunks] == [384, 384, 384]
     assert chunks[0].embedding[0] == pytest.approx(0.1)
     assert chunks[1].embedding[0] == pytest.approx(0.2)
+    assert chunks[2].embedding[0] == pytest.approx(0.3)
     assert [(chunk.paragraph_start, chunk.paragraph_end) for chunk in chunks] == [
         (1, 1),
         (2, 2),
+        (1, 2),
     ]
 
 
@@ -175,8 +186,11 @@ def test_process_manual_document_replaces_stale_chunks_atomically(
 
     class FakeEmbeddingProvider:
         def embed_batch(self, texts: list[str]) -> list[list[float]]:
-            assert texts == ["new first paragraph\n\nnew second paragraph"]
-            return [[0.4] * 384]
+            assert texts == [
+                "new first paragraph\n\nnew second paragraph",
+                "new first paragraph\n\nnew second paragraph",
+            ]
+            return [[0.4] * 384, [0.5] * 384]
 
     monkeypatch.setattr(
         document_ingestion_service,
@@ -192,12 +206,18 @@ def test_process_manual_document_replaces_stale_chunks_atomically(
     chunks = (
         db_session.query(DocumentChunk)
         .filter(DocumentChunk.document_id == document.id)
-        .order_by(DocumentChunk.chunk_index)
+        .order_by(DocumentChunk.chunk_strategy, DocumentChunk.chunk_index)
         .all()
     )
 
     assert result.status == "completed"
+    assert [chunk.chunk_strategy for chunk in chunks] == [
+        PARAGRAPH_CHUNK_STRATEGY,
+        SLIDING_WINDOW_CHUNK_STRATEGY,
+    ]
     assert [chunk.content for chunk in chunks] == [
-        "new first paragraph\n\nnew second paragraph"
+        "new first paragraph\n\nnew second paragraph",
+        "new first paragraph\n\nnew second paragraph",
     ]
     assert chunks[0].embedding[0] == pytest.approx(0.4)
+    assert chunks[1].embedding[0] == pytest.approx(0.5)

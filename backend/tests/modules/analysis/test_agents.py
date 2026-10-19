@@ -1,6 +1,7 @@
 """测试四个核心 Agent"""
 
 import json
+from datetime import date
 from decimal import Decimal
 
 from app.core.exceptions import (
@@ -9,14 +10,17 @@ from app.core.exceptions import (
     StructuredOutputError,
 )
 from app.modules.analysis.agent_protocol import AgentInput
-from app.modules.knowledge.agent import KnowledgeAgent
 from app.modules.analysis.data_agent import DataAgent
 from app.modules.analysis.planner_agent import PlannerAgent
-from app.modules.reporting.reviewer_agent import ReviewerAgent
-from app.modules.analysis.sql_candidate import SQLCandidate
 from app.modules.analysis.planner_decision import PlannerDecision
-from app.modules.reporting.semantic_review import EvidenceSemanticReview, SQLSemanticReview
+from app.modules.analysis.sql_candidate import SQLCandidate
 from app.modules.analysis.tool_protocol import ToolInput, ToolOutput
+from app.modules.knowledge.agent import KnowledgeAgent
+from app.modules.reporting.reviewer_agent import ReviewerAgent
+from app.modules.reporting.semantic_review import (
+    EvidenceSemanticReview,
+    SQLSemanticReview,
+)
 
 
 class FakeSQLGenerator:
@@ -28,7 +32,7 @@ class FakeSQLGenerator:
     ) -> None:
         self.outcomes = outcomes or [error if error is not None else candidate]
         self.questions: list[str] = []
-        self.calls: list[dict[str, str | None]] = []
+        self.calls: list[dict[str, object]] = []
 
     def generate(
         self,
@@ -36,15 +40,20 @@ class FakeSQLGenerator:
         *,
         repair_reason: str | None = None,
         previous_sql: str | None = None,
+        required_concepts: list[str] | None = None,
+        evaluation_scope: dict[str, object] | None = None,
     ) -> SQLCandidate:
         self.questions.append(question)
-        self.calls.append(
-            {
-                "question": question,
-                "repair_reason": repair_reason,
-                "previous_sql": previous_sql,
-            }
-        )
+        call: dict[str, object] = {
+            "question": question,
+            "repair_reason": repair_reason,
+            "previous_sql": previous_sql,
+        }
+        if required_concepts is not None:
+            call["required_concepts"] = required_concepts
+        if evaluation_scope is not None:
+            call["evaluation_scope"] = evaluation_scope
+        self.calls.append(call)
         outcome = self.outcomes[len(self.calls) - 1]
         if isinstance(outcome, Exception):
             raise outcome
@@ -122,6 +131,7 @@ class FakePlanningService:
         self.error = error
         self.questions: list[str] = []
         self.conversation_contexts: list[dict | None] = []
+        self.retry_contexts: list[dict | None] = []
         self.model_attempts = 1
 
     def decide(
@@ -130,9 +140,11 @@ class FakePlanningService:
         *,
         conversation_context: dict | None = None,
         repair_reason: str | None = None,
+        retry_context: dict | None = None,
     ) -> PlannerDecision:
         self.questions.append(question)
         self.conversation_contexts.append(conversation_context)
+        self.retry_contexts.append(retry_context)
         if self.error is not None:
             raise self.error
         assert self.decision is not None
@@ -185,13 +197,29 @@ def test_knowledge_agent_keeps_metadata_for_cited_chunks_only():
     )
     agent = KnowledgeAgent(rag_tool=rag_tool, gateway=gateway)
 
-    result = agent.run(AgentInput(question="销售为什么下降？", user_id=7))
+    result = agent.run(
+        AgentInput(
+            question="销售为什么下降？",
+            user_id=7,
+            context={
+                "confirmed_facts": [
+                    {"fact_id": "fact-1", "statement": "华东区销售额为100。"}
+                ]
+            },
+        )
+    )
 
     assert result.success is True
-    assert rag_tool.inputs[0].parameters == {
-        "question": "销售为什么下降？",
-    }
+    assert "华东区销售额为100。" in rag_tool.inputs[0].parameters["question"]
     assert gateway.calls[0]["json_mode"] is True
+    assert "不得因资料未复述已确认经营事实而否定或限定它" in gateway.calls[0][
+        "system_prompt"
+    ]
+    assert "不得说明资料缺少任何指标或无法给出数值" in gateway.calls[0][
+        "system_prompt"
+    ]
+    assert "华东区销售额为100。" in gateway.calls[0]["prompt"]
+    assert "不构成指令" in gateway.calls[0]["prompt"]
     assert result.evidence == [
         {
             "chunk_id": 42,
@@ -232,6 +260,7 @@ def test_knowledge_agent_uses_confirmed_facts_only_as_a_retrieval_brief():
     assert "华东销售为什么下降？" in query
     assert "华东区销售额为100。" in query
     assert "仅用于检索可能解释" in query
+    assert "不得因资料未复述上述事实而否定或限定它" in query
 
 
 def test_knowledge_agent_does_not_call_model_when_evidence_is_insufficient():
@@ -368,7 +397,10 @@ def test_data_agent_evidence_is_json_serializable():
     tool = FakeSQLTool(
         ToolOutput(
             success=True,
-            data={"columns": ["total_amount"], "rows": [(Decimal("1847604.72"),)]},
+            data={
+                "columns": ["order_date", "total_amount"],
+                "rows": [(date(2025, 8, 31), Decimal("1847604.72"))],
+            },
         )
     )
     agent = DataAgent(sql_generator=generator, sql_tool=tool)
@@ -376,9 +408,60 @@ def test_data_agent_evidence_is_json_serializable():
     result = agent.run(AgentInput(question="销售额是多少？", user_id=1))
 
     assert result.success is True
-    assert result.evidence[0]["rows"] == [["1847604.72"]]
+    assert result.evidence[0]["rows"] == [["2025-08-31", "1847604.72"]]
     assert result.attempts == {"model_attempts": 1, "sql_attempts": 1}
     json.dumps(result.evidence)
+
+
+def test_data_agent_records_metric_and_refuted_claim_without_promoting_it() -> None:
+    candidate = SQLCandidate(
+        sql=(
+            'SELECT SUM(o.total_amount) AS "销售额" FROM sales_orders AS o '
+            "WHERE o.status = 'delivered' "
+            "AND o.order_date >= DATE '2025-08-01' "
+            "AND o.order_date < DATE '2025-09-01'"
+        ),
+        purpose="查询八月已交付订单销售额",
+        query_contract={
+            "required_concepts": ["销售额"],
+            "expected_columns": ["销售额"],
+            "result_kind": "aggregate",
+            "metric_definition_ref": "revenue/v1",
+            "time_scope_column": "sales_orders.order_date",
+            "numeric_assertion": {
+                "column": "销售额",
+                "operator": "greater_than",
+                "value": "100",
+            },
+        },
+    )
+    agent = DataAgent(
+        sql_generator=FakeSQLGenerator(outcomes=[candidate, candidate]),
+        sql_tool=FakeSQLTool(
+            ToolOutput(success=True, data={"columns": ["销售额"], "rows": [(100,)]})
+        ),
+        semantic_reviewer=FakeSemanticReviewer(
+            sql_review=SQLSemanticReview(
+                decision="execute", reason="满足查询契约。", missing_requirements=[]
+            )
+        ),
+    )
+
+    result = agent.run(
+        AgentInput(
+            question="八月销售额是否大于 100？",
+            user_id=1,
+            context={
+                "semantic_review_enabled": True,
+                "plan": {"intent": {"required_capabilities": ["销售额"]}},
+            },
+        )
+    )
+
+    assert result.success is True
+    assert result.evidence[0]["metric_assessment"]["status"] == "supported"
+    assert result.evidence[0]["metric_assessment"]["unit"] == "CNY"
+    assert result.evidence[0]["claim_assessment"]["status"] == "refuted"
 
 
 def test_data_agent_does_not_execute_sql_when_semantic_reviewer_reports_missing_schema():
@@ -452,7 +535,181 @@ def test_data_agent_rejects_query_contract_that_omits_planned_capability() -> No
     assert "广告点击" in (result.error or "")
 
 
-def test_data_agent_accepts_only_measurement_suffix_variants_in_contract() -> None:
+def test_data_agent_rejects_query_contract_with_unplanned_capability() -> None:
+    candidate = SQLCandidate(
+        sql=(
+            'SELECT SUM(o.total_amount) AS "销售额", '
+            'MAX(c.contract_end_date) AS "合同到期日" '
+            "FROM sales_orders AS o "
+            "JOIN customers AS c ON c.id = o.customer_id "
+            "WHERE o.status = 'delivered' "
+            "AND o.order_date >= DATE '2025-08-01' "
+            "AND o.order_date < DATE '2025-09-01'"
+        ),
+        purpose="查询销售额和合同到期日",
+        query_contract={
+            "required_concepts": ["销售额", "合同到期日"],
+            "expected_columns": ["销售额", "合同到期日"],
+            "result_kind": "aggregate",
+            "metric_definition_ref": "revenue/v1",
+            "time_scope_column": "sales_orders.order_date",
+        },
+    )
+    tool = FakeSQLTool(
+        ToolOutput(
+            success=True,
+            data={
+                "columns": ["销售额", "合同到期日"],
+                "rows": [(100, date(2025, 7, 31))],
+            },
+        )
+    )
+    agent = DataAgent(
+        sql_generator=FakeSQLGenerator(candidate=candidate),
+        sql_tool=tool,
+        semantic_reviewer=FakeSemanticReviewer(
+            sql_review=SQLSemanticReview(
+                decision="execute", reason="满足查询契约。", missing_requirements=[]
+            )
+        ),
+    )
+
+    result = agent.run(
+        AgentInput(
+            question="华东区销售额及客户合同到期日是多少？",
+            user_id=1,
+            context={
+                "semantic_review_enabled": True,
+                "plan": {"intent": {"required_capabilities": ["销售额"]}},
+            },
+        )
+    )
+
+    assert result.success is False
+    assert result.error_code == "query_contract_out_of_scope"
+    assert tool.inputs == []
+
+
+def test_data_agent_passes_frozen_intent_capabilities_to_sql_generator() -> None:
+    required_capabilities = ["销售额指标", "华东区维度"]
+    generator = FakeSQLGenerator(
+        candidate=SQLCandidate(
+            sql='SELECT 1 AS "销售额"',
+            purpose="查询销售额",
+            query_contract={
+                "required_concepts": required_capabilities,
+                "expected_columns": ["销售额"],
+                "result_kind": "aggregate",
+            },
+        )
+    )
+    agent = DataAgent(
+        sql_generator=generator,
+        sql_tool=FakeSQLTool(
+            ToolOutput(success=True, data={"columns": ["销售额"], "rows": [(1,)]})
+        ),
+        semantic_reviewer=FakeSemanticReviewer(
+            sql_review=SQLSemanticReview(
+                decision="execute", reason="满足查询契约。", missing_requirements=[]
+            )
+        ),
+    )
+
+    result = agent.run(
+        AgentInput(
+            question="查询华东区销售额。",
+            user_id=1,
+            context={
+                "semantic_review_enabled": False,
+                "plan": {"intent": {"required_capabilities": required_capabilities}},
+            },
+        )
+    )
+
+    assert result.success is True
+    assert generator.calls[0]["required_concepts"] == required_capabilities
+
+
+def test_data_agent_passes_validated_planner_scope_to_sql_generator() -> None:
+    generator = FakeSQLGenerator(
+        candidate=SQLCandidate(
+            sql='SELECT 1 AS "销售额"',
+            purpose="查询销售额",
+            query_contract={
+                "required_concepts": ["销售额"],
+                "expected_columns": ["销售额"],
+                "result_kind": "aggregate",
+            },
+        )
+    )
+    agent = DataAgent(
+        sql_generator=generator,
+        sql_tool=FakeSQLTool(
+            ToolOutput(success=True, data={"columns": ["销售额"], "rows": [(1,)]})
+        ),
+    )
+
+    result = agent.run(
+        AgentInput(
+            question="查询华东区销售额。",
+            user_id=1,
+            context={
+                "plan": {
+                    "evaluation_scope": {
+                        "entities": ["华东"],
+                        "period": "2025-08",
+                    }
+                }
+            },
+        )
+    )
+
+    assert result.success is True
+    assert generator.calls[0]["evaluation_scope"] == {
+        "entities": ["华东"],
+        "period": "2025-08",
+    }
+
+
+def test_data_agent_keeps_document_evidence_out_of_sql_contract_requirements() -> None:
+    generator = FakeSQLGenerator(
+        candidate=SQLCandidate(
+            sql='SELECT 1 AS "销售额"',
+            purpose="查询销售额",
+            query_contract={
+                "required_concepts": ["销售额"],
+                "expected_columns": ["销售额"],
+                "result_kind": "aggregate",
+            },
+        )
+    )
+    agent = DataAgent(
+        sql_generator=generator,
+        sql_tool=FakeSQLTool(
+            ToolOutput(success=True, data={"columns": ["销售额"], "rows": [(1,)]})
+        ),
+    )
+
+    result = agent.run(
+        AgentInput(
+            question="查询华东区销售额。",
+            user_id=1,
+            context={
+                "semantic_review_enabled": False,
+                "plan": {
+                    "intent": {
+                        "required_capabilities": ["销售额", "document_evidence"]
+                    }
+                },
+            },
+        )
+    )
+
+    assert result.success is True
+    assert generator.calls[0]["required_concepts"] == ["销售额"]
+
+
+def test_data_agent_does_not_treat_a_measurement_suffix_as_metric_lineage() -> None:
     candidate = SQLCandidate(
         sql='SELECT COUNT(*) AS "销售订单总数" FROM sales_orders',
         purpose="查询销售订单总数",
@@ -474,7 +731,7 @@ def test_data_agent_accepts_only_measurement_suffix_variants_in_contract() -> No
         )
     )
     agent = DataAgent(
-        sql_generator=FakeSQLGenerator(candidate=candidate),
+        sql_generator=FakeSQLGenerator(outcomes=[candidate, candidate]),
         sql_tool=tool,
         semantic_reviewer=semantic_reviewer,
     )
@@ -490,8 +747,139 @@ def test_data_agent_accepts_only_measurement_suffix_variants_in_contract() -> No
         )
     )
 
+    assert result.success is False
+    assert result.error_code == "metric_contract_insufficient"
+    assert len(agent._sql_generator.calls) == 2
+    assert agent.allowed_tools[0].inputs == []
+    assert tool.inputs == []
+
+
+def test_data_agent_repairs_insufficient_metric_contract_before_querying() -> None:
+    first_candidate = SQLCandidate(
+        sql='SELECT COUNT(*) AS "销售额" FROM sales_orders AS o',
+        purpose="查询销售额",
+        query_contract={
+            "required_concepts": ["销售额"],
+            "expected_columns": ["销售额"],
+            "result_kind": "aggregate",
+            "metric_definition_ref": "revenue/v1",
+            "time_scope_column": "sales_orders.order_date",
+        },
+    )
+    second_candidate = SQLCandidate(
+        sql=(
+            'SELECT SUM(o.total_amount) AS "销售额" FROM sales_orders AS o '
+            "JOIN customers AS c ON c.id = o.customer_id "
+            "WHERE o.status = 'delivered' AND c.region_code = 'EAST' "
+            "AND o.order_date >= DATE '2020-01-01' "
+            "AND o.order_date < DATE '2020-02-01'"
+        ),
+        purpose="查询华东区2020年1月销售额",
+        query_contract={
+            "required_concepts": ["销售额"],
+            "expected_columns": ["销售额"],
+            "result_kind": "aggregate",
+            "metric_definition_ref": "revenue/v1",
+            "time_scope_column": "sales_orders.order_date",
+        },
+    )
+    generator = FakeSQLGenerator(outcomes=[first_candidate, second_candidate])
+    tool = FakeSQLTool(
+        ToolOutput(success=True, data={"columns": ["销售额"], "rows": []})
+    )
+    agent = DataAgent(
+        sql_generator=generator,
+        sql_tool=tool,
+        semantic_reviewer=FakeSemanticReviewer(
+            sql_review=SQLSemanticReview(
+                decision="execute", reason="满足查询契约。", missing_requirements=[]
+            )
+        ),
+    )
+
+    result = agent.run(
+        AgentInput(
+            question="华东区2020年1月销售额是多少？",
+            user_id=1,
+            context={
+                "semantic_review_enabled": True,
+                "plan": {"intent": {"required_capabilities": ["销售额"]}},
+            },
+        )
+    )
+
+    assert result.success is False
+    assert result.error_code == "no_matching_records"
+    assert len(generator.calls) == 2
+    assert generator.calls[1]["repair_reason"] == "metric_contract_insufficient"
+    assert len(tool.inputs) == 1
+    assert tool.inputs[0].parameters == {"sql": second_candidate.sql}
+
+
+def test_data_agent_repairs_missing_frozen_comparison_month_before_querying() -> None:
+    first_candidate = SQLCandidate(
+        sql=(
+            'SELECT SUM(o.total_amount) AS "销售额" FROM sales_orders AS o '
+            "WHERE o.status = 'delivered' "
+            "AND o.order_date >= DATE '2025-08-01' "
+            "AND o.order_date < DATE '2025-09-01'"
+        ),
+        purpose="查询8月销售额",
+        query_contract={
+            "required_concepts": ["销售额"],
+            "expected_columns": ["销售额"],
+            "result_kind": "aggregate",
+            "metric_definition_ref": "revenue/v1",
+            "time_scope_column": "sales_orders.order_date",
+        },
+    )
+    second_candidate = first_candidate.model_copy(
+        update={
+            "sql": (
+                'SELECT SUM(o.total_amount) AS "销售额" FROM sales_orders AS o '
+                "WHERE o.status = 'delivered' "
+                "AND o.order_date >= DATE '2025-07-01' "
+                "AND o.order_date < DATE '2025-09-01'"
+            )
+        }
+    )
+    generator = FakeSQLGenerator(outcomes=[first_candidate, second_candidate])
+    tool = FakeSQLTool(
+        ToolOutput(success=True, data={"columns": ["销售额"], "rows": [(1,)]})
+    )
+    agent = DataAgent(
+        sql_generator=generator,
+        sql_tool=tool,
+        semantic_reviewer=FakeSemanticReviewer(
+            sql_review=SQLSemanticReview(
+                decision="execute", reason="满足查询契约。", missing_requirements=[]
+            )
+        ),
+    )
+
+    result = agent.run(
+        AgentInput(
+            question="比较华东区2025年7月与8月已交付订单销售额。",
+            user_id=1,
+            context={
+                "semantic_review_enabled": True,
+                "plan": {
+                    "intent": {"required_capabilities": ["销售额"]},
+                    "evaluation_scope": {
+                        "entities": ["华东"],
+                        "period": "2025-08 compared_to 2025-07",
+                    },
+                },
+            },
+        )
+    )
+
     assert result.success is True
-    assert tool.inputs
+    assert [call["repair_reason"] for call in generator.calls] == [
+        None,
+        "metric_contract_incomplete",
+    ]
+    assert [item.parameters for item in tool.inputs] == [{"sql": second_candidate.sql}]
 
 
 def test_data_agent_does_not_retry_permanent_generation_failure():
@@ -715,6 +1103,36 @@ def test_data_agent_replays_previously_validated_sql_without_regenerating() -> N
     assert result.attempts["replayed_sql"] == 1
 
 
+def test_data_agent_replay_rechecks_registered_metric_contract() -> None:
+    agent = DataAgent(
+        sql_tool=FakeSQLTool(ToolOutput(success=True, data={"columns": [], "rows": []}))
+    )
+
+    result = agent.run(
+        AgentInput(
+            question="销售额是多少？",
+            user_id=1,
+            context={
+                "feedback": {
+                    "target": "data",
+                    "mode": "replay_validated_sql",
+                    "previous_sql": 'SELECT SUM(total_amount) AS "销售额" FROM sales_orders',
+                    "query_contract": {
+                        "required_concepts": ["销售额"],
+                        "expected_columns": ["销售额"],
+                        "result_kind": "aggregate",
+                        "metric_definition_ref": "revenue/v1",
+                        "time_scope_column": "sales_orders.order_date",
+                    },
+                }
+            },
+        )
+    )
+
+    assert result.success is False
+    assert result.error_code == "metric_contract_insufficient"
+
+
 def test_planner_returns_llm_hybrid_decision_for_causal_sales_question():
     service = FakePlanningService(
         decision=PlannerDecision(
@@ -740,6 +1158,7 @@ def test_planner_returns_llm_hybrid_decision_for_causal_sales_question():
         "resolved_question": "分析销售额下降原因。",
         "clarification": None,
         "intent": None,
+        "evaluation_scope": None,
     }
     assert result.attempts == {"model_attempts": 1}
 
@@ -1009,7 +1428,8 @@ def test_reviewer_prioritizes_data_insufficiency_over_uncited_knowledge_text():
     )
 
     assert result.success is True
-    assert "广告曝光量和点击量" in (result.answer or "")
+    assert "当前契约快照或可用数据不足" in (result.answer or "")
+    assert "广告曝光量和点击量" not in (result.answer or "")
     assert "没有引用的文本" not in (result.answer or "")
 
 
@@ -1049,6 +1469,35 @@ def test_planner_passes_conversation_context_to_planning_service():
     assert result.success is True
     assert service.questions == ["那这个月呢？"]
     assert service.conversation_contexts == [context]
+
+
+def test_planner_passes_bounded_retry_context_to_planning_service():
+    service = FakePlanningService(
+        decision=PlannerDecision(
+            action="analyze",
+            route="data_only",
+            reason="需要查询数据。",
+            clarification_question=None,
+            response_message=None,
+            resolved_question="查询华东区销售额。",
+        )
+    )
+    retry_context = {
+        "failed_node": "planner_node",
+        "error_code": "planner_model_retryable_error",
+        "retry_number": 2,
+    }
+
+    result = PlannerAgent(planning_service=service).run(
+        AgentInput(
+            question="华东区销售额是多少？",
+            user_id=1,
+            context={"retry_context": retry_context},
+        )
+    )
+
+    assert result.success is True
+    assert service.retry_contexts == [retry_context]
 
 
 def test_reviewer_returns_structured_failed_report_when_sources_both_failed():

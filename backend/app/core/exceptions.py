@@ -1,9 +1,9 @@
 from uuid import uuid4
+
 from fastapi import Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
-from fastapi.exceptions import RequestValidationError
-
 
 _CHINESE_ERROR_MESSAGES = {
     "invalid or missing API key": "API Key 无效或未提供。",
@@ -26,6 +26,7 @@ _CHINESE_ERROR_MESSAGES = {
     "request validation failed": "请求参数校验失败。",
     "internal server error": "服务器内部错误，请稍后重试。",
     "service unavailable": "服务暂时不可用，请稍后重试。",
+    "storage capacity exhausted": "存储空间不足，请稍后重试。",
     "platform already has a company": "系统已完成首次初始化，不能再次创建初始管理员。",
     "该账户已设置密码登录": "该账户已设置密码登录。",
     "account already has an application": "该账户已有成员申请。",
@@ -74,6 +75,10 @@ class RetryableModelError(Exception):
     pass
 
 
+class MalformedModelResponseError(RetryableModelError):
+    """The provider returned a response that violates the gateway contract."""
+
+
 class PermanentModelError(Exception):
     pass
 
@@ -84,6 +89,10 @@ class StructuredOutputError(ValueError):
 
 class DocumentUploadError(Exception):
     pass
+
+
+class InsufficientStorageError(DocumentUploadError):
+    """The application storage volume cannot accept another file."""
 
 
 class EmptyDocumentError(DocumentUploadError):
@@ -130,6 +139,28 @@ class TaskCannotBeCancelledError(Exception):
     pass
 
 
+class TaskAdmissionLimitError(Exception):
+    def __init__(self, *, scope: str, limit: int, retry_after_seconds: int) -> None:
+        self.scope = scope
+        self.limit = limit
+        self.retry_after_seconds = retry_after_seconds
+        super().__init__(f"analysis task {scope} admission limit reached")
+
+
+class TaskCapacityAdmissionError(Exception):
+    def __init__(self, *, retry_after_seconds: int) -> None:
+        self.retry_after_seconds = retry_after_seconds
+        super().__init__("analysis task capacity admission rejected")
+
+
+class TaskCapacitySignalUnavailableError(TaskCapacityAdmissionError):
+    pass
+
+
+class TaskCapacityLowWatermarkError(TaskCapacityAdmissionError):
+    pass
+
+
 async def unhandled_exception_handler(
     request: Request,
     _exc: Exception,
@@ -161,7 +192,9 @@ async def http_exception_handler(
     )
     code_by_status = {
         404: "not_found",
+        429: "rate_limited",
         503: "service_unavailable",
+        507: "insufficient_storage",
     }
     headers = dict(exc.headers or {})
     headers["X-Request-ID"] = request_id

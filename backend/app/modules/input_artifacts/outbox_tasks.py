@@ -24,7 +24,7 @@ def publish_pending_artifact_processing_events() -> int:
     try:
         company_ids = db.scalars(select(Company.id).order_by(Company.id)).all()
         published_count = 0
-        from app.modules.input_artifacts.tasks import process_scan_job
+        from app.modules.input_artifacts.tasks import process_parse_job, process_scan_job
 
         for company_id in company_ids:
             set_tenant_scope(db, company_id)
@@ -36,13 +36,22 @@ def publish_pending_artifact_processing_events() -> int:
                     if event is not None
                     else None
                 )
-                if event_job is None or event_job.stage != "scan":
+                if event_job is None:
+                    continue
+                task = (
+                    process_scan_job
+                    if event_job.stage == "scan"
+                    else process_parse_job
+                    if event_job.stage == "parse"
+                    else None
+                )
+                if task is None:
                     continue
                 published_count += publish_artifact_processing_event(
                     db,
                     event_id=event_id,
                     enqueue=lambda company_id, job_id, dispatch_generation: cast(
-                        Any, process_scan_job
+                        Any, task
                     ).delay(
                         company_id=company_id,
                         job_id=job_id,

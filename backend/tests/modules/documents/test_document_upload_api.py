@@ -1,9 +1,9 @@
 from types import SimpleNamespace
 from unittest.mock import Mock
 
-from fastapi.testclient import TestClient
-
 import app.modules.documents.api as document_api
+from app.core.exceptions import InsufficientStorageError
+from fastapi.testclient import TestClient
 
 
 def test_upload_document_enqueues_ingestion_and_returns_pending(
@@ -46,3 +46,25 @@ def test_upload_document_enqueues_ingestion_and_returns_pending(
     assert response.json()["error_message"] is None
     upload_document.assert_called_once()
     delay.assert_called_once_with(document_id=123, company_id=company.json()["id"])
+
+
+def test_upload_document_returns_507_when_application_storage_is_full(
+    client: TestClient,
+    monkeypatch,
+) -> None:
+    def disk_full(**_kwargs):
+        raise InsufficientStorageError("application storage is full")
+
+    monkeypatch.setattr(document_api, "upload_document_service", disk_full)
+
+    company = client.post("/companies", json={"name": "upload-storage-full-company"})
+    assert company.status_code == 201
+
+    response = client.post(
+        "/documents/upload",
+        files={"file": ("report.txt", b"hello", "text/plain")},
+    )
+
+    assert response.status_code == 507
+    assert response.json()["code"] == "insufficient_storage"
+    assert response.json()["message"] == "存储空间不足，请稍后重试。"

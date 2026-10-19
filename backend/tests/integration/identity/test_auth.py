@@ -1,10 +1,14 @@
-from fastapi.testclient import TestClient
 from uuid import uuid4
-from app.modules.identity.models import User
-from app.modules.organizations.models import Company, CompanyMember
+
+from app.core.security import hash_password
 from app.db.session import get_db
 from app.main import app
-from app.core.security import hash_password
+from app.modules.identity.models import User
+from app.modules.organizations.models import Company, CompanyMember
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session
+from sqlalchemy.pool import StaticPool
 
 
 def test_get_current_user(db_session):
@@ -129,16 +133,21 @@ def test_password_login_and_jwt_can_read_current_user(db_session) -> None:
         app.dependency_overrides.pop(get_db, None)
 
 
-def test_bootstrap_owner_only_works_before_any_company(db_session) -> None:
-    # This test asserts the bootstrap precondition itself. Other integration
-    # modules may have committed fixture data through independent Sessions, so
-    # establish that precondition inside this transaction explicitly.
-    db_session.query(Company).delete(synchronize_session=False)
-    db_session.flush()
+def test_bootstrap_owner_only_works_before_any_company() -> None:
+    # Bootstrap only owns these three tables; a dedicated in-memory database
+    # avoids coupling its zero-company precondition to shared PostgreSQL data.
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    for table in (User.__table__, Company.__table__, CompanyMember.__table__):
+        table.create(engine)
     suffix = uuid4().hex
 
     def override_get_db():
-        yield db_session
+        with Session(engine) as db:
+            yield db
 
     app.dependency_overrides[get_db] = override_get_db
     try:
@@ -153,10 +162,8 @@ def test_bootstrap_owner_only_works_before_any_company(db_session) -> None:
                 },
             )
             assert created.status_code == 201
-            token = created.json()["access_token"]
-            me = client.get("/auth/me", headers={"Authorization": f"Bearer {token}"})
-            assert me.status_code == 200
-            assert me.json()["role"] == "owner"
+            with Session(engine) as db:
+                assert db.query(CompanyMember).one().role == "owner"
 
             repeated = client.post(
                 "/auth/bootstrap-owner",
@@ -170,6 +177,7 @@ def test_bootstrap_owner_only_works_before_any_company(db_session) -> None:
             assert repeated.status_code == 409
     finally:
         app.dependency_overrides.pop(get_db, None)
+        engine.dispose()
 
 
 def test_legacy_api_key_can_set_an_initial_password_once(db_session) -> None:

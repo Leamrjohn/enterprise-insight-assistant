@@ -1,0 +1,25 @@
+{
+  "schema_version": "1.0",
+  "dataset_version": "business-data-east-sales-comparison-repair-development-v2",
+  "cases": [
+    {
+      "case_id": "data-east-sales-comparison-repair-v2",
+      "scenario": "sales_decline_east",
+      "complexity": "medium",
+      "split": "development",
+      "coverage_tags": ["data_sql", "time_range", "scope_repair", "semantic_projection"],
+      "question": "比较华东区2025年7月与8月已交付订单销售额。",
+      "company_scope": "acme-demo",
+      "document_scope": [],
+      "expected_route": "data_only",
+      "expected_entities": ["华东"],
+      "expected_period": "2025-08 compared_to 2025-07",
+      "expected_query_requirements": ["只统计已交付订单", "按区域比较"],
+      "expected_result_fingerprint": {"scenario": "east_sales_comparison"},
+      "expected_semantic_result_fingerprint": {"algorithm": "sha256", "value": "ab3c4bf4b2e5bc713bdebeba47802bc96dd01f8c97348cd9fb8c3ebff1921228"},
+      "expected_outcome": "completed",
+      "max_model_calls": 5,
+      "max_tokens": 10000
+    }
+  ]
+}

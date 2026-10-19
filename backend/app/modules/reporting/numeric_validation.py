@@ -1,8 +1,9 @@
 """数字校验器 —— 防止答案把接近但不同的 SQL 数值说成事实。"""
 
-from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 import re
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 
+from app.modules.analysis.facts import render_evidence_purpose
 
 _NUMBER_PATTERN = re.compile(r"-?\d+(?:\.\d+)?%?")
 
@@ -46,9 +47,32 @@ def _display_matches_source(
     return False
 
 
-def validate_numbers(answer: str, data_result: dict | None) -> tuple[bool, list[str]]:
-    """Validate displayed values against SQL output without a percentage tolerance."""
-    answer_without_citations = re.sub(r"\[(?:来源|引用)[：:\s]*\d+\]", "", answer)
+def _without_trusted_evidence_labels(answer: str, data_result: dict | None) -> str:
+    """Exclude only deterministic query labels, never their returned values."""
+    sanitized = answer
+    for evidence in (data_result or {}).get("evidence", []):
+        if not isinstance(evidence, dict):
+            continue
+        purpose = render_evidence_purpose(evidence.get("purpose"))
+        sanitized = sanitized.replace(
+            f"数据查询（{purpose}）",
+            "数据查询（已授权经营数据）",
+        )
+    return sanitized
+
+
+def validate_numbers(
+    answer: str,
+    data_result: dict | None,
+    *,
+    knowledge_evidences: list[dict] | None = None,
+) -> tuple[bool, list[str]]:
+    """Validate values against controlled SQL rows or cited retrieved text."""
+    answer_without_citations = re.sub(
+        r"\[(?:来源|引用)[：:\s]*\d+\]",
+        "",
+        _without_trusted_evidence_labels(answer, data_result),
+    )
     answer_numbers: list[tuple[Decimal, bool]] = []
     for matched in _NUMBER_PATTERN.findall(answer_without_citations):
         try:
@@ -65,6 +89,12 @@ def validate_numbers(answer: str, data_result: dict | None) -> tuple[bool, list[
         for evidence in (data_result or {}).get("evidence", [])
         for number in _numbers_from_value(evidence.get("rows", []))
     ]
+    source_numbers.extend(
+        number
+        for evidence in knowledge_evidences or []
+        if isinstance(evidence, dict)
+        for number in _numbers_from_value(evidence.get("content"))
+    )
     if not source_numbers:
         return False, ["数据源中没有数值，无法校验答案中的数字"]
 

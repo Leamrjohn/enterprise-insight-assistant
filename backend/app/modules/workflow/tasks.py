@@ -1,43 +1,67 @@
 """Celery 任务入口：读取已提交任务，执行 LangGraph，并保存图的结果。"""
 
+import errno
 import logging
-from datetime import datetime, timezone
+import re
+from contextlib import contextmanager
+from threading import Event, Thread
 from typing import Any
 
-from fastapi.encoders import jsonable_encoder
-
 from app.core.celery_app import celery_app
+from app.core.exceptions import RetryableModelError
 from app.core.logging import request_id_context
-
+from app.core.settings import get_settings
+from app.db.clock import database_now
 from app.db.session import SessionLocal, set_tenant_scope
-from app.modules.workflow.models import AnalysisTask, AnalysisTaskDocument
-from app.modules.organizations.models import BusinessDataSource, SchemaSnapshot
+from app.modules.conversations.models import (  # noqa: F401
+    Conversation,
+    ConversationMessage,
+)
 from app.modules.conversations.repository import (
     get_assistant_message_by_task_id,
     touch_conversation,
 )
-from app.modules.workflow.graph import run_analysis
-from app.modules.reviews.service import create_review_request, requires_human_review
-from app.modules.memory.service import persist_report_memory, planner_memories
+
+# 导入所有模型确保 SQLAlchemy 能解析外键
+from app.modules.documents.chunks import DocumentChunk
+from app.modules.documents.models import Documents  # noqa: F401
+from app.modules.evaluation.result_fingerprint import (
+    result_fingerprint_from_data_result,
+    revenue_month_comparison_fingerprint_from_data_result,
+)
+from app.modules.identity.models import User  # noqa: F401
+from app.modules.input_artifacts.attachment_context import (
+    build_task_attachment_context,
+)
+from app.modules.input_artifacts.processing_storage import (
+    get_artifact_processing_storage,
+)
+from app.modules.memory.service import persist_report_memory, select_planner_memories
+from app.modules.organizations.models import BusinessDataSource, SchemaSnapshot
 from app.modules.reporting.validation import validate_report
+from app.modules.reviews.service import create_review_request
+from app.modules.runtime.model_governance import ModelBudgetExceeded, model_call_scope
+from app.modules.runtime.tool_runtime import ToolRuntime, ToolRuntimeContext
+from app.modules.workflow.events import append_workflow_event
 from app.modules.workflow.execution import (
     ClaimedExecution,
     checkpoint_stage,
     checkpoint_workflow_state,
     claim_execution,
+    execution_heartbeat_interval_seconds,
     finish_execution,
+    renew_execution_lease,
+    retry_resume_node,
     transition_execution,
 )
-from app.modules.runtime.model_governance import model_call_scope
-from app.modules.runtime.model_governance import ModelBudgetExceeded
-from app.modules.runtime.tool_runtime import ToolRuntime, ToolRuntimeContext
-from app.modules.workflow.events import append_workflow_event
-
-# 导入所有模型确保 SQLAlchemy 能解析外键
-from app.modules.documents.chunks import DocumentChunk  # noqa: F401
-from app.modules.documents.models import Documents  # noqa: F401
-from app.modules.conversations.models import Conversation, ConversationMessage  # noqa: F401
-from app.modules.identity.models import User  # noqa: F401
+from app.modules.workflow.graph import run_analysis
+from app.modules.workflow.models import (
+    AnalysisTask,
+    AnalysisTaskDocument,
+    AnalysisTaskInputArtifactVersion,
+)
+from app.modules.workflow.publication import decide_completion
+from fastapi.encoders import jsonable_encoder
 
 logger = logging.getLogger(__name__)
 TERMINAL_TASK_STATUSES = {"completed", "partial", "failed", "cancelled"}
@@ -46,7 +70,7 @@ RETRYING_WORKER_MESSAGE = "分析服务暂时不可用，正在自动重试。"
 
 
 def _frozen_allowed_chunk_ids(db, *, task_id: int) -> set[int] | None:
-    """Return a scope only when the task persisted document scope at creation."""
+    """Return the persisted scope; an empty scope denies every chunk."""
     if not hasattr(db, "query"):
         return None
     document_ids = [
@@ -57,8 +81,6 @@ def _frozen_allowed_chunk_ids(db, *, task_id: int) -> set[int] | None:
             .all()
         )
     ]
-    if not document_ids:
-        return None
     return {
         row[0]
         for row in (
@@ -69,21 +91,91 @@ def _frozen_allowed_chunk_ids(db, *, task_id: int) -> set[int] | None:
     }
 
 
+def _deterministic_validation_result(
+    review_result: dict[str, Any], report_validated: bool | None
+) -> dict[str, object]:
+    """Persist the existing deterministic gate outcomes without inferring missing checks."""
+    answer_validation = review_result.get("answer_validation")
+    checks = {
+        name: answer_validation.get(name)
+        if isinstance(answer_validation, dict)
+        else None
+        for name in ("schema_valid", "numbers_valid", "citations_valid")
+    }
+    checks["report_validated"] = report_validated
+    values = list(checks.values())
+    status = "failed" if any(value is False for value in values) else (
+        "passed" if all(value is True for value in values) else "unknown"
+    )
+    return {"status": status, "checks": checks}
+
+
+def _evaluation_facts(workflow_result: dict[str, Any]) -> dict[str, object]:
+    """Persist only structured execution facts that evaluation can later read."""
+    plan = workflow_result.get("plan")
+    data_result = workflow_result.get("data_result")
+    data_result = data_result if isinstance(data_result, dict) else {}
+    scope = plan.get("evaluation_scope") if isinstance(plan, dict) else None
+    entities = (
+        scope.get("entities")
+        if isinstance(scope, dict)
+        and isinstance(scope.get("entities"), list)
+        and scope["entities"]
+        and all(isinstance(entity, str) and entity.strip() for entity in scope["entities"])
+        else None
+    )
+    period = (
+        scope.get("period")
+        if isinstance(scope, dict)
+        and isinstance(scope.get("period"), str)
+        and scope["period"].strip()
+        else None
+    )
+    data_status = data_result.get("status")
+    data_error_code = data_result.get("error_code")
+    return {
+        "entities": entities,
+        "period": period,
+        "data_status": (
+            data_status
+            if data_status in {"ready", "insufficient_evidence", "failed", "not_run"}
+            else None
+        ),
+        "data_error_code": (
+            data_error_code
+            if isinstance(data_error_code, str)
+            and re.fullmatch(r"[a-z0-9_]{1,80}", data_error_code)
+            else None
+        ),
+        "result_fingerprint": result_fingerprint_from_data_result(
+            data_result
+        ),
+        "semantic_result_fingerprint": revenue_month_comparison_fingerprint_from_data_result(
+            data_result, period=period
+        ),
+    }
+
+
 class RetryableAnalysisTaskError(Exception):
     """A dependency failed transiently and the whole analysis can be retried."""
 
 
 def _is_retryable_exception(exc: Exception) -> bool:
-    return isinstance(exc, (ConnectionError, TimeoutError, OSError))
+    if isinstance(exc, OSError) and exc.errno == errno.ENOSPC:
+        return False
+    return isinstance(
+        exc,
+        (ConnectionError, TimeoutError, OSError, RetryableModelError),
+    )
 
 
-def _duration_ms(record: AnalysisTask) -> int | None:
+def _duration_ms(db, record: AnalysisTask) -> int | None:
     started_at = getattr(record, "started_at", None)
     if started_at is None:
         return None
     return max(
         0,
-        round((datetime.now(timezone.utc) - started_at).total_seconds() * 1000),
+        round((database_now(db) - started_at).total_seconds() * 1000),
     )
 
 
@@ -111,7 +203,7 @@ def _stop_if_cancelled(db, record: AnalysisTask) -> bool:
     if record.status != "cancelled":
         return False
 
-    record.completed_at = datetime.now(timezone.utc)
+    record.completed_at = database_now(db)
     _sync_assistant_message(
         db,
         record,
@@ -134,19 +226,28 @@ def _stop_if_cancelled(db, record: AnalysisTask) -> bool:
 
 
 def _update_stage(
-    db, record: AnalysisTask, execution: ClaimedExecution, stage: str
+    db,
+    record: AnalysisTask,
+    execution: ClaimedExecution,
+    stage: str,
+    node_name: str | None = None,
 ) -> None:
     """Persist a frontend-visible workflow stage before entering that node."""
     db.refresh(record)
     if record.status == "cancelled":
         return
-    if checkpoint_stage(db, attempt=execution.attempt, stage=stage):
+    if checkpoint_stage(
+        db,
+        attempt=execution.attempt,
+        stage=stage,
+        completed_node=node_name,
+    ):
         append_workflow_event(
             db,
             attempt=execution.attempt,
             company_id=record.company_id,
             event_type="stage_started",
-            node_name=stage,
+            node_name=node_name or stage,
             status="running",
             details={"stage": stage},
         )
@@ -209,6 +310,43 @@ def _claim_task(
     )
 
 
+@contextmanager
+def _maintain_execution_lease(execution: ClaimedExecution):
+    """Keep a blocking workflow alive without sharing its SQLAlchemy Session."""
+    stop = Event()
+    task_id = execution.attempt.task_id
+    execution_id = execution.attempt.execution_id
+
+    def heartbeat() -> None:
+        interval_seconds = execution_heartbeat_interval_seconds()
+        while not stop.wait(interval_seconds):
+            heartbeat_db = SessionLocal()
+            try:
+                if not renew_execution_lease(
+                    heartbeat_db,
+                    task_id=task_id,
+                    execution_id=execution_id,
+                ):
+                    return
+            except Exception:
+                heartbeat_db.rollback()
+                logger.warning(
+                    "Task %s execution heartbeat failed", task_id, exc_info=True
+                )
+            finally:
+                heartbeat_db.close()
+
+    thread = Thread(target=heartbeat, name=f"execution-heartbeat-{task_id}", daemon=True)
+    thread.start()
+    try:
+        yield
+    finally:
+        stop.set()
+        thread.join(timeout=1)
+        if thread.is_alive():
+            logger.warning("Task %s execution heartbeat did not stop promptly", task_id)
+
+
 def _save_workflow_result(
     db,
     record: AnalysisTask,
@@ -223,7 +361,6 @@ def _save_workflow_result(
     """
     final_answer = workflow_result.get("final_answer")
     terminal_result = workflow_result.get("terminal_result")
-    is_failed = (terminal_result or {}).get("outcome") == "failed"
     review_result = workflow_result.get("review_result") or {}
     raw_report = review_result.get("report")
     allowed_chunk_ids = _frozen_allowed_chunk_ids(db, task_id=record.id)
@@ -232,10 +369,10 @@ def _save_workflow_result(
         if isinstance(raw_report, dict)
         else None
     )
-    report_status = report.status if report is not None else None
-    is_failed = is_failed or report_status == "failed"
-    is_partial = (
-        review_result.get("review_status") == "partial" or report_status == "partial"
+    deterministic_validation = (
+        _deterministic_validation_result(review_result, report is not None)
+        if report is not None or isinstance(review_result.get("answer_validation"), dict)
+        else None
     )
 
     if not checkpoint_stage(db, attempt=execution.attempt, stage="saving_result"):
@@ -255,6 +392,7 @@ def _save_workflow_result(
             "knowledge_result": workflow_result.get("knowledge_result"),
             "review_result": workflow_result.get("review_result"),
             "report": report.model_dump(mode="json") if report is not None else None,
+            "evaluation_facts": _evaluation_facts(workflow_result),
             "execution": {
                 "external_retry_count": workflow_result.get("external_retry_count", 0),
                 "max_external_retries": workflow_result.get("max_external_retries", 0),
@@ -264,23 +402,23 @@ def _save_workflow_result(
             },
         }
     )
+    if deterministic_validation is not None:
+        result_data["deterministic_validation"] = deterministic_validation
 
-    # ── needs_clarification ─────────────────────────────────
-    is_clarification = (terminal_result or {}).get("outcome") == "needs_clarification"
-    if is_clarification:
-        task_status = "needs_clarification"
-        error_message = None
-    elif is_failed or not final_answer:
-        task_status = "failed"
-        error_message = "分析工作流未能生成可返回的结果。"
-    elif is_partial:
-        task_status = "partial"
-        error_message = None
-    elif (
-        report is not None
-        and getattr(record, "company_id", None) is not None
-        and requires_human_review(report)
-    ):
+    decision = decide_completion(
+        final_answer=final_answer,
+        terminal_outcome=(terminal_result or {}).get("outcome"),
+        review_status=review_result.get("review_status"),
+        report=report,
+        company_id=getattr(record, "company_id", None),
+    )
+    task_status = decision.task_status
+    attempt_status = decision.attempt_status
+    result_data["publication"] = decision.publication_record()
+    error_message = (
+        "分析工作流未能生成可返回的结果。" if task_status == "failed" else None
+    )
+    if decision.report_location == "report_draft":
         # A causal hypothesis may be evidence-supported but is still not a
         # business fact. Keep it as a draft until a company admin approves it.
         task_status = "awaiting_review"
@@ -290,16 +428,6 @@ def _save_workflow_result(
             "status": "pending",
             "reason_code": "causal_hypothesis_requires_human_review",
         }
-    else:
-        task_status = "completed"
-        error_message = None
-
-    # Clarification is task-terminal but maps to a completed Worker attempt.
-    attempt_status = (
-        "completed"
-        if task_status in {"needs_clarification", "awaiting_review"}
-        else task_status
-    )
     if task_status == "awaiting_review":
         create_review_request(db, task=record)
     if not finish_execution(
@@ -321,7 +449,7 @@ def _save_workflow_result(
         record.clarification_missing_fields = (terminal_result or {}).get(
             "missing_fields"
         )
-    record.duration_ms = _duration_ms(record)
+    record.duration_ms = _duration_ms(db, record)
 
     _sync_assistant_message(
         db,
@@ -348,6 +476,11 @@ def _publish_approved_draft(
     result_data.pop("report_draft", None)
     result_data["report"] = report.model_dump(mode="json")
     result_data["review"] = {"status": "approved"}
+    result_data["publication"] = {
+        "decision": "published",
+        "report_location": "report",
+        "reason_code": "human_review_approved",
+    }
     summary = result_data.get("answer") or report.executive_summary
     if not finish_execution(
         db,
@@ -364,7 +497,7 @@ def _publish_approved_draft(
         return
     db.refresh(record)
     persist_report_memory(db, task=record, report=report)
-    record.duration_ms = _duration_ms(record)
+    record.duration_ms = _duration_ms(db, record)
     _sync_assistant_message(db, record, status="completed", content=summary)
     db.commit()
 
@@ -416,14 +549,50 @@ def process_analysis_task(self, task_id: int):
             .filter(AnalysisTaskDocument.task_id == record.id)
             .all()
         ]
+        has_frozen_attachments = (
+            db.query(AnalysisTaskInputArtifactVersion)
+            .filter(AnalysisTaskInputArtifactVersion.task_id == record.id)
+            .first()
+            is not None
+        )
+        attachment_context = build_task_attachment_context(
+            db,
+            task_id=record.id,
+            company_id=record.company_id,
+            storage=(
+                get_artifact_processing_storage(get_settings())
+                if has_frozen_attachments
+                else None
+            ),
+        )
+        planner_memory, planner_memory_manifest = select_planner_memories(
+            db, company_id=record.company_id, user_id=record.user_id
+        )
+        context_snapshot = record.context_snapshot or {}
+        append_workflow_event(
+            db,
+            attempt=execution.attempt,
+            company_id=record.company_id,
+            event_type="context_selected",
+            node_name="planner",
+            status="succeeded",
+            details={
+                "conversation": {
+                    "snapshot_version": context_snapshot.get("version"),
+                    "history_truncated": context_snapshot.get("history_truncated"),
+                    "manifest": context_snapshot.get("context_manifest"),
+                },
+                "planner_memory": planner_memory_manifest,
+                "attachments": attachment_context.selection_manifest,
+            },
+        )
+        db.commit()
         workflow_kwargs: dict[str, Any] = {
             "conversation_context": record.context_snapshot,
-            "planner_memory": planner_memories(
-                db, company_id=record.company_id, user_id=record.user_id
-            ),
+            "planner_memory": planner_memory,
+            "attachment_context": attachment_context.planner_payload,
         }
-        if document_ids:
-            workflow_kwargs["document_ids"] = document_ids
+        workflow_kwargs["document_ids"] = document_ids
         workflow_kwargs["tool_runtime"] = ToolRuntime(
             db=db,
             attempt=execution.attempt,
@@ -458,14 +627,14 @@ def process_analysis_task(self, task_id: int):
             task=record,
             attempt=execution.attempt,
             node_name="workflow",
-        ):
+        ), _maintain_execution_lease(execution):
             workflow_record = record
             workflow_result = run_analysis(
                 workflow_record.question,
                 workflow_record.user_id,
                 company_id=workflow_record.company_id,
-                stage_callback=lambda stage: _update_stage(
-                    db, workflow_record, execution, stage
+                stage_callback=lambda stage, node_name=None: _update_stage(
+                    db, workflow_record, execution, stage, node_name
                 ),
                 checkpoint_callback=lambda completed_node, next_node, patch: (
                     _checkpoint_workflow_node(
@@ -514,7 +683,7 @@ def process_analysis_task(self, task_id: int):
             )
             if record is None:
                 return
-            record.duration_ms = _duration_ms(record)
+            record.duration_ms = _duration_ms(db, record)
             _sync_assistant_message(
                 db,
                 record,
@@ -533,11 +702,12 @@ def process_analysis_task(self, task_id: int):
             error_type=type(exc).__name__,
             error_message="分析服务暂时不可用。",
             recovery_instruction="retry_same_execution_scope",
-            next_node="planner_node",
+            next_node=retry_resume_node(db, attempt=execution.attempt),
+            retry_error_code=str(exc),
         )
         if record is None:
             return
-        record.duration_ms = _duration_ms(record)
+        record.duration_ms = _duration_ms(db, record)
         _sync_assistant_message(
             db,
             record,
@@ -564,7 +734,7 @@ def process_analysis_task(self, task_id: int):
         )
         if record is None:
             return
-        record.duration_ms = _duration_ms(record)
+        record.duration_ms = _duration_ms(db, record)
         record.result_summary = "模型调用预算已耗尽，已保留当前可用结果与限制。"
         record.result_data = {
             "type": "model_budget_exhausted",
@@ -596,11 +766,12 @@ def process_analysis_task(self, task_id: int):
                     error_type=type(exc).__name__,
                     error_message="分析服务暂时不可用。",
                     recovery_instruction="retry_same_execution_scope",
-                    next_node="planner_node",
+                    next_node=retry_resume_node(db, attempt=execution.attempt),
+                    retry_error_code=type(exc).__name__,
                 )
                 if record is None:
                     return
-                record.duration_ms = _duration_ms(record)
+                record.duration_ms = _duration_ms(db, record)
                 _sync_assistant_message(
                     db,
                     record,
@@ -633,7 +804,7 @@ def process_analysis_task(self, task_id: int):
             logger.info("Task %s was cancelled while handling an error", task_id)
             return
 
-        record.duration_ms = _duration_ms(record)
+        record.duration_ms = _duration_ms(db, record)
         _sync_assistant_message(
             db,
             record,

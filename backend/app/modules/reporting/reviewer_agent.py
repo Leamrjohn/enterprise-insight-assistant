@@ -1,13 +1,14 @@
 """Reviewer Agent —— 检查数据一致性和建议合理性，不替代确定性校验器"""
 
-from app.modules.analysis.agent_protocol import Agent, AgentInput, AgentOutput
+from collections.abc import Callable
+
 from app.core.exceptions import (
     PermanentModelError,
     RetryableModelError,
     StructuredOutputError,
 )
-from app.modules.reporting.schemas import FinalAnalysisReport, Limitation
-from app.modules.reporting.semantic_review_service import SemanticReviewService
+from app.modules.analysis.agent_protocol import Agent, AgentInput, AgentOutput
+from app.modules.analysis.tool_protocol import Tool
 from app.modules.reporting.composer import (
     compose_report,
     render_data_fields,
@@ -16,8 +17,13 @@ from app.modules.reporting.composer import (
 from app.modules.reporting.coverage import calculate_coverage
 from app.modules.reporting.numeric_validation import validate_numbers
 from app.modules.reporting.schema_validation import validate_schema
-from app.modules.analysis.tool_protocol import Tool
-from collections.abc import Callable
+from app.modules.reporting.schemas import (
+    DocumentQualification,
+    FinalAnalysisReport,
+    Limitation,
+)
+from app.modules.reporting.semantic_review import EvidenceSemanticReview
+from app.modules.reporting.semantic_review_service import SemanticReviewService
 
 
 def _format_data_result(data_result: dict) -> str | None:
@@ -29,6 +35,18 @@ def _format_data_result(data_result: dict) -> str | None:
     for evidence in evidences:
         assessment = evidence.get("result_assessment")
         if isinstance(assessment, dict) and assessment.get("status") != "supported":
+            continue
+        metric_assessment = evidence.get("metric_assessment")
+        if (
+            isinstance(metric_assessment, dict)
+            and metric_assessment.get("status") != "supported"
+        ):
+            continue
+        claim_assessment = evidence.get("claim_assessment")
+        if isinstance(claim_assessment, dict) and claim_assessment.get("status") in {
+            "refuted",
+            "irrelevant",
+        }:
             continue
         columns = evidence.get("columns") or []
         rows = evidence.get("rows") or []
@@ -66,7 +84,11 @@ def _validate_final_answer(
         len(knowledge_evidences),
         citation_required=citation_required,
     )
-    numbers_valid, number_errors = validate_numbers(answer, data_result)
+    numbers_valid, number_errors = validate_numbers(
+        answer,
+        data_result,
+        knowledge_evidences=knowledge_evidences,
+    )
     citations_valid, invalid_citation_ids = (
         citation_validator(
             answer,
@@ -104,6 +126,97 @@ def _safe_validation_failure_answer(data_summary: str | None) -> str:
     if data_summary:
         return f"{data_summary}\n文档回答未通过证据校验，未据此作出原因判断。"
     return "现有资料未通过证据校验，无法形成可引用的原因判断。"
+
+
+def _unsupported_claim_reason(data_result: dict) -> str | None:
+    for evidence in data_result.get("evidence") or []:
+        assessment = evidence.get("claim_assessment")
+        if not isinstance(assessment, dict):
+            continue
+        status = assessment.get("status")
+        if status == "refuted":
+            return "受控数据查询结果不支持该数值断言，未将其发布为确认事实。"
+        if status == "irrelevant":
+            return "查询结果无法支撑该数值断言，未将其发布为确认事实。"
+    return None
+
+
+def _semantic_limitations(review: object) -> list[Limitation]:
+    semantic_limitation_messages = getattr(review, "limitations", [])
+    reason = getattr(review, "reason", "证据语义复核未通过。")
+    limitations = [
+        Limitation(
+            code="semantic_support_insufficient",
+            message=reason,
+            next_step="补充语义复核列出的数据、筛选条件或可引用资料后重试。",
+        )
+    ]
+    limitations.extend(
+        Limitation(
+            code=f"semantic_limitation_{index}",
+            message=message,
+            next_step="补充或核验该限制涉及的资料后重试。",
+        )
+        for index, message in enumerate(semantic_limitation_messages, start=1)
+        if message.strip()
+    )
+    return limitations
+
+
+def _supported_document_chunks(
+    *,
+    plan: dict,
+    semantic_review: EvidenceSemanticReview | None,
+    retrieved_chunk_ids: set[int],
+) -> set[int] | None:
+    intent = plan.get("intent")
+    if not isinstance(intent, dict) or intent.get("kind") != "document_question":
+        return None
+    if semantic_review is None:
+        return None
+    supported = set(semantic_review.supported_document_chunk_ids)
+    if not supported or not supported.issubset(retrieved_chunk_ids):
+        return None
+    return supported
+
+
+def _is_document_question(plan: dict) -> bool:
+    intent = plan.get("intent")
+    return isinstance(intent, dict) and intent.get("kind") == "document_question"
+
+
+def _verbatim_document_qualifications(
+    *,
+    semantic_review: EvidenceSemanticReview | None,
+    supported_chunk_ids: set[int],
+    knowledge_evidences: list[dict],
+) -> list[DocumentQualification]:
+    """Retain only review boundaries that are verbatim in cited retrieved text."""
+    if semantic_review is None:
+        return []
+    content_by_chunk = {
+        evidence["chunk_id"]: evidence.get("content")
+        for evidence in knowledge_evidences
+        if isinstance(evidence.get("chunk_id"), int)
+        and isinstance(evidence.get("content"), str)
+    }
+    qualifications: list[DocumentQualification] = []
+    for proposed in semantic_review.document_qualifications:
+        cited_ids = set(proposed.citation_chunk_ids)
+        if not cited_ids or not cited_ids.issubset(supported_chunk_ids):
+            continue
+        if not all(
+            proposed.statement in content_by_chunk.get(chunk_id, "")
+            for chunk_id in cited_ids
+        ):
+            continue
+        qualifications.append(
+            DocumentQualification(
+                statement=proposed.statement,
+                citation_chunk_ids=sorted(cited_ids),
+            )
+        )
+    return qualifications
 
 
 class ReviewerAgent(Agent):
@@ -154,7 +267,9 @@ class ReviewerAgent(Agent):
         )
 
         semantic_review = None
-        if input.context.get("semantic_review_enabled"):
+        if input.context.get("semantic_review_enabled") and (
+            data_result.get("evidence") or knowledge_result.get("evidences")
+        ):
             if self._semantic_reviewer is None:
                 self._semantic_reviewer = SemanticReviewService()
             try:
@@ -180,13 +295,7 @@ class ReviewerAgent(Agent):
                             "status": "partial",
                             "limitations": [
                                 *report.limitations,
-                                Limitation(
-                                    code="semantic_support_insufficient",
-                                    message=semantic_review.reason,
-                                    next_step=(
-                                        "补充语义复核列出的数据、筛选条件或可引用资料后重试。"
-                                    ),
-                                ),
+                                *_semantic_limitations(semantic_review),
                             ],
                         }
                     )
@@ -203,22 +312,81 @@ class ReviewerAgent(Agent):
             for evidence in knowledge_evidences
             if isinstance(evidence.get("chunk_id"), int)
         ]
+        supported_document_chunk_ids = _supported_document_chunks(
+            plan=plan,
+            semantic_review=semantic_review,
+            retrieved_chunk_ids=set(citation_chunk_ids),
+        )
+        if supported_document_chunk_ids is not None:
+            document_qualifications = _verbatim_document_qualifications(
+                semantic_review=semantic_review,
+                supported_chunk_ids=supported_document_chunk_ids,
+                knowledge_evidences=knowledge_evidences,
+            )
+            report = report.model_copy(
+                update={
+                    "document_citations": [
+                        citation
+                        for citation in report.document_citations
+                        if citation.chunk_id in supported_document_chunk_ids
+                    ],
+                    "document_findings": [
+                        finding.model_copy(
+                            update={
+                                "citation_chunk_ids": sorted(
+                                    supported_document_chunk_ids
+                                ),
+                                "qualifications": document_qualifications,
+                            }
+                        )
+                        for finding in report.document_findings
+                    ],
+                }
+            )
+            citation_chunk_ids = sorted(supported_document_chunk_ids)
         semantic_metadata = {
             "semantic_review": (
                 semantic_review.model_dump() if semantic_review is not None else None
             ),
             "semantic_review_error": semantic_review_error,
         }
+        unsupported_claim_reason = _unsupported_claim_reason(data_result)
+        if unsupported_claim_reason is not None:
+            return AgentOutput(
+                success=True,
+                answer=unsupported_claim_reason,
+                evidence=[
+                    _review_metadata(
+                        report,
+                        review_status="partial",
+                        data_available=True,
+                        knowledge_available=bool(citation_chunk_ids),
+                        citation_chunk_ids=citation_chunk_ids,
+                        limitations=[unsupported_claim_reason],
+                        **semantic_metadata,
+                    )
+                ],
+            )
         if (
-            input.context.get("semantic_review_enabled")
+            (
+                _is_document_question(plan)
+                or (
+                    input.context.get("semantic_review_enabled")
+                    and (
+                        semantic_review is None
+                        or semantic_review.verdict != "supported"
+                    )
+                )
+            )
             and knowledge_answer
             and citation_chunk_ids
-            and (semantic_review is None or semantic_review.verdict != "supported")
+            and supported_document_chunk_ids is None
         ):
             report = report.model_copy(
                 update={
                     "status": "partial",
                     "hypotheses": [],
+                    "document_findings": [],
                     "document_citations": [],
                     "limitations": [
                         *report.limitations,
@@ -287,6 +455,7 @@ class ReviewerAgent(Agent):
                     update={
                         "status": "partial",
                         "hypotheses": [],
+                        "document_findings": [],
                         "document_citations": [],
                         "limitations": [
                             *report.limitations,
@@ -383,10 +552,19 @@ class ReviewerAgent(Agent):
             citations_text = " ".join(
                 f"[引用:{chunk_id}]" for chunk_id in citation_chunk_ids
             )
-            answer = (
-                "文档线索（尚未由当前经营数据验证）："
-                f"{knowledge_answer}\n文档引用：{citations_text}"
+            qualifications = [
+                qualification.statement
+                for finding in report.document_findings
+                for qualification in finding.qualifications
+            ]
+            document_prefix = (
+                "文档说明："
+                if _is_document_question(plan) and report.status == "completed"
+                else "文档线索（尚未由当前经营数据验证）："
             )
+            answer = f"{document_prefix}{knowledge_answer}\n文档引用：{citations_text}"
+            if qualifications:
+                answer = f"{answer}\n证据限定：{'；'.join(qualifications)}"
             valid, validation = _validate_final_answer(
                 answer=answer,
                 question=input.question,
@@ -400,6 +578,7 @@ class ReviewerAgent(Agent):
                     update={
                         "status": "partial",
                         "hypotheses": [],
+                        "document_findings": [],
                         "document_citations": [],
                     }
                 )
@@ -410,12 +589,12 @@ class ReviewerAgent(Agent):
                 evidence=[
                     _review_metadata(
                         report,
-                        review_status="partial",
+                        review_status=report.status,
                         data_available=False,
                         knowledge_available=True,
                         citation_chunk_ids=citation_chunk_ids,
                         limitations=[
-                            "经营数据查询未成功，文档线索不能作为已确认事实。"
+                            limitation.message for limitation in report.limitations
                         ],
                         answer_validation=validation,
                         **semantic_metadata,
@@ -441,12 +620,37 @@ class ReviewerAgent(Agent):
             )
 
         if data_result.get("status") == "insufficient_evidence":
+            if (
+                plan.get("route") == "hybrid"
+                and knowledge_result.get("status") == "insufficient_evidence"
+            ):
+                report = report.model_copy(
+                    update={
+                        "limitations": [
+                            *report.limitations,
+                            Limitation(
+                                code="document_evidence_insufficient",
+                                message="缺少能够支持原因判断的文档证据。",
+                                next_step="补充可引用的业务资料后重试原因判断。",
+                            ),
+                        ]
+                    }
+                )
+            answer = (
+                "当前契约快照或可用数据不足以回答该问题。"
+                "请补充所需指标或数据源后重试。"
+            )
+            valid, validation = _validate_final_answer(
+                answer=answer,
+                question=input.question,
+                user_id=input.user_id,
+                data_result=data_result,
+                knowledge_evidences=[],
+                citation_validator=self._citation_validator,
+            )
             return AgentOutput(
                 success=True,
-                answer=(
-                    "当前契约快照或可用数据不足以回答该问题。"
-                    f"{data_result.get('error') or '请补充所需指标或数据源后重试。'}"
-                ),
+                answer=answer if valid else _safe_validation_failure_answer(None),
                 evidence=[
                     _review_metadata(
                         report,
@@ -454,16 +658,28 @@ class ReviewerAgent(Agent):
                         data_available=False,
                         knowledge_available=False,
                         citation_chunk_ids=[],
-                        limitations=[data_result.get("error") or "经营数据证据不足。"],
+                        limitations=[
+                            limitation.message for limitation in report.limitations
+                        ],
+                        answer_validation=validation,
                         **semantic_metadata,
                     )
                 ],
             )
 
         if knowledge_answer and not knowledge_failed:
+            answer = "未检索到可验证引用，无法根据现有文档形成原因判断。"
+            valid, validation = _validate_final_answer(
+                answer=answer,
+                question=input.question,
+                user_id=input.user_id,
+                data_result=data_result,
+                knowledge_evidences=[],
+                citation_validator=self._citation_validator,
+            )
             return AgentOutput(
                 success=True,
-                answer="未检索到可验证引用，无法根据现有文档形成原因判断。",
+                answer=answer if valid else _safe_validation_failure_answer(None),
                 evidence=[
                     _review_metadata(
                         report,
@@ -474,6 +690,7 @@ class ReviewerAgent(Agent):
                         limitations=[
                             "未检索到足够的文档证据，无法形成可引用的原因判断。"
                         ],
+                        answer_validation=validation,
                         **semantic_metadata,
                     )
                 ],

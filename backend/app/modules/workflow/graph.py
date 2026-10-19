@@ -3,22 +3,20 @@
 from collections.abc import Callable
 from typing import Literal
 
-from langgraph.graph import StateGraph, START, END
-
-from app.modules.workflow.state import WorkflowState
 from app.modules.organizations.models import BusinessDataSource
 from app.modules.runtime.tool_runtime import ToolRuntime
 from app.modules.workflow.nodes import (
+    data_node,
+    knowledge_node,
     planner_node,
     planner_semantic_review_node,
     planner_terminal_node,
     planning_failure_node,
-    knowledge_node,
-    data_node,
     reviewer_node,
     smart_router_node,
 )
-
+from app.modules.workflow.state import WorkflowState
+from langgraph.graph import END, START, StateGraph
 
 _RESUMABLE_NODES = frozenset(
     {
@@ -32,6 +30,7 @@ _RESUMABLE_NODES = frozenset(
         "smart_router_node",
     }
 )
+MAX_GRAPH_STEPS = 20
 
 
 def _route_from_start(state: WorkflowState) -> str:
@@ -72,12 +71,6 @@ def _route_after_data(
     state: WorkflowState,
 ) -> Literal["knowledge_node", "reviewer_node"]:
     """Continue to knowledge only for an LLM-approved hybrid plan."""
-    if (
-        state.get("routing_action") == "retry_data"
-        and state.get("cached_knowledge_result") is not None
-        and state.get("cache_scope_fingerprint") == state.get("scope_fingerprint")
-    ):
-        return "reviewer_node"
     plan = state.get("plan") or {}
     return "knowledge_node" if plan.get("route") == "hybrid" else "reviewer_node"
 
@@ -162,6 +155,7 @@ def build_workflow() -> StateGraph:
         {
             "data_node": "data_node",
             "knowledge_node": "knowledge_node",
+            "reviewer_node": "reviewer_node",
             "planner_node": "planner_node",
             "end": END,
         },
@@ -183,6 +177,7 @@ def run_analysis(
     company_id: int | None = None,
     conversation_context: dict | None = None,
     planner_memory: list[dict] | None = None,
+    attachment_context: list[dict] | None = None,
     document_ids: list[int] | None = None,
     business_data_source: BusinessDataSource | None = None,
     schema_catalog: dict | None = None,
@@ -215,6 +210,7 @@ def run_analysis(
         "error": None,
         "conversation_context": conversation_context,
         "planner_memory": planner_memory or [],
+        "attachment_context": attachment_context or [],
         "document_ids": document_ids,
         "business_data_source": business_data_source,
         "schema_catalog": schema_catalog,
@@ -224,11 +220,10 @@ def run_analysis(
         "max_external_retries": 2,
         "routing_action": None,
         "routing_feedback": None,
+        "retry_context": None,
+        "recovery_decision": None,
         "loop_stop_reason": None,
         "loop_history": [],
-        "cached_data_result": None,
-        "cached_knowledge_result": None,
-        "cache_scope_fingerprint": None,
         "empty_result_replanned": False,
         "tool_runtime": tool_runtime,
         "stage_callback": stage_callback,
@@ -257,13 +252,12 @@ def run_analysis(
         "external_retry_count",
         "routing_action",
         "routing_feedback",
+        "retry_context",
+        "recovery_decision",
         "loop_stop_reason",
         "loop_history",
-        "cached_data_result",
-        "cached_knowledge_result",
-        "cache_scope_fingerprint",
         "empty_result_replanned",
     ):
         if isinstance(resume_state, dict) and key in resume_state:
             initial_state[key] = resume_state[key]
-    return workflow.invoke(initial_state)
+    return workflow.invoke(initial_state, {"recursion_limit": MAX_GRAPH_STEPS})

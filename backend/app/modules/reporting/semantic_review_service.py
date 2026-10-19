@@ -6,15 +6,17 @@ import json
 from time import sleep
 from typing import Any
 
-from pydantic import ValidationError
-
 from app.core.exceptions import RetryableModelError, StructuredOutputError
 from app.core.gateway.base import ModelGateway
 from app.core.gateway.factory import get_model_gateway
 from app.modules.analysis.planner_decision import PlannerDecision
-from app.modules.reporting.semantic_review import EvidenceSemanticReview, SQLSemanticReview
-from app.modules.analysis.sql_candidate import SQLCandidate
 from app.modules.analysis.snapshot_catalog import SnapshotCatalog
+from app.modules.analysis.sql_candidate import SQLCandidate
+from app.modules.reporting.semantic_review import (
+    EvidenceSemanticReview,
+    SQLSemanticReview,
+)
+from pydantic import ValidationError
 
 
 def _catalog_payload(catalog: SnapshotCatalog | None) -> dict[str, Any]:
@@ -57,10 +59,11 @@ class SemanticReviewService:
             "scope_exit 不得实际完成翻译、写诗、推荐等无关任务。"
             "action 只能是 analyze、direct_response、scope_exit、needs_clarification、refuse；"
             "若初始计划正确，必须原样保留它的 action 和其他字段，不能使用 proceed、accept、keep 等词。"
-            "必须只输出以下八字段 JSON："
+            "必须只输出以下九字段 JSON："
             '{"action":"...","route":null,"reason":"...",'
             '"clarification_question":null,"response_message":null,'
-            '"resolved_question":null,"clarification":null,"intent":null}。'
+            '"resolved_question":null,"clarification":null,"intent":null,'
+            '"evaluation_scope":null}。'
         )
         payload = {
             "question": question,
@@ -72,13 +75,26 @@ class SemanticReviewService:
         preserved_plan = self._preserved_plan_from_review(raw_output, proposed_plan)
         if preserved_plan is not None:
             return preserved_plan
-        return self._parse_with_repair(
+        reviewed_plan = self._parse_with_repair(
             PlannerDecision,
             raw_output,
             "Planner 语义复核结果不符合 JSON 契约",
             system_prompt,
             payload,
         )
+        if (
+            reviewed_plan.action == "analyze"
+            and reviewed_plan.evaluation_scope is None
+            and proposed_plan.get("action") == "analyze"
+        ):
+            original_scope = PlannerDecision.model_validate(
+                proposed_plan
+            ).evaluation_scope
+            if original_scope is not None:
+                return reviewed_plan.model_copy(
+                    update={"evaluation_scope": original_scope}
+                )
+        return reviewed_plan
 
     @staticmethod
     def _preserved_plan_from_review(
@@ -109,6 +125,10 @@ class SemanticReviewService:
             "SQLTool 决定。若快照缺少所需指标、枚举含义、比较期或关键条件，返回"
             "insufficient_schema，绝不允许用无关表或近似指标替代。若快照足够但 SQL "
             "遗漏可修复条件，返回 repair；只有关键业务条件、指标与范围都被表达时返回 execute。"
+            "当 Planner route=hybrid 时，候选 SQL 只需完整验证经营数据可支持的子问题；"
+            "原因归因所需的文档证据由知识节点处理，不得仅因 SQL 不能单独证明原因而拒绝"
+            "一个已覆盖指标、范围和比较期的数据查询。若候选 SQL 连数据子问题也不能证明，"
+            "仍必须拒绝。"
             "必须只输出 JSON："
             '{"decision":"execute|repair|insufficient_schema","reason":"...",'
             '"missing_requirements":["..."]}。'
@@ -143,9 +163,17 @@ class SemanticReviewService:
             "支持，partial 表示只支持部分事实，unsupported 表示不能回答核心问题。"
             "当数据只是无关记录、缺少关键筛选/比较条件，或原因没有文档引用时，不能"
             "判为 supported。"
+            "当 plan.route=hybrid 时，data_result 可单独支持数值或指标子问题；"
+            "knowledge_result 只需支持文档事实和结论边界。不得仅因文档未重复 SQL "
+            "指标，或 SQL 未包含文档背景，而把已分别覆盖的混合问题判为 partial。"
+            "对于 document_question，只有直接支持非因果、非数值文档事实的已列引用 chunk "
+            "才可写入 supported_document_chunk_ids；其他情况必须为空数组。"
+            "document_qualifications 仅可记录已列引用 chunk 中逐字出现的结论边界；"
+            "不得推断、改写或补充文档未写出的限制。"
             "必须只输出 JSON："
             '{"verdict":"supported|partial|unsupported","reason":"...",'
-            '"limitations":["..."]}。'
+            '"limitations":["..."],"supported_document_chunk_ids":[1],'
+            '"document_qualifications":[{"statement":"...","citation_chunk_ids":[1]}]}。'
         )
         payload = {
             "question": question,

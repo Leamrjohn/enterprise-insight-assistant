@@ -1,0 +1,11 @@
+{
+  "schema_version": "p0-evaluation-thresholds-v1",
+  "fixture_sha256": "a110e7c31239d7883df42608bc829ea6248902d852c544cb4ebe0bda0048cc72",
+  "required_split": "development",
+  "expected_case_count": 1,
+  "max_total_settled_cost_usd": "0.15",
+  "max_duration_p95_ms": 600000,
+  "require_persisted_task_observations": true,
+  "require_hard_gate_passed": true,
+  "require_settled_cost": true
+}

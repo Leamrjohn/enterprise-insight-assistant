@@ -1,0 +1,26 @@
+{
+  "schema_version": "1.0",
+  "dataset_version": "business-runtime-empty-document-scope-rejection-development-v1",
+  "cases": [
+    {
+      "case_id": "runtime-empty-document-scope-denial",
+      "evaluation_kind": "runtime_tool_rejection",
+      "scenario": "empty_frozen_document_scope",
+      "complexity": "medium",
+      "split": "development",
+      "coverage_tags": ["security_scope", "tool_runtime", "empty_scope"],
+      "question": "任务冻结文档范围为空时调用已登记检索工具。",
+      "company_scope": "disposable-development-tenant",
+      "document_scope": [],
+      "expected_route": null,
+      "expected_entities": ["空文档范围"],
+      "expected_period": "not_applicable",
+      "expected_query_requirements": ["在执行前拒绝空的冻结文档范围"],
+      "expected_result_fingerprint": {"scenario": "empty_frozen_document_scope"},
+      "expected_outcome": "failed",
+      "expected_tool_denial_codes": ["tool_document_scope_denied"],
+      "max_model_calls": 0,
+      "max_tokens": 0
+    }
+  ]
+}

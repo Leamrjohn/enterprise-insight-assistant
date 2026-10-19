@@ -20,6 +20,8 @@ class EvidenceRef:
     page_number: int | None = None
     paragraph_start: int | None = None
     paragraph_end: int | None = None
+    chunk_strategy: str | None = None
+    retrieval_strategies: tuple[str, ...] = ()
 
 
 @dataclass

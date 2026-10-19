@@ -85,7 +85,7 @@ def test_admin_can_list_only_current_company_pending_review_requests(
     assert payload[0]["task_question"] == "华东销售为何下降"
     assert payload[0]["status"] == "pending"
     assert payload[0]["reason_code"] == "causal_hypothesis_requires_human_review"
-    assert payload[0]["report_draft"]["schema_version"] == "1.0"
+    assert payload[0]["report_draft"]["schema_version"] == "1.2"
     assert payload[0]["report_draft"]["confirmed_facts"][0]["fact_id"] == "fact-1"
     assert payload[0]["report_draft"]["document_citations"][0]["chunk_id"] == 101
     assert payload[0]["draft_error"] is None

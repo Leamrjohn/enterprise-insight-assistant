@@ -1,9 +1,8 @@
+import re
 from typing import Literal
 
-from pydantic import BaseModel, Field, model_validator
-
 from app.modules.analysis.query_contract import ClarificationSpec, QuestionIntent
-
+from pydantic import BaseModel, Field, model_validator
 
 PlanAction = Literal[
     "analyze",
@@ -18,6 +17,61 @@ AnalysisRoute = Literal[
     "knowledge_only",
     "hybrid",
 ]
+
+# This deliberately recognizes only explicit document-evidence requests.  It is
+# not a general-purpose intent classifier and must not capture causal questions
+# that do not expressly ask for document support.
+_EXPLICIT_DOCUMENT_EVIDENCE_QUESTION = re.compile(
+    r"(?:"
+    r"(?:资料|文档)(?:能够|可以)?(?:支持|说明)"
+    r"|.+?(?:有)?哪些被(?:资料|文档)(?:支持|说明)(?:的)?(?:因素|事实|结论)?[？?]?"
+    r")"
+)
+_EXPLICIT_SALES_METRIC_REQUEST = re.compile(
+    r"(?:请给出|查询|统计|计算).{0,48}销售额|销售额(?:是多少|多少)"
+)
+
+
+class EvaluationScope(BaseModel):
+    """The Planner's structured interpretation, not a business fact."""
+
+    entities: list[str] = Field(default_factory=list, max_length=8)
+    period: str | None = Field(default=None, min_length=1, max_length=200)
+
+
+def enforce_explicit_document_evidence_contract(
+    question: str, decision: "PlannerDecision"
+) -> "PlannerDecision":
+    """Keep document-only questions narrow, but preserve explicit data-plus-doc work."""
+    if decision.action != "analyze" or not _EXPLICIT_DOCUMENT_EVIDENCE_QUESTION.search(
+        question
+    ):
+        return decision
+
+    specified_slots = (
+        decision.intent.specified_slots if decision.intent is not None else []
+    )
+    if _EXPLICIT_SALES_METRIC_REQUEST.search(question):
+        return decision.model_copy(
+            update={
+                "route": "hybrid",
+                "intent": QuestionIntent(
+                    kind="document_question",
+                    required_capabilities=["销售额", "document_evidence"],
+                    specified_slots=specified_slots,
+                ),
+            }
+        )
+    return decision.model_copy(
+        update={
+            "route": "knowledge_only",
+            "intent": QuestionIntent(
+                kind="document_question",
+                required_capabilities=["document_evidence"],
+                specified_slots=specified_slots,
+            ),
+        }
+    )
 
 
 class PlannerDecision(BaseModel):
@@ -71,6 +125,10 @@ class PlannerDecision(BaseModel):
         default=None,
         description="分析问题需要哪些业务能力与条件；仅 analyze 使用。",
     )
+    evaluation_scope: EvaluationScope | None = Field(
+        default=None,
+        description="供评测读取的结构化实体和业务期间；仅 analyze 可填写。",
+    )
 
     @model_validator(mode="after")
     def validate_action_contract(self) -> "PlannerDecision":
@@ -114,6 +172,9 @@ class PlannerDecision(BaseModel):
 
         if self.action != "analyze" and self.intent is not None:
             raise ValueError("only analyze may include intent")
+
+        if self.action != "analyze" and self.evaluation_scope is not None:
+            raise ValueError("only analyze may include evaluation_scope")
 
         if self.action not in terminal_actions and self.response_message is not None:
             raise ValueError("only terminal actions may include response_message")

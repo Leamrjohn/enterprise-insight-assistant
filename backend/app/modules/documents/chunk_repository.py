@@ -1,5 +1,5 @@
-from sqlalchemy.orm import Session
 from app.modules.documents.chunks import DocumentChunk
+from sqlalchemy.orm import Session
 
 
 def add_chunk(
@@ -7,6 +7,7 @@ def add_chunk(
     *,
     document_id: int,
     company_id: int,
+    chunk_strategy: str,
     chunk_index: int,
     content: str,
     token_count: int,
@@ -18,6 +19,7 @@ def add_chunk(
     chunk = DocumentChunk(
         document_id=document_id,
         company_id=company_id,
+        chunk_strategy=chunk_strategy,
         chunk_index=chunk_index,
         content=content,
         token_count=token_count,
@@ -40,6 +42,6 @@ def get_chunks_by_document_id(
         .filter(
             DocumentChunk.document_id == document_id,
         )
-        .order_by(DocumentChunk.chunk_index)
+        .order_by(DocumentChunk.chunk_strategy, DocumentChunk.chunk_index)
         .all()
     )

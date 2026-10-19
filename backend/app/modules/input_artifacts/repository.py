@@ -72,6 +72,28 @@ def get_input_artifact_version_for_company(
     )
 
 
+def get_ready_owned_input_artifact_versions(
+    db: Session,
+    *,
+    version_ids: list[int],
+    company_id: int,
+    uploaded_by_user_id: int,
+) -> list[InputArtifactVersion]:
+    if not version_ids:
+        return []
+    return (
+        db.query(InputArtifactVersion)
+        .join(InputArtifact, InputArtifact.id == InputArtifactVersion.artifact_id)
+        .filter(
+            InputArtifactVersion.id.in_(version_ids),
+            InputArtifactVersion.status == "ready",
+            InputArtifact.company_id == company_id,
+            InputArtifact.uploaded_by_user_id == uploaded_by_user_id,
+        )
+        .all()
+    )
+
+
 def get_input_artifact_upload_request(
     db: Session,
     *,

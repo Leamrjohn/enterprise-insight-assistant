@@ -2,19 +2,24 @@
 
 from __future__ import annotations
 
+from app.modules.analysis.facts import (
+    build_confirmed_facts,
+    build_data_evidence,
+)
+from app.modules.analysis.facts import (
+    render_data_fields as _render_data_fields,
+)
+from app.modules.analysis.facts import (
+    render_evidence_purpose as _render_evidence_purpose,
+)
 from app.modules.reporting.schemas import (
     ConfirmedFact,
     DocumentCitation,
+    DocumentFinding,
     FinalAnalysisReport,
     Hypothesis,
     Limitation,
     Recommendation,
-)
-from app.modules.analysis.facts import (
-    build_confirmed_facts,
-    build_data_evidence,
-    render_data_fields as _render_data_fields,
-    render_evidence_purpose as _render_evidence_purpose,
 )
 
 
@@ -38,6 +43,11 @@ def compose_report(
     facts = build_confirmed_facts(data_evidence)
     knowledge_answer = knowledge_result.get("answer")
     citations = _document_citations(knowledge_result, knowledge_answer)
+    document_findings = _document_findings(
+        route=route,
+        citations=citations,
+        knowledge_answer=knowledge_answer,
+    )
     data_failed = data_result.get("status") == "failed"
     knowledge_failed = knowledge_result.get("status") == "failed"
 
@@ -49,12 +59,14 @@ def compose_report(
         data_failed=data_failed,
         knowledge_failed=knowledge_failed,
     )
-    status = "completed" if facts and not limitations else "partial"
-    if not facts and data_failed and not citations:
+    status = (
+        "completed" if (facts or document_findings) and not limitations else "partial"
+    )
+    if not facts and not document_findings and data_failed and not citations:
         status = "failed"
 
     recommendations = _recommendations(facts, hypotheses) if facts else []
-    summary = _summary(status, facts, hypotheses, limitations)
+    summary = _summary(status, facts, document_findings, hypotheses, limitations)
     return FinalAnalysisReport(
         status=status,
         executive_summary=summary,
@@ -63,6 +75,7 @@ def compose_report(
         recommendations=recommendations,
         data_evidence=data_evidence,
         document_citations=citations,
+        document_findings=document_findings,
         limitations=limitations,
     )
 
@@ -108,6 +121,29 @@ def _hypotheses(
     ]
 
 
+def _document_findings(
+    *,
+    route: str | None,
+    citations: list[DocumentCitation],
+    knowledge_answer: object,
+) -> list[DocumentFinding]:
+    """Prepare a candidate finding; Reviewer grants publication after semantic review."""
+    if (
+        route not in {"knowledge_only", "hybrid"}
+        or not citations
+        or not isinstance(knowledge_answer, str)
+        or not knowledge_answer.strip()
+    ):
+        return []
+    return [
+        DocumentFinding(
+            finding_id="document-finding-1",
+            statement=knowledge_answer,
+            citation_chunk_ids=[citation.chunk_id for citation in citations],
+        )
+    ]
+
+
 def _limitations(
     *,
     facts: list[ConfirmedFact],
@@ -117,7 +153,7 @@ def _limitations(
     knowledge_failed: bool,
 ) -> list[Limitation]:
     limitations: list[Limitation] = []
-    if not facts:
+    if not facts and route != "knowledge_only":
         limitations.append(
             Limitation(
                 code="data_unavailable" if data_failed else "data_empty",
@@ -158,6 +194,7 @@ def _recommendations(
 def _summary(
     status: str,
     facts: list[ConfirmedFact],
+    document_findings: list[DocumentFinding],
     hypotheses: list[Hypothesis],
     limitations: list[Limitation],
 ) -> str:
@@ -167,4 +204,6 @@ def _summary(
         return "已保留可确认的证据，但资料不足或执行受限，未作确定性归因。"
     if hypotheses:
         return "已确认经营数据事实；文档提供了待进一步核验的可能原因。"
+    if document_findings:
+        return "已确认可引用的文档事实；未将其扩大为未经证实的因果结论。"
     return "已确认经营数据事实；本次未进入原因归因范围。"

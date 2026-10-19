@@ -1,5 +1,5 @@
-from app.modules.analysis.tool_protocol import ToolInput
 from app.modules.analysis.template_query import TemplateQueryTool
+from app.modules.analysis.tool_protocol import ToolInput
 
 
 def valid_parameters() -> dict:
@@ -29,6 +29,8 @@ def test_template_query_tool_executes_registered_parameterized_query(monkeypatch
 
     assert result.success is True
     assert "SELECT" in captured["sql"]
+    assert "%(region)s::text IS NULL" in captured["sql"]
+    assert "c.region_code = %(region)s::text" in captured["sql"]
     assert captured["parameters"]["region"] == "EAST"
     assert result.data == {
         "query_id": "regional_revenue_comparison",

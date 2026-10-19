@@ -10,6 +10,7 @@ htmlcov/
 .env
 .env.*
 !.env.example
+!.env.p0.example
 *.db
 *.sqlite3
 *.egg-info/
@@ -31,4 +32,13 @@ Thumbs.db
 .codex/
 tmp/
 evaluation-runs/
+artifacts/p0/
 backend/pyright_output.json
+
+# Local evaluation run outputs and agent scratch files (never committed)
+.evaluation-runs/
+--task-map/
+*.err
+
+# Personal files kept outside the repository
+output/

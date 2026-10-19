@@ -9,7 +9,6 @@ from typing import Any, Literal
 
 from app.modules.workflow.node_outcome import NodeOutcome
 
-
 RoutingAction = Literal[
     "stop", "retry_data", "retry_knowledge", "retry_reviewer", "replan"
 ]
@@ -116,6 +115,12 @@ def choose_next_action(state: Mapping[str, Any]) -> tuple[RoutingAction, str]:
     knowledge_status = knowledge_result.get("status")
     data_code = data_result.get("error_code")
     knowledge_code = knowledge_result.get("error_code")
+
+    if (
+        knowledge_status == "insufficient_evidence"
+        and (state.get("plan") or {}).get("route") == "knowledge_only"
+    ):
+        return "stop", "knowledge_insufficient"
 
     # Legacy state from before NodeOutcome preserves its previous one-time repair.
     if data_code == "no_matching_records" and not state.get("empty_result_replanned"):

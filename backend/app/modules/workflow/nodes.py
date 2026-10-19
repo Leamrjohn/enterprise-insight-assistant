@@ -2,32 +2,36 @@
 
 from typing import Any
 
-from app.modules.analysis.agent_protocol import AgentInput
-from app.modules.analysis.planner_agent import PlannerAgent
-from app.modules.knowledge.agent import KnowledgeAgent
-from app.modules.analysis.data_agent import DataAgent
-from app.modules.reporting.reviewer_agent import ReviewerAgent
 from app.core.exceptions import (
     PermanentModelError,
     RetryableModelError,
     StructuredOutputError,
 )
-from app.modules.reporting.semantic_review_service import SemanticReviewService
+from app.core.settings import get_settings
+from app.modules.analysis.agent_protocol import AgentInput
+from app.modules.analysis.data_agent import DataAgent
+from app.modules.analysis.facts import build_confirmed_facts, build_data_evidence
+from app.modules.analysis.planner_agent import PlannerAgent
+from app.modules.analysis.planner_decision import (
+    enforce_explicit_document_evidence_contract,
+)
+from app.modules.analysis.snapshot_catalog import SnapshotCatalog
+from app.modules.analysis.sql_tool import SQLTool
+from app.modules.knowledge.agent import KnowledgeAgent
+from app.modules.knowledge.tool import RAGTool
 from app.modules.reporting.citation_validation import validate_citations
-from app.modules.workflow.state import WorkflowState
+from app.modules.reporting.reviewer_agent import ReviewerAgent
+from app.modules.reporting.semantic_review_service import SemanticReviewService
+from app.modules.runtime.model_governance import model_node_scope
+from app.modules.workflow.node_outcome import NodeOutcome
+from app.modules.workflow.recovery import recovery_decision_for_node
 from app.modules.workflow.router import (
     MAX_EXTERNAL_RETRIES,
     build_feedback,
     build_scope_fingerprint,
     choose_next_action,
 )
-from app.modules.workflow.node_outcome import NodeOutcome
-from app.modules.runtime.model_governance import model_node_scope
-from app.modules.analysis.facts import build_confirmed_facts, build_data_evidence
-from app.modules.analysis.snapshot_catalog import SnapshotCatalog
-from app.modules.knowledge.tool import RAGTool
-from app.modules.analysis.sql_tool import SQLTool
-
+from app.modules.workflow.state import WorkflowState
 
 _CLARIFICATION_SLOT_LABELS = {
     "metric": "需要查询的经营指标",
@@ -62,10 +66,10 @@ def _render_clarification(plan: dict) -> str:
     return "请补充" + "、".join(labels) + example_text + "。"
 
 
-def _set_stage(state: WorkflowState, stage: str) -> None:
+def _set_stage(state: WorkflowState, stage: str, node_name: str) -> None:
     callback = state.get("stage_callback")
     if callback is not None:
-        callback(stage)
+        callback(stage, node_name)
 
 
 def _checkpoint(
@@ -102,11 +106,10 @@ def _checkpoint(
             "external_retry_count",
             "routing_action",
             "routing_feedback",
+            "retry_context",
+            "recovery_decision",
             "loop_stop_reason",
             "loop_history",
-            "cached_data_result",
-            "cached_knowledge_result",
-            "cache_scope_fingerprint",
             "empty_result_replanned",
         )
         snapshot = {
@@ -142,7 +145,7 @@ def planner_node(state: WorkflowState) -> dict:
     读 state["question"] 和 state["user_id"]，
     写 state["plan"]。
     """
-    _set_stage(state, "planning")
+    _set_stage(state, "planning", "planner_node")
     agent = PlannerAgent()
     with model_node_scope("planner"):
         result = agent.run(
@@ -157,8 +160,18 @@ def planner_node(state: WorkflowState) -> dict:
                         else {}
                     ),
                     **(
+                        {"attachment_context": state["attachment_context"]}
+                        if state.get("attachment_context")
+                        else {}
+                    ),
+                    **(
                         {"feedback": state["routing_feedback"]}
                         if state.get("routing_feedback") is not None
+                        else {}
+                    ),
+                    **(
+                        {"retry_context": state["retry_context"]}
+                        if state.get("retry_context") is not None
                         else {}
                     ),
                 },
@@ -220,7 +233,7 @@ def planner_semantic_review_node(state: WorkflowState) -> dict:
     if not plan:
         return {}
     # The durable task stage remains "planning"; semantic review is a planning substep.
-    _set_stage(state, "planning")
+    _set_stage(state, "planning", "planner_semantic_review_node")
     catalog_data = state.get("schema_catalog")
     catalog = (
         SnapshotCatalog.from_snapshot(catalog_data)
@@ -235,7 +248,11 @@ def planner_semantic_review_node(state: WorkflowState) -> dict:
                 proposed_plan=plan,
                 catalog=catalog,
             )
+            reviewed_plan = enforce_explicit_document_evidence_contract(
+                state["question"], reviewed_plan
+            )
     except (PermanentModelError, RetryableModelError, StructuredOutputError) as error:
+        retryable = isinstance(error, RetryableModelError)
         update = {
             "plan": {
                 "action": "needs_clarification",
@@ -258,21 +275,30 @@ def planner_semantic_review_node(state: WorkflowState) -> dict:
             },
             "error": f"Planner 语义复核失败: {error}",
             "semantic_review_outcome": NodeOutcome(
-                status="retryable_error"
-                if isinstance(error, RetryableModelError)
-                else "repairable_error",
+                status="retryable_error" if retryable else "repairable_error",
                 output={},
                 error_code="semantic_review_failed",
-                retry_hint="retry"
-                if isinstance(error, RetryableModelError)
-                else "repair",
+                retry_hint="retry" if retryable else "repair",
                 checkpoint_patch={"stage": "planning"},
             ).model_dump(),
         }
+        if retryable:
+            # This is a technical failure, not a user clarification.  Route it
+            # through planning_failure_node so the Worker records a retryable
+            # terminal result and the next attempt can resume this exact node.
+            # Clearing the old analyze plan is also essential: the graph's
+            # conditional edge otherwise would keep following that stale plan
+            # into Data instead of taking the planning-failure branch.
+            update["plan"] = None
+            update["planner_failure"] = {
+                "code": "semantic_review_failed",
+                "message": f"Planner 语义复核失败: {error}",
+                "retryable": True,
+            }
         return _checkpoint(
             state,
             completed_node="planner_semantic_review_node",
-            next_node="planner_terminal_node",
+            next_node="planning_failure_node" if retryable else "planner_terminal_node",
             update=update,
         )
     if reviewed_plan.action == "analyze" and reviewed_plan.intent is None:
@@ -339,17 +365,26 @@ def planner_terminal_node(state: WorkflowState) -> dict:
     """Return a deterministic terminal response for non-analysis Planner actions."""
     plan = state.get("plan") or {}
     action = plan.get("action")
+    terminal_result = {
+        "outcome": action,
+        "reason": plan.get("reason"),
+    }
 
     if action == "needs_clarification":
         answer = _render_clarification(plan)
+        clarification = plan.get("clarification") or {}
+        missing_slots = clarification.get("missing_slots")
+        if isinstance(missing_slots, list):
+            terminal_result["missing_fields"] = [
+                slot
+                for slot in missing_slots
+                if isinstance(slot, str) and slot in _CLARIFICATION_SLOT_LABELS
+            ]
     else:
         answer = plan.get("response_message") or "当前问题无法进入分析流程。"
 
     return {
-        "terminal_result": {
-            "outcome": action,
-            "reason": plan.get("reason"),
-        },
+        "terminal_result": terminal_result,
         "final_answer": answer,
     }
 
@@ -380,12 +415,15 @@ def knowledge_node(state: WorkflowState) -> dict:
     “使用 resolved_question，否则回退原始问题”和 state["user_id"]，
     写 state["knowledge_result"]。
     """
-    _set_stage(state, "retrieving_knowledge")
+    _set_stage(state, "retrieving_knowledge", "knowledge_node")
     runtime = state.get("tool_runtime")
+    rag_tool = RAGTool()
+    if get_settings().knowledge_evidence_transport == "mcp_stdio":
+        from app.modules.knowledge.mcp_adapter import McpEvidenceReadTool
+
+        rag_tool = McpEvidenceReadTool.stdio()
     agent = (
-        KnowledgeAgent(rag_tool=runtime.wrap(RAGTool()))
-        if runtime
-        else KnowledgeAgent()
+        KnowledgeAgent(rag_tool=runtime.wrap(rag_tool)) if runtime else KnowledgeAgent()
     )
     with model_node_scope("knowledge"):
         result = agent.run(
@@ -395,6 +433,11 @@ def knowledge_node(state: WorkflowState) -> dict:
                 context={
                     "company_id": state.get("company_id"),
                     "confirmed_facts": state.get("confirmed_facts") or [],
+                    **(
+                        {"retry_context": state["retry_context"]}
+                        if state.get("retry_context") is not None
+                        else {}
+                    ),
                     **(
                         {"document_ids": state["document_ids"]}
                         if state.get("document_ids") is not None
@@ -469,7 +512,7 @@ def data_node(state: WorkflowState) -> dict:
     写 state["data_result"]。
     """
 
-    _set_stage(state, "querying_data")
+    _set_stage(state, "querying_data", "data_node")
     data_source = state.get("business_data_source")
     snapshot_data = state.get("schema_catalog")
     if data_source is not None and snapshot_data is not None:
@@ -495,6 +538,8 @@ def data_node(state: WorkflowState) -> dict:
     data_context = {}
     if state.get("routing_feedback") is not None:
         data_context["feedback"] = state["routing_feedback"]
+    if state.get("retry_context") is not None:
+        data_context["retry_context"] = state["retry_context"]
     if state.get("semantic_review_enabled"):
         data_context.update(
             {
@@ -525,12 +570,6 @@ def data_node(state: WorkflowState) -> dict:
                 build_data_evidence(update["data_result"])
             )
         ]
-        if (
-            state.get("routing_action") == "retry_data"
-            and state.get("cached_knowledge_result") is not None
-            and state.get("cache_scope_fingerprint") == state.get("scope_fingerprint")
-        ):
-            update["knowledge_result"] = state["cached_knowledge_result"]
         update["data_outcome"] = NodeOutcome(
             status="succeeded",
             output=update["data_result"],
@@ -662,7 +701,7 @@ def reviewer_node(state: WorkflowState) -> dict:
     读 state["data_result"] 和 state["knowledge_result"]，
     写 state["review_result"] 和 state["final_answer"]。
     """
-    _set_stage(state, "composing_report")
+    _set_stage(state, "composing_report", "reviewer_node")
     agent = ReviewerAgent()
     if hasattr(agent, "set_citation_validator"):
         agent.set_citation_validator(validate_citations)
@@ -671,6 +710,8 @@ def reviewer_node(state: WorkflowState) -> dict:
         "data_result": state.get("data_result", {}),
         "knowledge_result": state.get("knowledge_result", {}),
     }
+    if state.get("retry_context") is not None:
+        reviewer_context["retry_context"] = state["retry_context"]
     if state.get("semantic_review_enabled"):
         reviewer_context["semantic_review_enabled"] = True
     with model_node_scope("reviewer"):
@@ -747,6 +788,7 @@ def reviewer_node(state: WorkflowState) -> dict:
 
 def smart_router_node(state: WorkflowState) -> dict:
     """Bounded policy engine: choose a node from typed execution state only."""
+    _set_stage(state, "composing_report", "smart_router_node")
     action, reason = choose_next_action(state)
     retries = state.get("external_retry_count", 0)
     maximum = state.get("max_external_retries", MAX_EXTERNAL_RETRIES)
@@ -765,52 +807,80 @@ def smart_router_node(state: WorkflowState) -> dict:
     ]
     if action == "stop":
         existing_terminal = state.get("terminal_result") or {}
-        return {
-            "routing_action": action,
-            "loop_stop_reason": reason,
-            "loop_history": history,
-            "terminal_result": {
-                **existing_terminal,
-                "outcome": existing_terminal.get("outcome", "completed"),
-                "reason": existing_terminal.get("reason", reason),
+        outcome = existing_terminal.get("outcome") or (
+            "insufficient_evidence"
+            if reason
+            in {
+                "knowledge_insufficient",
+                "evidence_exhausted",
+                "data_insufficient",
+                "no_matching_records",
+            }
+            else "failed"
+            if reason == "non_retryable_or_unknown_failure"
+            or reason.endswith("_denied")
+            else "completed"
+        )
+        return _checkpoint(
+            state,
+            completed_node="smart_router_node",
+            next_node=None,
+            update={
+                "routing_action": action,
+                "loop_stop_reason": reason,
+                "loop_history": history,
+                "terminal_result": {
+                    **existing_terminal,
+                    "outcome": outcome,
+                    "reason": existing_terminal.get("reason", reason),
+                },
             },
-        }
+        )
 
     feedback = build_feedback(state, action, reason)
+    failed_node = {
+        "retry_data": "data_node",
+        "retry_knowledge": "knowledge_node",
+        "retry_reviewer": "reviewer_node",
+        "replan": "planner_node",
+    }[action]
+    outcome_key = {
+        "retry_data": "data_outcome",
+        "retry_knowledge": "knowledge_outcome",
+        "retry_reviewer": "reviewer_outcome",
+        "replan": "planner_outcome",
+    }[action]
+    outcome = state.get(outcome_key)
+    error_code = (
+        feedback.get("error_code")
+        if isinstance(feedback, dict) and feedback.get("error_code")
+        else outcome.get("error_code")
+        if isinstance(outcome, dict) and outcome.get("error_code")
+        else reason
+    )
+    decision = recovery_decision_for_node(failed_node)
+    assert decision is not None
     updates = {
         "routing_action": action,
         "routing_feedback": feedback,
+        "recovery_decision": decision.model_dump(mode="json"),
+        "retry_context": {
+            "failed_node": failed_node,
+            "error_code": error_code,
+            "retry_number": retries + 1,
+            "recovery_mode": decision.mode,
+        },
         "external_retry_count": retries + 1,
         "loop_history": history,
     }
-    if action == "retry_data":
-        updates.update(
-            {
-                "cached_knowledge_result": state.get("knowledge_result"),
-                "cache_scope_fingerprint": state.get("scope_fingerprint"),
-            }
+    updates.update({key: None for key in decision.invalidated_state_keys})
+    if action == "replan":
+        updates["empty_result_replanned"] = state.get("empty_result_replanned") or (
+            reason == "empty_result_scope_check"
         )
-    elif action == "retry_knowledge":
-        updates.update(
-            {
-                "cached_data_result": state.get("data_result"),
-                "cache_scope_fingerprint": state.get("scope_fingerprint"),
-            }
-        )
-    elif action == "replan":
-        updates.update(
-            {
-                "plan": None,
-                "data_result": None,
-                "knowledge_result": None,
-                "data_outcome": None,
-                "knowledge_outcome": None,
-                "review_result": None,
-                "cached_data_result": None,
-                "cached_knowledge_result": None,
-                "cache_scope_fingerprint": None,
-                "empty_result_replanned": state.get("empty_result_replanned")
-                or reason == "empty_result_scope_check",
-            }
-        )
-    return updates
+    return _checkpoint(
+        state,
+        completed_node="smart_router_node",
+        next_node=decision.resume_node,
+        update=updates,
+    )

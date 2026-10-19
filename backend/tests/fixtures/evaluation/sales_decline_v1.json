@@ -40,6 +40,9 @@
       "expected_confirmed_facts": [],
       "expected_supported_claims": [],
       "allowed_chunk_ids": [],
+      "inapplicable_hard_gates": {
+        "citation_scope_correct": "data_only route does not consume documents"
+      },
       "forbidden_claims": ["销售下降", "主要原因"],
       "expected_outcome": "partial",
       "expected_limitations": ["未找到对应区域经营数据"],
@@ -84,6 +87,9 @@
       "expected_confirmed_facts": [],
       "expected_supported_claims": [],
       "allowed_chunk_ids": [],
+      "inapplicable_hard_gates": {
+        "citation_scope_correct": "data_only route does not consume documents"
+      },
       "forbidden_claims": ["变化率为", "无限大"],
       "expected_outcome": "partial",
       "expected_limitations": ["对比期为0，变化率不可计算"],

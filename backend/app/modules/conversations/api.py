@@ -1,15 +1,8 @@
 """Conversation HTTP API."""
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
-from sqlalchemy.orm import Session
-from sqlalchemy import func
-
-from app.modules.organizations.access import (
-    CurrentCompanyContext,
-    get_current_company_context,
-    require_analysis_permission,
-)
+from app.core.exceptions import TaskAdmissionLimitError, TaskCapacityAdmissionError
 from app.db.session import get_db
+from app.modules.conversations.repository import get_assistant_message_by_task_id
 from app.modules.conversations.schemas import (
     ConversationCreate,
     ConversationMessageAccepted,
@@ -18,13 +11,9 @@ from app.modules.conversations.schemas import (
     ConversationOut,
     ConversationTaskRetryAccepted,
 )
-from app.modules.workflow.schemas import ConversationTaskOut, ConversationTaskReviewOut, TaskOut
-from app.modules.conversations.repository import get_assistant_message_by_task_id
-from app.modules.workflow.execution_attempt import TaskExecutionAttempt
-from app.modules.workflow.checkpoint import WorkflowCheckpoint
-from app.modules.workflow.model_call import ModelCallRecord
 from app.modules.conversations.service import (
     ConversationDocumentScopeError,
+    ConversationInputArtifactScopeError,
     DataSourceNotReadyError,
     cancel_conversation_task_service,
     create_conversation_service,
@@ -35,8 +24,23 @@ from app.modules.conversations.service import (
     get_conversations_service,
     retry_conversation_task_service,
 )
+from app.modules.organizations.access import (
+    CurrentCompanyContext,
+    get_current_company_context,
+    require_analysis_permission,
+)
+from app.modules.workflow.checkpoint import WorkflowCheckpoint
+from app.modules.workflow.execution_attempt import TaskExecutionAttempt
+from app.modules.workflow.model_call import ModelCallRecord
 from app.modules.workflow.outbox import publish_analysis_task_event
-
+from app.modules.workflow.schemas import (
+    ConversationTaskOut,
+    ConversationTaskReviewOut,
+    TaskOut,
+)
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from sqlalchemy import func
+from sqlalchemy.orm import Session
 
 router = APIRouter()
 
@@ -66,6 +70,14 @@ def _task_observability(db: Session, task) -> dict:
         .filter(ModelCallRecord.task_id == task.id)
         .one()
     )
+    unknown_cost_calls = (
+        db.query(func.count(ModelCallRecord.id))
+        .filter(
+            ModelCallRecord.task_id == task.id,
+            ModelCallRecord.billing_status == "unknown",
+        )
+        .scalar()
+    )
     return {
         "request_id": task.request_id,
         "active_execution_id": task.active_execution_id,
@@ -83,7 +95,9 @@ def _task_observability(db: Session, task) -> dict:
         "model_usage": {
             "calls": calls,
             "tokens": int(tokens),
-            "cost": str(cost),
+            "cost": None if unknown_cost_calls else str(cost),
+            "cost_status": "unknown" if unknown_cost_calls else "settled",
+            "unknown_cost_calls": unknown_cost_calls,
             "budget": task.model_budget_snapshot,
             "usage": task.model_budget_usage,
         },
@@ -257,6 +271,18 @@ def retry_conversation_task_endpoint(
             context=context,
             request_id=request.state.request_id,
         )
+    except TaskAdmissionLimitError as exc:
+        raise HTTPException(
+            status_code=429,
+            detail="analysis task admission limit reached",
+            headers={"Retry-After": str(exc.retry_after_seconds)},
+        ) from exc
+    except TaskCapacityAdmissionError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="analysis task capacity is unavailable",
+            headers={"Retry-After": str(exc.retry_after_seconds)},
+        ) from exc
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc))
     if bundle is None:
@@ -291,12 +317,25 @@ def create_conversation_message_endpoint(
             context=context,
             content=request_model.content,
             document_ids=request_model.document_ids,
+            artifact_version_ids=request_model.artifact_version_ids,
             request_id=request.state.request_id,
         )
-    except ConversationDocumentScopeError as exc:
+    except (ConversationDocumentScopeError, ConversationInputArtifactScopeError) as exc:
         raise HTTPException(status_code=422, detail=str(exc))
     except DataSourceNotReadyError as exc:
         raise HTTPException(status_code=409, detail=str(exc))
+    except TaskAdmissionLimitError as exc:
+        raise HTTPException(
+            status_code=429,
+            detail="analysis task admission limit reached",
+            headers={"Retry-After": str(exc.retry_after_seconds)},
+        ) from exc
+    except TaskCapacityAdmissionError as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="analysis task capacity is unavailable",
+            headers={"Retry-After": str(exc.retry_after_seconds)},
+        ) from exc
     if bundle is None:
         raise HTTPException(status_code=404, detail="conversation not found")
 

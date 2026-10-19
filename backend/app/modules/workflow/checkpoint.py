@@ -3,11 +3,12 @@
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
+from app.db.base import Base
 from sqlalchemy import DateTime, ForeignKey, Integer, String, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.db.base import Base
+CHECKPOINT_SCHEMA_VERSION = "workflow-checkpoint/v1"
 
 if TYPE_CHECKING:
     from app.modules.workflow.execution_attempt import TaskExecutionAttempt
@@ -33,6 +34,10 @@ class WorkflowCheckpoint(Base):
     state_patch: Mapped[dict[str, Any]] = mapped_column(
         JSONB, nullable=False, default=dict
     )
+    schema_version: Mapped[str] = mapped_column(
+        String(64), nullable=False, default=CHECKPOINT_SCHEMA_VERSION
+    )
+    task_input_fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
     error_code: Mapped[str | None] = mapped_column(String(128))
     recovery_instruction: Mapped[str | None] = mapped_column(String(128))
     created_at: Mapped[datetime] = mapped_column(

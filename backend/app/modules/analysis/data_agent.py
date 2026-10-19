@@ -1,20 +1,26 @@
 """Data Agent —— 生成候选 SQL，并通过受控 SQL Tool 查询经营数据。"""
 
-from app.modules.analysis.agent_protocol import Agent, AgentInput, AgentOutput
+from datetime import date
+from decimal import Decimal
+
 from app.core.exceptions import (
     PermanentModelError,
     RetryableModelError,
     StructuredOutputError,
 )
-from app.modules.analysis.sql_generation import SQLGenerationService
-from app.modules.reporting.semantic_review_service import SemanticReviewService
-from app.modules.analysis.query_validation import assess_query_result
+from app.modules.analysis.agent_protocol import Agent, AgentInput, AgentOutput
+from app.modules.analysis.claim_validation import assess_numeric_assertion
+from app.modules.analysis.metric_validation import assess_metric_query
+from app.modules.analysis.planner_decision import EvaluationScope
 from app.modules.analysis.query_contract import QueryContract
-from app.modules.analysis.tool_protocol import Tool, ToolInput
-from app.modules.analysis.sql_tool import SQLTool
-from app.modules.organizations.models import BusinessDataSource
+from app.modules.analysis.query_validation import assess_query_result
 from app.modules.analysis.snapshot_catalog import SnapshotCatalog
-from decimal import Decimal
+from app.modules.analysis.sql_generation import SQLGenerationService
+from app.modules.analysis.sql_tool import SQLTool
+from app.modules.analysis.tool_protocol import Tool, ToolInput
+from app.modules.organizations.models import BusinessDataSource
+from app.modules.reporting.semantic_review_service import SemanticReviewService
+from pydantic import ValidationError
 
 MAX_DATA_ATTEMPTS = 2
 
@@ -32,10 +38,27 @@ def _make_json_safe(value):
     if isinstance(value, Decimal):
         return format(value, "f")
 
+    if isinstance(value, date):
+        return value.isoformat()
+
     if isinstance(value, (list, tuple)):
         return [_make_json_safe(item) for item in value]
 
     return value
+
+
+def _validated_evaluation_scope(plan: object) -> dict[str, object] | None:
+    if not isinstance(plan, dict) or not isinstance(
+        plan.get("evaluation_scope"), dict
+    ):
+        return None
+    try:
+        scope = EvaluationScope.model_validate(plan["evaluation_scope"])
+    except ValidationError:
+        return None
+    if not scope.entities and scope.period is None:
+        return None
+    return scope.model_dump()
 
 
 class DataAgent(Agent):
@@ -85,6 +108,21 @@ class DataAgent(Agent):
 
         repair_reason = None
         previous_sql = None
+        plan = input.context.get("plan")
+        evaluation_scope = _validated_evaluation_scope(plan)
+        intent = plan.get("intent") if isinstance(plan, dict) else None
+        required_capabilities = (
+            [
+                item
+                for item in intent.get("required_capabilities", [])
+                if isinstance(item, str)
+            ]
+            if isinstance(intent, dict)
+            else []
+        )
+        data_required_capabilities = [
+            item for item in required_capabilities if item != "document_evidence"
+        ]
         attempts = {
             "model_attempts": 0,
             "sql_attempts": 0,
@@ -93,10 +131,17 @@ class DataAgent(Agent):
         for attempt_index in range(MAX_DATA_ATTEMPTS):
             try:
                 attempts["model_attempts"] += 1
+                generation_kwargs = {
+                    "repair_reason": repair_reason,
+                    "previous_sql": previous_sql,
+                }
+                if data_required_capabilities:
+                    generation_kwargs["required_concepts"] = data_required_capabilities
+                if evaluation_scope is not None:
+                    generation_kwargs["evaluation_scope"] = evaluation_scope
                 candidate = self._sql_generator.generate(
                     input.question,
-                    repair_reason=repair_reason,
-                    previous_sql=previous_sql,
+                    **generation_kwargs,
                 )
             except PermanentModelError as error:
                 return AgentOutput(
@@ -142,11 +187,9 @@ class DataAgent(Agent):
                             }
                         ],
                     )
-                intent = input.context.get("plan", {}).get("intent")
                 if isinstance(intent, dict):
                     required = {
-                        _concept_key(item)
-                        for item in (intent.get("required_capabilities") or [])
+                        _concept_key(item) for item in data_required_capabilities
                     }
                     declared = {
                         _concept_key(item)
@@ -165,6 +208,22 @@ class DataAgent(Agent):
                                     "sql": candidate.sql,
                                     "purpose": candidate.purpose,
                                     "missing_requirements": missing,
+                                }
+                            ],
+                        )
+                    unexpected = sorted(declared - required)
+                    if unexpected:
+                        return AgentOutput(
+                            success=False,
+                            attempts=attempts,
+                            error="查询契约包含规划未要求的业务能力："
+                            + "、".join(unexpected),
+                            error_code="query_contract_out_of_scope",
+                            evidence=[
+                                {
+                                    "sql": candidate.sql,
+                                    "purpose": candidate.purpose,
+                                    "unexpected_requirements": unexpected,
                                 }
                             ],
                         )
@@ -224,6 +283,36 @@ class DataAgent(Agent):
                         ],
                     )
 
+            metric_assessment = assess_metric_query(
+                candidate.sql,
+                candidate.query_contract,
+                evaluation_scope=evaluation_scope,
+            )
+            if (
+                input.context.get("semantic_review_enabled")
+                and metric_assessment.status != "supported"
+            ):
+                if attempt_index < MAX_DATA_ATTEMPTS - 1:
+                    repair_reason = "metric_contract_" + metric_assessment.status
+                    previous_sql = candidate.sql
+                    continue
+                return AgentOutput(
+                    success=False,
+                    attempts=attempts,
+                    error=metric_assessment.reason,
+                    error_code="metric_contract_" + metric_assessment.status,
+                    evidence=[
+                        {
+                            "sql": candidate.sql,
+                            "purpose": candidate.purpose,
+                            "metric_assessment": {
+                                "status": metric_assessment.status,
+                                "reason": metric_assessment.reason,
+                            },
+                        }
+                    ],
+                )
+
             attempts["sql_attempts"] += 1
             result = self._sql_tool.execute(
                 ToolInput(parameters={"sql": candidate.sql})
@@ -237,6 +326,15 @@ class DataAgent(Agent):
                     rows=rows,
                     contract=candidate.query_contract,
                 )
+                claim_assessment = assess_numeric_assertion(
+                    candidate.query_contract.numeric_assertion
+                    if candidate.query_contract is not None
+                    else None,
+                    columns=columns,
+                    rows=rows,
+                    metric_status=metric_assessment.status,
+                )
+                metric_definition = metric_assessment.definition
                 evidence = {
                     "sql": candidate.sql,
                     "purpose": candidate.purpose,
@@ -248,6 +346,27 @@ class DataAgent(Agent):
                     "columns": columns,
                     "rows": _make_json_safe(rows),
                     "result_assessment": assessment.model_dump(),
+                    "claim_assessment": {
+                        "status": claim_assessment.status,
+                        "reason": claim_assessment.reason,
+                    },
+                    "metric_assessment": {
+                        "status": metric_assessment.status,
+                        "reason": metric_assessment.reason,
+                        "metric_definition_ref": (
+                            metric_definition.reference if metric_definition else None
+                        ),
+                        "unit": metric_definition.unit if metric_definition else None,
+                        "time_column": (
+                            metric_definition.time_column if metric_definition else None
+                        ),
+                        "time_semantics": (
+                            metric_definition.time_semantics
+                            if metric_definition
+                            else None
+                        ),
+                        "lineage_columns": list(metric_assessment.lineage_columns),
+                    },
                 }
                 if assessment.status != "supported":
                     return AgentOutput(
@@ -296,7 +415,6 @@ class DataAgent(Agent):
         """Retry only a SQL statement that previously passed the SQL Tool boundary."""
         sql = feedback["previous_sql"]
         attempts = {"model_attempts": 0, "sql_attempts": 1, "replayed_sql": 1}
-        result = self._sql_tool.execute(ToolInput(parameters={"sql": sql}))
         purpose = feedback.get("purpose") or "重试已验证经营数据查询"
         contract_data = feedback.get("query_contract")
         contract = (
@@ -304,6 +422,19 @@ class DataAgent(Agent):
             if isinstance(contract_data, dict)
             else None
         )
+        metric_assessment = assess_metric_query(sql, contract)
+        if (
+            contract is not None
+            and contract.metric_definition_ref is not None
+            and metric_assessment.status != "supported"
+        ):
+            return AgentOutput(
+                success=False,
+                attempts=attempts,
+                error=metric_assessment.reason,
+                error_code="metric_contract_" + metric_assessment.status,
+            )
+        result = self._sql_tool.execute(ToolInput(parameters={"sql": sql}))
         if result.success:
             columns = result.data.get("columns") if result.data else []
             rows = result.data.get("rows") if result.data else []
@@ -312,6 +443,13 @@ class DataAgent(Agent):
                 rows=rows,
                 contract=contract,
             )
+            claim_assessment = assess_numeric_assertion(
+                contract.numeric_assertion if contract is not None else None,
+                columns=columns,
+                rows=rows,
+                metric_status=metric_assessment.status,
+            )
+            metric_definition = metric_assessment.definition
             evidence = {
                 "sql": sql,
                 "purpose": purpose,
@@ -319,6 +457,27 @@ class DataAgent(Agent):
                 "columns": columns,
                 "rows": _make_json_safe(rows),
                 "result_assessment": assessment.model_dump(),
+                "claim_assessment": {
+                    "status": claim_assessment.status,
+                    "reason": claim_assessment.reason,
+                },
+                "metric_assessment": {
+                    "status": metric_assessment.status,
+                    "reason": metric_assessment.reason,
+                    "metric_definition_ref": (
+                        metric_definition.reference if metric_definition else None
+                    ),
+                    "unit": metric_definition.unit if metric_definition else None,
+                    "time_column": (
+                        metric_definition.time_column if metric_definition else None
+                    ),
+                    "time_semantics": (
+                        metric_definition.time_semantics
+                        if metric_definition
+                        else None
+                    ),
+                    "lineage_columns": list(metric_assessment.lineage_columns),
+                },
             }
             if assessment.status == "supported":
                 return AgentOutput(success=True, attempts=attempts, evidence=[evidence])

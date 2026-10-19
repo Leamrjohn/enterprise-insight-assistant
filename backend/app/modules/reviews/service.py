@@ -3,15 +3,14 @@
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
-from sqlalchemy.orm import Session
-
-from app.modules.workflow.models import AnalysisTask
-from app.modules.reviews.models import ReviewRequest
-from app.modules.identity.models import User
 from app.modules.conversations.repository import get_assistant_message_by_task_id
-from app.modules.workflow.outbox import create_analysis_task_event
+from app.modules.identity.models import User
 from app.modules.reporting.schemas import FinalAnalysisReport
-
+from app.modules.reviews.models import ReviewRequest
+from app.modules.workflow.models import AnalysisTask
+from app.modules.workflow.outbox import create_analysis_task_event
+from app.modules.workflow.task_state import require_task_transition
+from sqlalchemy.orm import Session
 
 HIGH_RISK_REASON = "causal_hypothesis_requires_human_review"
 
@@ -69,12 +68,21 @@ def approve_review_request(
     request.reviewer_id = reviewer.id
     request.decision_note = note
     request.reviewed_at = now
+    require_task_transition(task.status, "queued")
     task.status = "queued"
     task.stage = "queued"
     task.completed_at = None
     task.error_type = None
     task.error_message = None
-    task.result_data = {**(task.result_data or {}), "review_publish_only": True}
+    task.result_data = {
+        **(task.result_data or {}),
+        "review_publish_only": True,
+        "publication": {
+            "decision": "awaiting_human_review",
+            "report_location": "report_draft",
+            "reason_code": "approved_pending_publish",
+        },
+    }
     message = get_assistant_message_by_task_id(db, task_id=task.id)
     if message is not None:
         message.status = "queued"
@@ -104,6 +112,7 @@ def reject_review_request(
     request.reviewer_id = reviewer.id
     request.decision_note = note
     request.reviewed_at = now
+    require_task_transition(task.status, "partial")
     task.status = "partial"
     task.stage = "completed"
     task.completed_at = now
@@ -114,6 +123,11 @@ def reject_review_request(
         **(task.result_data or {}),
         "review_publish_only": False,
         "review": {"status": "rejected", "reason_code": request.reason_code},
+        "publication": {
+            "decision": "not_published",
+            "report_location": "report_draft",
+            "reason_code": "human_review_rejected",
+        },
     }
     message = get_assistant_message_by_task_id(db, task_id=task.id)
     if message is not None:

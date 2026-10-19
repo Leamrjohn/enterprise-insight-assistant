@@ -1,0 +1,26 @@
+{
+  "schema_version": "1.0",
+  "dataset_version": "business-runtime-document-visibility-rejection-development-v1",
+  "cases": [
+    {
+      "case_id": "runtime-document-current-authorization-denial",
+      "evaluation_kind": "runtime_tool_rejection",
+      "scenario": "document_visibility_revoked",
+      "complexity": "medium",
+      "split": "development",
+      "coverage_tags": ["security_scope", "tool_runtime", "document_visibility"],
+      "question": "任务创建后，已冻结文档对成员失去当前可见权限时调用检索工具。",
+      "company_scope": "disposable-development-tenant",
+      "document_scope": [],
+      "expected_route": null,
+      "expected_entities": ["当前不可见文档"],
+      "expected_period": "not_applicable",
+      "expected_query_requirements": ["在执行前拒绝当前不可见的冻结文档"],
+      "expected_result_fingerprint": {"scenario": "document_current_authorization_denied"},
+      "expected_outcome": "failed",
+      "expected_tool_denial_codes": ["tool_document_current_authorization_denied"],
+      "max_model_calls": 0,
+      "max_tokens": 0
+    }
+  ]
+}

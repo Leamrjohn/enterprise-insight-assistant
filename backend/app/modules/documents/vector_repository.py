@@ -4,10 +4,11 @@
 需要 PostgreSQL 安装了 pgvector 扩展才能运行。
 """
 
+import re
+
+from app.modules.documents.chunks import DocumentChunk
 from sqlalchemy import text
 from sqlalchemy.orm import Session
-import re
-from app.modules.documents.chunks import DocumentChunk
 
 
 def _character_bigrams(text_value: str) -> set[str]:
@@ -30,6 +31,7 @@ def search_similar_chunks(
     top_k: int = 5,
     min_score: float = 0.5,
     document_ids: list[int] | None = None,
+    chunk_strategy: str = "paragraph_v1",
 ) -> list[dict]:
     """搜索与给定向量最相似的文档分块
 
@@ -57,6 +59,7 @@ def search_similar_chunks(
             dc.page_number,
             dc.paragraph_start,
             dc.paragraph_end,
+            dc.chunk_strategy,
             d.name AS document_name,
             d.file_type AS document_type,
             1 - (dc.embedding <=> :embedding) AS score
@@ -65,6 +68,7 @@ def search_similar_chunks(
         WHERE
             dc.company_id = :company_id
             AND d.company_id = :company_id
+            AND dc.chunk_strategy = :chunk_strategy
             AND 1 - (dc.embedding <=> :embedding) > :min_score
             {scope_filter}
         ORDER BY dc.embedding <=> :embedding
@@ -79,6 +83,7 @@ def search_similar_chunks(
             "min_score": min_score,
             "candidate_limit": candidate_limit,
             "document_ids": document_ids,
+            "chunk_strategy": chunk_strategy,
         },
     ).fetchall()
 
@@ -90,6 +95,7 @@ def search_similar_chunks(
             "page_number": row.page_number,
             "paragraph_start": row.paragraph_start,
             "paragraph_end": row.paragraph_end,
+            "chunk_strategy": row.chunk_strategy,
             "document_name": row.document_name,
             "document_type": row.document_type,
             "score": round(float(row.score), 4),

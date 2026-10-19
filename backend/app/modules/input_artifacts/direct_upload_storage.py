@@ -83,7 +83,10 @@ class S3DirectUploadStorage:
         checksum_base64 = base64.b64encode(bytes.fromhex(sha256_hex)).decode("ascii")
         client = boto3.client(
             "s3",
-            endpoint_url=self._settings.input_artifact_object_storage_endpoint_url,
+            endpoint_url=(
+                self._settings.input_artifact_object_storage_public_endpoint_url
+                or self._settings.input_artifact_object_storage_endpoint_url
+            ),
             region_name=self._settings.input_artifact_object_storage_region,
             aws_access_key_id=self._settings.input_artifact_object_storage_access_key_id.get_secret_value(),
             aws_secret_access_key=self._settings.input_artifact_object_storage_secret_access_key.get_secret_value(),

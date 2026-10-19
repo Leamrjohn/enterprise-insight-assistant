@@ -1,9 +1,20 @@
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, String, Text, func
+from sqlalchemy import (
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    Integer,
+    String,
+    Text,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.db.base import Base
 from datetime import datetime
 from typing import TYPE_CHECKING, Any, Optional
 from sqlalchemy.dialects.postgresql import JSONB
+from app.core.settings import get_settings
+from app.modules.workflow.model_budget import configured_model_budget
 
 if TYPE_CHECKING:
     from app.modules.workflow.execution_attempt import TaskExecutionAttempt
@@ -23,7 +34,8 @@ class AnalysisTask(Base):
             name="analysistask_status_values",
         ),
         CheckConstraint(
-            "stage IN ('queued','planning','querying_data','retrieving_knowledge','composing_report','saving_result','awaiting_review','retrying','completed')",
+            "stage IN ('queued','planning','querying_data','retrieving_knowledge',"
+            "'composing_report','saving_result','awaiting_review','retrying','completed')",
             name="analysistask_task_stage_values",
         ),
     )
@@ -79,6 +91,12 @@ class AnalysisTask(Base):
     active_execution_id: Mapped[str | None] = mapped_column(
         String(36), nullable=True, index=True
     )
+    workflow_policy_snapshot: Mapped[dict[str, Any]] = mapped_column(
+        JSONB,
+        nullable=False,
+        default=lambda: {"version": "v1", "rollback_version": "v1"},
+    )
+    workflow_version_override: Mapped[str | None] = mapped_column(String(64))
     model_policy_snapshot: Mapped[dict[str, Any]] = mapped_column(
         JSONB,
         nullable=False,
@@ -88,19 +106,15 @@ class AnalysisTask(Base):
             "require_json": False,
             "allow_tool_calling": False,
             "timeout_seconds": 30,
+            "max_output_tokens": 1024,
             "max_attempts": 3,
+            "model_pricing": {"version": "unconfigured", "entries": []},
         },
     )
     model_budget_snapshot: Mapped[dict[str, Any]] = mapped_column(
         JSONB,
         nullable=False,
-        default=lambda: {
-            "max_calls": 12,
-            "max_calls_per_node": 4,
-            "max_repairs": 2,
-            "max_total_tokens": 12000,
-            "max_cost": "1.00",
-        },
+        default=lambda: configured_model_budget(get_settings()),
     )
     model_budget_usage: Mapped[dict[str, Any]] = mapped_column(
         JSONB,
@@ -109,6 +123,8 @@ class AnalysisTask(Base):
             "calls": 0,
             "tokens": 0,
             "cost": "0.00",
+            "reserved_cost": "0.00",
+            "unknown_cost_calls": 0,
             "repairs": 0,
             "calls_by_node": {},
         },
@@ -120,6 +136,8 @@ class AnalysisTask(Base):
             "allowed_tools": ["rag_search", "sql_query", "template_query"],
             "require_company_scope": True,
             "require_frozen_document_scope": True,
+            "sql_statement_timeout_ms": 10000,
+            "rag_database_timeout_ms": 10000,
         },
     )
     tool_budget_snapshot: Mapped[dict[str, Any]] = mapped_column(
@@ -212,6 +230,24 @@ class AnalysisTaskDocument(Base):
     document_id: Mapped[int] = mapped_column(
         ForeignKey("documents.id", ondelete="RESTRICT"), primary_key=True
     )
+
+
+class AnalysisTaskInputArtifactVersion(Base):
+    """An immutable attachment-version scope frozen for one analysis task."""
+
+    __tablename__ = "analysis_task_input_artifact_versions"
+    __table_args__ = (
+        CheckConstraint("position >= 0", name="position_non_negative"),
+        UniqueConstraint("task_id", "position", name="uq_task_input_artifact_position"),
+    )
+
+    task_id: Mapped[int] = mapped_column(
+        ForeignKey("analysis_tasks.id", ondelete="CASCADE"), primary_key=True
+    )
+    artifact_version_id: Mapped[int] = mapped_column(
+        ForeignKey("input_artifact_versions.id", ondelete="RESTRICT"), primary_key=True
+    )
+    position: Mapped[int] = mapped_column(Integer, nullable=False)
 
 
 # Relationship targets must be registered even in processes that only import

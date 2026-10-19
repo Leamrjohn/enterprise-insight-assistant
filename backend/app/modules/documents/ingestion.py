@@ -1,18 +1,26 @@
-from app.modules.documents.chunks import DocumentChunk
-from app.modules.documents.chunk_repository import add_chunk
-from app.utils.document_chunk import ChunkText, chunk_file, chunk_text_with_metadata
 from typing import BinaryIO
-from sqlalchemy.orm import Session
+
+from app.core.exceptions import DuplicateDocumentError, EmptyDocumentError
 from app.core.settings import Settings
+from app.modules.documents.chunk_repository import add_chunk
+from app.modules.documents.chunks import DocumentChunk
 from app.modules.documents.models import Documents
 from app.modules.documents.repository import (
     add_uploaded_document,
     get_document_by_sha256,
 )
 from app.modules.documents.storage import save_document_file
-from sqlalchemy.exc import IntegrityError
 from app.modules.knowledge.rag.embeddings_local import LocalEmbeddingProvider
-from app.core.exceptions import DuplicateDocumentError, EmptyDocumentError
+from app.utils.document_chunk import (
+    PARAGRAPH_CHUNK_STRATEGY,
+    SLIDING_WINDOW_CHUNK_STRATEGY,
+    ChunkText,
+    chunk_file,
+    chunk_text_for_strategy,
+    chunk_text_with_metadata,
+)
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
 
 
 def upload_document_service(
@@ -92,7 +100,19 @@ def process_document_chunks(
             )
             for index, record in enumerate(chunk_records)
         ]
-        chunk_texts = [record.content for record in chunk_records]
+        chunk_records_by_strategy = {
+            PARAGRAPH_CHUNK_STRATEGY: chunk_records,
+            SLIDING_WINDOW_CHUNK_STRATEGY: chunk_text_for_strategy(
+                "\n\n".join(record.content for record in chunk_records),
+                SLIDING_WINDOW_CHUNK_STRATEGY,
+            ),
+        }
+        indexed_chunks = [
+            (strategy, index, record)
+            for strategy, records in chunk_records_by_strategy.items()
+            for index, record in enumerate(records)
+        ]
+        chunk_texts = [record.content for _strategy, _index, record in indexed_chunks]
 
         embeddings = LocalEmbeddingProvider().embed_batch(chunk_texts)
 
@@ -101,13 +121,14 @@ def process_document_chunks(
         db.query(DocumentChunk).filter(DocumentChunk.document_id == document_id).delete(
             synchronize_session=False
         )
-        for index, (chunk_record, embedding) in enumerate(
-            zip(chunk_records, embeddings)
+        for (strategy, index, chunk_record), embedding in zip(
+            indexed_chunks, embeddings
         ):
             add_chunk(
                 db=db,
                 document_id=document_id,
                 company_id=document.company_id,
+                chunk_strategy=strategy,
                 chunk_index=index,
                 content=chunk_record.content,
                 token_count=len(chunk_record.content.split()),
@@ -116,7 +137,7 @@ def process_document_chunks(
                 paragraph_end=chunk_record.paragraph_end,
             )
         document.status = "completed"
-        document.content = "\n\n".join(chunk_texts)
+        document.content = "\n\n".join(record.content for record in chunk_records)
         db.commit()
         db.refresh(document)
         return document

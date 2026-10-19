@@ -1,13 +1,14 @@
 """测试 Tool 协议和两个工具实现"""
 
-from app.modules.analysis.tool_protocol import ToolInput
-from app.modules.knowledge.tool import RAGTool
 from app.modules.analysis.semantic_catalog import BUSINESS_TABLES
-from app.modules.analysis.sql_tool import SQLTool
-from app.modules.knowledge.rag.engine import EvidenceRef
-from app.modules.organizations.models import BusinessDataSource
 from app.modules.analysis.snapshot_catalog import SnapshotCatalog
-from psycopg.errors import GroupingError
+from app.modules.analysis.sql_tool import SQLTool
+from app.modules.analysis.tool_protocol import ToolInput
+from app.modules.knowledge.rag.engine import EvidenceRef
+from app.modules.knowledge.rag.policy import RetrievalPolicy
+from app.modules.knowledge.tool import RAGTool
+from app.modules.organizations.models import BusinessDataSource
+from psycopg.errors import GroupingError, QueryCanceled
 
 
 def test_rag_tool_name_and_description():
@@ -59,12 +60,17 @@ class FakeReranker:
 
 def test_rag_tool_uses_reranked_evidence_for_prompt(monkeypatch):
     class FakeSession:
+        def execute(self, *_args, **_kwargs) -> None:
+            pass
+
         def close(self) -> None:
             pass
 
     monkeypatch.setattr("app.modules.knowledge.tool.SessionLocal", FakeSession)
     monkeypatch.setattr("app.modules.knowledge.tool.set_tenant_scope", lambda *_: None)
-    monkeypatch.setattr("app.modules.knowledge.tool.LocalEmbeddingProvider", lambda: object())
+    monkeypatch.setattr(
+        "app.modules.knowledge.tool.LocalEmbeddingProvider", lambda: object()
+    )
     monkeypatch.setattr(
         "app.modules.knowledge.tool.retrieve_evidence",
         lambda **kwargs: [
@@ -95,12 +101,17 @@ def test_rag_tool_uses_reranked_evidence_for_prompt(monkeypatch):
 
 def test_rag_tool_rejects_high_vector_score_with_low_rerank_score(monkeypatch):
     class FakeSession:
+        def execute(self, *_args, **_kwargs) -> None:
+            pass
+
         def close(self) -> None:
             pass
 
     monkeypatch.setattr("app.modules.knowledge.tool.SessionLocal", FakeSession)
     monkeypatch.setattr("app.modules.knowledge.tool.set_tenant_scope", lambda *_: None)
-    monkeypatch.setattr("app.modules.knowledge.tool.LocalEmbeddingProvider", lambda: object())
+    monkeypatch.setattr(
+        "app.modules.knowledge.tool.LocalEmbeddingProvider", lambda: object()
+    )
     monkeypatch.setattr(
         "app.modules.knowledge.tool.retrieve_evidence",
         lambda **kwargs: [
@@ -119,6 +130,87 @@ def test_rag_tool_rejects_high_vector_score_with_low_rerank_score(monkeypatch):
 
     assert result.success is True
     assert result.data["status"] == "insufficient_evidence"
+
+
+def test_rag_tool_can_disable_reranking_only_through_server_policy(monkeypatch):
+    class FakeSession:
+        def execute(self, *_args, **_kwargs) -> None:
+            pass
+
+        def close(self) -> None:
+            pass
+
+    class FailingReranker:
+        def score(self, _question: str, _passages: list[str]) -> list[float]:
+            raise AssertionError("disabled reranker must not be called")
+
+    monkeypatch.setattr("app.modules.knowledge.tool.SessionLocal", FakeSession)
+    monkeypatch.setattr("app.modules.knowledge.tool.set_tenant_scope", lambda *_: None)
+    monkeypatch.setattr(
+        "app.modules.knowledge.tool.LocalEmbeddingProvider", lambda: object()
+    )
+    monkeypatch.setattr(
+        "app.modules.knowledge.tool.retrieve_evidence",
+        lambda **kwargs: [
+            EvidenceRef(
+                chunk_id=1,
+                document_id=1,
+                content="客户合同到期后暂停采购。",
+                score=0.91,
+            )
+        ],
+    )
+
+    result = RAGTool(
+        reranker=FailingReranker(),
+        retrieval_policy=RetrievalPolicy(
+            policy_id="paragraph_vector_no_rerank_v1",
+            chunk_strategies=("paragraph_v1",),
+            rerank_enabled=False,
+        ),
+    ).execute(
+        ToolInput(parameters={"question": "客户合同为何影响销售", "company_id": 1})
+    )
+
+    assert result.success is True
+    assert result.data["retrieval_policy_id"] == "paragraph_vector_no_rerank_v1"
+    assert result.data["evidences"][0]["rerank_score"] is None
+
+
+def test_rag_tool_applies_runtime_database_timeout(monkeypatch):
+    captured: dict[str, object] = {}
+
+    class FakeSession:
+        def execute(self, statement, parameters) -> None:
+            captured["statement"] = str(statement)
+            captured["parameters"] = parameters
+
+        def close(self) -> None:
+            pass
+
+    monkeypatch.setattr("app.modules.knowledge.tool.SessionLocal", FakeSession)
+    monkeypatch.setattr("app.modules.knowledge.tool.set_tenant_scope", lambda *_: None)
+    monkeypatch.setattr(
+        "app.modules.knowledge.tool.LocalEmbeddingProvider", lambda: object()
+    )
+    monkeypatch.setattr(
+        "app.modules.knowledge.tool.retrieve_evidence", lambda **_kwargs: []
+    )
+
+    result = RAGTool(reranker=FakeReranker([])).execute(
+        ToolInput(
+            parameters={
+                "question": "客户合同为何影响销售",
+                "company_id": 1,
+                "_runtime_database_timeout_ms": 321,
+            }
+        )
+    )
+
+    assert result.success is True
+    assert result.data["status"] == "insufficient_evidence"
+    assert "set_config" in captured["statement"]
+    assert captured["parameters"] == {"timeout_ms": "321"}
 
 
 def test_sql_tool_name_and_description():
@@ -140,9 +232,10 @@ def test_sql_tool_missing_parameters():
 def test_sql_tool_passes_business_catalogue_tables_to_executor(monkeypatch):
     captured: dict[str, object] = {}
 
-    def fake_execute_readonly_sql(sql: str, allowed_tables: set[str]):
+    def fake_execute_readonly_sql(sql: str, allowed_tables: set[str], **kwargs: object):
         captured["sql"] = sql
         captured["allowed_tables"] = allowed_tables
+        captured.update(kwargs)
         return ["revenue"], [(100.0,)]
 
     monkeypatch.setattr(
@@ -157,6 +250,7 @@ def test_sql_tool_passes_business_catalogue_tables_to_executor(monkeypatch):
     assert result.success is True
     assert result.data == {"columns": ["revenue"], "rows": [(100.0,)]}
     assert captured["allowed_tables"] == set(BUSINESS_TABLES)
+    assert captured["timeout_ms"] == 10_000
 
 
 def test_sql_tool_returns_validation_failure_without_database_connection():
@@ -176,10 +270,12 @@ def test_sql_tool_returns_validation_failure_without_database_connection():
 
 
 def test_sql_tool_marks_grouping_error_as_repairable_semantic_failure(monkeypatch):
-    def raise_grouping_error(sql: str, allowed_tables: set[str]):
+    def raise_grouping_error(sql: str, allowed_tables: set[str], **kwargs: object):
         raise GroupingError("column must appear in the GROUP BY clause")
 
-    monkeypatch.setattr("app.modules.analysis.sql_tool.execute_readonly_sql", raise_grouping_error)
+    monkeypatch.setattr(
+        "app.modules.analysis.sql_tool.execute_readonly_sql", raise_grouping_error
+    )
 
     result = SQLTool().execute(
         ToolInput(
@@ -195,11 +291,34 @@ def test_sql_tool_marks_grouping_error_as_repairable_semantic_failure(monkeypatc
     assert result.repairable is True
 
 
+def test_sql_tool_marks_statement_timeout_as_a_distinct_failure(monkeypatch):
+    def raise_query_canceled(sql: str, allowed_tables: set[str], **kwargs: object):
+        raise QueryCanceled("canceling statement due to statement timeout")
+
+    monkeypatch.setattr(
+        "app.modules.analysis.sql_tool.execute_readonly_sql", raise_query_canceled
+    )
+
+    result = SQLTool().execute(
+        ToolInput(
+            parameters={
+                "sql": "SELECT o.total_amount FROM sales_orders AS o",
+            }
+        )
+    )
+
+    assert result.success is False
+    assert result.error_code == "sql_statement_timeout"
+    assert result.repairable is True
+
+
 def test_sql_tool_returns_safe_failure_when_database_execution_raises(monkeypatch):
-    def raise_database_error(sql: str, allowed_tables: set[str]):
+    def raise_database_error(sql: str, allowed_tables: set[str], **kwargs: object):
         raise RuntimeError("column must appear in the GROUP BY clause")
 
-    monkeypatch.setattr("app.modules.analysis.sql_tool.execute_readonly_sql", raise_database_error)
+    monkeypatch.setattr(
+        "app.modules.analysis.sql_tool.execute_readonly_sql", raise_database_error
+    )
 
     result = SQLTool().execute(
         ToolInput(
@@ -248,7 +367,9 @@ def test_sql_tool_passes_tenant_source_and_snapshot_catalog_to_executor(monkeypa
         captured.update(kwargs)
         return ["on_hand"], [(12,)]
 
-    monkeypatch.setattr("app.modules.analysis.sql_tool.execute_readonly_sql", fake_execute_readonly_sql)
+    monkeypatch.setattr(
+        "app.modules.analysis.sql_tool.execute_readonly_sql", fake_execute_readonly_sql
+    )
 
     result = SQLTool(data_source=source, snapshot_catalog=catalog).execute(
         ToolInput(parameters={"sql": "SELECT i.on_hand FROM inventory AS i"})
@@ -258,6 +379,7 @@ def test_sql_tool_passes_tenant_source_and_snapshot_catalog_to_executor(monkeypa
     assert captured["allowed_tables"] == {"inventory"}
     assert captured["catalog"] is catalog
     assert captured["data_source"] is source
+    assert captured["timeout_ms"] == 10_000
 
 
 def test_sql_tool_requires_source_and_snapshot_together() -> None:

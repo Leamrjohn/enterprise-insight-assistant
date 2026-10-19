@@ -6,22 +6,32 @@ import re
 from typing import LiteralString, TypedDict, cast
 
 import psycopg
-from psycopg import sql as psycopg_sql
+import sqlglot
 from app.core.settings import get_settings
-from app.modules.organizations.models import BusinessDataSource
 from app.modules.analysis.snapshot_catalog import SnapshotCatalog
 from app.modules.analysis.sql_validator import validate_sql
+from app.modules.organizations.models import BusinessDataSource
+from psycopg import sql as psycopg_sql
+from sqlglot import exp
 
 logger = logging.getLogger(__name__)
 
 
 def _apply_row_limit(sql: str, max_rows: int) -> str:
-    """Add the safety limit without turning a valid trailing semicolon invalid."""
+    """Keep a bounded top-level LIMIT or enforce the execution cap."""
     normalized_sql = sql.strip()
-    if "LIMIT" in normalized_sql.upper():
-        return normalized_sql
+    statement = sqlglot.parse_one(normalized_sql, read="postgres")
+    limit = statement.args.get("limit")
+    if limit is not None:
+        expression = limit.expression
+        if (
+            isinstance(expression, exp.Literal)
+            and expression.is_int
+            and int(expression.this) <= max_rows
+        ):
+            return normalized_sql
 
-    return f"{normalized_sql.rstrip(';').rstrip()} LIMIT {max_rows}"
+    return statement.limit(max_rows).sql(dialect="postgres")
 
 
 def _mask_sensitive_rows(rows):

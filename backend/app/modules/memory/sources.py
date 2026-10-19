@@ -3,10 +3,9 @@
 from datetime import datetime
 from typing import TYPE_CHECKING
 
+from app.db.base import Base
 from sqlalchemy import DateTime, ForeignKey, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-
-from app.db.base import Base
 
 if TYPE_CHECKING:
     from app.modules.memory.models import AnalysisMemory
@@ -30,4 +29,6 @@ class MemorySource(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
 
-    memories: Mapped[list["AnalysisMemory"]] = relationship(back_populates="source")
+    memories: Mapped[list["AnalysisMemory"]] = relationship(
+        back_populates="source", passive_deletes=True
+    )

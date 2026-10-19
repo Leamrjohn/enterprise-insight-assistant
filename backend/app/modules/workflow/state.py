@@ -3,10 +3,9 @@
 from collections.abc import Callable
 from typing import TypedDict
 
-from typing_extensions import NotRequired
-
 from app.modules.organizations.models import BusinessDataSource
 from app.modules.runtime.tool_runtime import ToolRuntime
+from typing_extensions import NotRequired
 
 
 class WorkflowState(TypedDict):
@@ -32,6 +31,7 @@ class WorkflowState(TypedDict):
     error: str | None  # 错误信息
     conversation_context: dict | None
     planner_memory: list[dict]
+    attachment_context: list[dict]
     document_ids: list[int] | None
     business_data_source: BusinessDataSource | None
     schema_catalog: dict | None
@@ -41,13 +41,12 @@ class WorkflowState(TypedDict):
     max_external_retries: int
     routing_action: str | None
     routing_feedback: dict | None
+    retry_context: dict | None  # Bounded prior-attempt failure metadata, never business fact.
+    recovery_decision: dict | None
     loop_stop_reason: str | None
     loop_history: list[dict]
-    cached_data_result: dict | None
-    cached_knowledge_result: dict | None
-    cache_scope_fingerprint: str | None
     empty_result_replanned: bool
     tool_runtime: NotRequired[ToolRuntime | None]
-    stage_callback: NotRequired[Callable[[str], None] | None]
+    stage_callback: NotRequired[Callable[[str, str], None] | None]
     checkpoint_callback: NotRequired[Callable[[str, str | None, dict], None] | None]
     resume_next_node: str | None

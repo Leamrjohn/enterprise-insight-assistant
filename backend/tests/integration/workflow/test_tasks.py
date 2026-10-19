@@ -1,26 +1,41 @@
+import errno
+import threading
+import time
 from datetime import datetime, timedelta, timezone
 from uuid import uuid4
 
-from fastapi.testclient import TestClient
-import pytest
-from sqlalchemy.orm import Session
-
+import app.modules.workflow.execution as execution_module
 import app.modules.workflow.tasks as analysis_tasks
-from app.modules.identity.authentication import get_current_user
+import pytest
+from app.core.exceptions import RetryableModelError
 from app.core.logging import request_id_context
-from app.db.session import SessionLocal
+from app.db.session import SessionLocal, set_tenant_scope
 from app.main import app
-from app.modules.workflow.models import AnalysisTask
-from app.modules.organizations.models import Company, CompanyMember
 from app.modules.conversations.models import Conversation, ConversationMessage
+from app.modules.identity.authentication import get_current_user
 from app.modules.identity.models import User
-from app.modules.workflow.tasks import process_analysis_task
+from app.modules.input_artifacts.attachment_context import TaskAttachmentContext
+from app.modules.input_artifacts.models import InputArtifact, InputArtifactVersion
+from app.modules.organizations.models import Company, CompanyMember
+from app.modules.reporting.schemas import FinalAnalysisReport
+from app.modules.runtime.model_governance import (
+    ModelBudgetExceeded,
+    record_model_call,
+    reserve_model_call,
+)
+from app.modules.workflow.checkpoint import WorkflowCheckpoint
+from app.modules.workflow.events_models import WorkflowEvent
 from app.modules.workflow.execution import (
     checkpoint_workflow_state,
     claim_execution,
     recover_expired_executions,
 )
-from app.modules.runtime.model_governance import ModelBudgetExceeded
+from app.modules.workflow.execution_attempt import TaskExecutionAttempt
+from app.modules.workflow.model_call import ModelCallRecord
+from app.modules.workflow.models import AnalysisTask, AnalysisTaskInputArtifactVersion
+from app.modules.workflow.tasks import process_analysis_task
+from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session
 
 
 def create_analysis_task(
@@ -39,6 +54,224 @@ def create_analysis_task(
     db_session.add(task)
     db_session.flush()
     return task
+
+
+def test_worker_cancellation_and_duration_use_database_time(
+    db_session: Session, test_user: User, monkeypatch
+) -> None:
+    task = create_analysis_task(
+        db_session,
+        test_user.id,
+        status="cancelled",
+        stage="queued",
+    )
+    database_timestamp = datetime(2040, 1, 2, tzinfo=timezone.utc)
+    task.started_at = database_timestamp - timedelta(seconds=1)
+    db_session.flush()
+    monkeypatch.setattr(
+        analysis_tasks, "database_now", lambda db: database_timestamp
+    )
+
+    assert analysis_tasks._stop_if_cancelled(db_session, task) is True
+    assert task.completed_at == database_timestamp
+    assert analysis_tasks._duration_ms(db_session, task) == 1000
+
+
+def test_worker_preserves_an_explicitly_empty_document_scope(monkeypatch) -> None:
+    db = SessionLocal()
+    task_id: int | None = None
+    user_id: int | None = None
+    company_id: int | None = None
+    try:
+        suffix = uuid4().hex
+        user = User(name=f"empty-scope-user-{suffix}", api_key=f"empty-scope-key-{suffix}")
+        company = Company(name=f"empty-scope-company-{suffix}")
+        db.add_all([user, company])
+        db.flush()
+        user_id, company_id = user.id, company.id
+        task = AnalysisTask(
+            user_id=user.id,
+            company_id=company.id,
+            question="明确不检索文档的分析",
+            status="queued",
+            stage="queued",
+        )
+        db.add(task)
+        db.commit()
+        task_id = task.id
+        captured: dict[str, object] = {}
+
+        def fake_run_analysis(question, user_id, **kwargs):
+            captured["document_ids"] = kwargs["document_ids"]
+            return {
+                "plan": {"action": "direct_response", "route": None},
+                "terminal_result": {"outcome": "direct_response"},
+                "final_answer": "不读取文档。",
+            }
+
+        monkeypatch.setattr(analysis_tasks, "run_analysis", fake_run_analysis)
+        process_analysis_task.run(task_id=task.id)
+
+        assert captured["document_ids"] == []
+    finally:
+        db.rollback()
+        if task_id is not None:
+            task = db.get(AnalysisTask, task_id)
+            if task is not None:
+                db.delete(task)
+                db.flush()
+        if company_id is not None:
+            company = db.get(Company, company_id)
+            if company is not None:
+                db.delete(company)
+                db.flush()
+        if user_id is not None:
+            user = db.get(User, user_id)
+            if user is not None:
+                db.delete(user)
+        db.commit()
+        db.close()
+
+
+def test_worker_passes_frozen_attachment_only_at_runtime(monkeypatch) -> None:
+    db = SessionLocal()
+    task_id: int | None = None
+    version_id: int | None = None
+    artifact_id: int | None = None
+    user_id: int | None = None
+    company_id: int | None = None
+    try:
+        suffix = uuid4().hex
+        user = User(
+            name=f"attachment-runtime-user-{suffix}",
+            api_key=f"attachment-runtime-key-{suffix}",
+        )
+        company = Company(name=f"attachment-runtime-company-{suffix}")
+        db.add_all([user, company])
+        db.flush()
+        user_id, company_id = user.id, company.id
+        set_tenant_scope(db, company.id)
+        artifact = InputArtifact(
+            company_id=company.id,
+            uploaded_by_user_id=user.id,
+            kind="attachment",
+        )
+        db.add(artifact)
+        db.flush()
+        artifact_id = artifact.id
+        version = InputArtifactVersion(
+            artifact_id=artifact.id,
+            version_number=1,
+            original_filename="runtime.txt",
+            raw_object_key=f"input-artifacts/quarantine/{company.id}/{suffix}",
+            byte_size=12,
+            sha256="a" * 64,
+            status="ready",
+        )
+        db.add(version)
+        db.flush()
+        version_id = version.id
+        task = AnalysisTask(
+            user_id=user.id,
+            company_id=company.id,
+            question="分析附件",
+            status="queued",
+            stage="queued",
+        )
+        db.add(task)
+        db.flush()
+        task_id = task.id
+        db.add(
+            AnalysisTaskInputArtifactVersion(
+                task_id=task.id,
+                artifact_version_id=version.id,
+                position=0,
+            )
+        )
+        db.commit()
+
+        runtime_payload = [
+            {
+                "artifact_version_id": version.id,
+                "content_trust_level": "untrusted",
+                "extracted_text": "attachment-only-runtime-content",
+            }
+        ]
+        selection_manifest = {
+            "attachment_count": 1,
+            "selected_char_count": 31,
+            "items": [{"artifact_version_id": version.id, "truncated": False}],
+        }
+        storage = object()
+        captured: dict[str, object] = {}
+
+        monkeypatch.setattr(
+            analysis_tasks,
+            "get_artifact_processing_storage",
+            lambda _settings: storage,
+        )
+
+        def fake_attachment_context(db, *, task_id, company_id, storage):
+            captured["attachment_context_args"] = (task_id, company_id, storage)
+            return TaskAttachmentContext(runtime_payload, selection_manifest)
+
+        def fake_run_analysis(question, user_id, **kwargs):
+            captured["attachment_context"] = kwargs["attachment_context"]
+            return {
+                "plan": {"action": "direct_response", "route": None},
+                "terminal_result": {"outcome": "direct_response"},
+                "final_answer": "附件范围已接入。",
+            }
+
+        monkeypatch.setattr(
+            analysis_tasks, "build_task_attachment_context", fake_attachment_context
+        )
+        monkeypatch.setattr(analysis_tasks, "run_analysis", fake_run_analysis)
+
+        process_analysis_task.run(task_id=task.id)
+
+        assert captured["attachment_context_args"] == (task.id, company.id, storage)
+        assert captured["attachment_context"] == runtime_payload
+        event = (
+            db.query(WorkflowEvent)
+            .filter(
+                WorkflowEvent.execution_attempt_id.is_not(None),
+                WorkflowEvent.event_type == "context_selected",
+            )
+            .order_by(WorkflowEvent.id.desc())
+            .first()
+        )
+        assert event is not None
+        assert event.details["attachments"] == selection_manifest
+        assert "attachment-only-runtime-content" not in str(event.details)
+    finally:
+        db.rollback()
+        if task_id is not None:
+            task = db.get(AnalysisTask, task_id)
+            if task is not None:
+                db.delete(task)
+                db.flush()
+        if version_id is not None:
+            version = db.get(InputArtifactVersion, version_id)
+            if version is not None:
+                db.delete(version)
+                db.flush()
+        if artifact_id is not None:
+            artifact = db.get(InputArtifact, artifact_id)
+            if artifact is not None:
+                db.delete(artifact)
+                db.flush()
+        if company_id is not None:
+            company = db.get(Company, company_id)
+            if company is not None:
+                db.delete(company)
+                db.flush()
+        if user_id is not None:
+            user = db.get(User, user_id)
+            if user is not None:
+                db.delete(user)
+        db.commit()
+        db.close()
 
 
 def create_conversation_analysis_task(
@@ -226,7 +459,9 @@ def test_task_detail_returns_stable_top_level_report(
     response = client.get(f"/conversations/{task.conversation_id}/tasks/{task.id}")
 
     assert response.status_code == 200
-    assert response.json()["report"] == task.result_data["report"]
+    assert response.json()["report"] == FinalAnalysisReport.model_validate(
+        task.result_data["report"]
+    ).model_dump(mode="json")
 
 
 def test_other_user_cannot_cancel_task(
@@ -361,6 +596,21 @@ def test_worker_runs_langgraph_and_saves_terminal_planner_result(monkeypatch) ->
             "attempts": {"model_attempts": 2},
         }
         assert stored_task.result_data["terminal_result"]["outcome"] == "scope_exit"
+        context_event = (
+            db.query(WorkflowEvent)
+            .filter(
+                WorkflowEvent.task_id == task_id,
+                WorkflowEvent.event_type == "context_selected",
+            )
+            .one()
+        )
+        assert context_event.details["conversation"] == {
+            "snapshot_version": "1.0",
+            "history_truncated": False,
+            "manifest": None,
+        }
+        assert context_event.details["planner_memory"]["version"] == "planner-memory/v1"
+        assert "content" not in str(context_event.details)
     finally:
         _delete_created_records(db, task_id, user_id)
 
@@ -706,10 +956,14 @@ def test_worker_persists_retryable_planner_failure_as_failed(monkeypatch) -> Non
 
 
 def test_worker_retries_transient_connection_error(monkeypatch) -> None:
+    def fail_after_entering_data_node(*args, **kwargs):
+        kwargs["stage_callback"]("querying_data", "data_node")
+        raise ConnectionError("redis down")
+
     monkeypatch.setattr(
         analysis_tasks,
         "run_analysis",
-        lambda *args, **kwargs: (_ for _ in ()).throw(ConnectionError("redis down")),
+        fail_after_entering_data_node,
     )
     db = SessionLocal()
     task_id: int | None = None
@@ -740,6 +994,446 @@ def test_worker_retries_transient_connection_error(monkeypatch) -> None:
         assert stored_task.stage == "retrying"
         assert stored_task.error_type == "ConnectionError"
         assert stored_task.attempt_count == 1
+        transition = (
+            db.query(WorkflowCheckpoint)
+            .join(
+                TaskExecutionAttempt,
+                WorkflowCheckpoint.execution_attempt_id == TaskExecutionAttempt.id,
+            )
+            .filter(TaskExecutionAttempt.task_id == task_id)
+            .order_by(WorkflowCheckpoint.id.desc())
+            .first()
+        )
+        assert transition is not None
+        assert transition.next_node == "data_node"
+        assert transition.state_patch["retry_error_code"] == "ConnectionError"
+    finally:
+        _delete_created_records(db, task_id, user_id)
+
+
+def test_worker_does_not_retry_disk_full_error(monkeypatch) -> None:
+    monkeypatch.setattr(
+        analysis_tasks,
+        "run_analysis",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            OSError(errno.ENOSPC, "No space left on device")
+        ),
+    )
+    db = SessionLocal()
+    task_id: int | None = None
+    user_id: int | None = None
+    try:
+        suffix = uuid4().hex
+        user = User(name=f"disk-full-user-{suffix}", api_key=f"disk-full-key-{suffix}")
+        db.add(user)
+        db.flush()
+        db.commit()
+        user_id = user.id
+        task = AnalysisTask(
+            user_id=user_id, question="销售额", status="queued", stage="queued"
+        )
+        db.add(task)
+        db.commit()
+        task_id = task.id
+
+        with pytest.raises(OSError, match="No space"):
+            process_analysis_task.run(task_id=task_id)
+
+        db.expire_all()
+        stored_task = db.get(AnalysisTask, task_id)
+        assert stored_task is not None
+        assert stored_task.status == "failed"
+        assert stored_task.attempt_count == 1
+        assert stored_task.error_type == "OSError"
+    finally:
+        _delete_created_records(db, task_id, user_id)
+
+
+def test_worker_database_full_during_terminal_transition_keeps_execution_recoverable(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(
+        analysis_tasks,
+        "run_analysis",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            OSError(errno.ENOSPC, "No space left on device")
+        ),
+    )
+    monkeypatch.setattr(
+        analysis_tasks,
+        "transition_execution",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            OSError(errno.ENOSPC, "No space left on device")
+        ),
+    )
+    db = SessionLocal()
+    task_id: int | None = None
+    user_id: int | None = None
+    try:
+        suffix = uuid4().hex
+        user = User(
+            name=f"database-full-user-{suffix}",
+            api_key=f"database-full-key-{suffix}",
+        )
+        db.add(user)
+        db.flush()
+        db.commit()
+        user_id = user.id
+        task = AnalysisTask(
+            user_id=user_id, question="销售额", status="queued", stage="queued"
+        )
+        db.add(task)
+        db.commit()
+        task_id = task.id
+
+        with pytest.raises(OSError, match="No space"):
+            process_analysis_task.run(task_id=task_id)
+
+        db.expire_all()
+        stored_task = db.get(AnalysisTask, task_id)
+        assert stored_task is not None
+        assert stored_task.status == "running"
+        assert stored_task.active_execution_id is not None
+        attempt = (
+            db.query(TaskExecutionAttempt)
+            .filter(TaskExecutionAttempt.task_id == task_id)
+            .one()
+        )
+        assert attempt.status == "running"
+        attempt.lease_expires_at = datetime.now(timezone.utc) - timedelta(seconds=1)
+        db.commit()
+
+        assert recover_expired_executions(db) == [task_id]
+        db.expire_all()
+        stored_task = db.get(AnalysisTask, task_id)
+        assert stored_task is not None
+        assert stored_task.status == "retrying"
+        assert stored_task.active_execution_id is None
+    finally:
+        _delete_created_records(db, task_id, user_id)
+
+
+def test_worker_late_result_cannot_publish_after_execution_lease_recovery(
+    monkeypatch,
+) -> None:
+    entered_model_call = threading.Event()
+    release_model_call = threading.Event()
+    worker_errors: list[Exception] = []
+
+    def fake_run_analysis(*args, **kwargs):
+        entered_model_call.set()
+        assert release_model_call.wait(timeout=5)
+        return {
+            "plan": {"action": "direct_response", "route": None},
+            "terminal_result": {"outcome": "direct_response"},
+            "final_answer": "迟到的旧执行结果。",
+        }
+
+    monkeypatch.setattr(analysis_tasks, "run_analysis", fake_run_analysis)
+    db = SessionLocal()
+    task_id: int | None = None
+    user_id: int | None = None
+    worker: threading.Thread | None = None
+    try:
+        suffix = uuid4().hex
+        user = User(
+            name=f"lease-recovery-user-{suffix}",
+            api_key=f"lease-recovery-key-{suffix}",
+        )
+        db.add(user)
+        db.flush()
+        db.commit()
+        user_id = user.id
+        task = AnalysisTask(
+            user_id=user_id, question="销售额", status="queued", stage="queued"
+        )
+        db.add(task)
+        db.commit()
+        task_id = task.id
+
+        def run_worker() -> None:
+            try:
+                process_analysis_task.run(task_id=task_id)
+            except Exception as exc:  # noqa: BLE001 - surface arbitrary thread failure
+                worker_errors.append(exc)
+
+        worker = threading.Thread(target=run_worker)
+        worker.start()
+        assert entered_model_call.wait(timeout=5)
+
+        db.expire_all()
+        attempt = (
+            db.query(TaskExecutionAttempt)
+            .filter(TaskExecutionAttempt.task_id == task_id)
+            .one()
+        )
+        attempt.lease_expires_at = datetime.now(timezone.utc) - timedelta(seconds=1)
+        db.commit()
+
+        assert recover_expired_executions(db) == [task_id]
+        release_model_call.set()
+        worker.join(timeout=5)
+        assert not worker.is_alive()
+        assert worker_errors == []
+
+        db.expire_all()
+        stored_task = db.get(AnalysisTask, task_id)
+        assert stored_task is not None
+        assert stored_task.status == "retrying"
+        assert stored_task.active_execution_id is None
+        assert stored_task.result_data is None
+        assert stored_task.result_summary is None
+        assert attempt.status == "expired"
+    finally:
+        release_model_call.set()
+        if worker is not None:
+            worker.join(timeout=5)
+        _delete_created_records(db, task_id, user_id)
+
+
+def test_worker_heartbeats_during_a_blocking_workflow(monkeypatch) -> None:
+    monkeypatch.setattr(execution_module, "LEASE_SECONDS", 2)
+    entered_model_call = threading.Event()
+    heartbeat_renewed = threading.Event()
+    release_model_call = threading.Event()
+    worker_errors: list[Exception] = []
+    original_renew = analysis_tasks.renew_execution_lease
+
+    def observe_renew(*args, **kwargs):
+        renewed = original_renew(*args, **kwargs)
+        if renewed:
+            heartbeat_renewed.set()
+        return renewed
+
+    def fake_run_analysis(*args, **kwargs):
+        entered_model_call.set()
+        assert release_model_call.wait(timeout=5)
+        return {
+            "plan": {"action": "direct_response", "route": None},
+            "terminal_result": {"outcome": "direct_response"},
+            "final_answer": "有心跳保护的长调用结果。",
+        }
+
+    monkeypatch.setattr(analysis_tasks, "renew_execution_lease", observe_renew)
+    monkeypatch.setattr(analysis_tasks, "run_analysis", fake_run_analysis)
+    db = SessionLocal()
+    task_id: int | None = None
+    user_id: int | None = None
+    worker: threading.Thread | None = None
+    try:
+        suffix = uuid4().hex
+        user = User(
+            name=f"heartbeat-user-{suffix}", api_key=f"heartbeat-key-{suffix}"
+        )
+        db.add(user)
+        db.flush()
+        db.commit()
+        user_id = user.id
+        task = AnalysisTask(
+            user_id=user_id, question="销售额", status="queued", stage="queued"
+        )
+        db.add(task)
+        db.commit()
+        task_id = task.id
+
+        def run_worker() -> None:
+            try:
+                process_analysis_task.run(task_id=task_id)
+            except Exception as exc:  # noqa: BLE001 - surface arbitrary thread failure
+                worker_errors.append(exc)
+
+        worker = threading.Thread(target=run_worker)
+        worker.start()
+        assert entered_model_call.wait(timeout=5)
+        assert heartbeat_renewed.wait(timeout=4)
+
+        db.expire_all()
+        assert recover_expired_executions(db) == []
+        release_model_call.set()
+        worker.join(timeout=5)
+        assert not worker.is_alive()
+        assert worker_errors == []
+
+        db.expire_all()
+        stored_task = db.get(AnalysisTask, task_id)
+        assert stored_task is not None
+        assert stored_task.status == "completed"
+        assert stored_task.result_summary == "有心跳保护的长调用结果。"
+    finally:
+        release_model_call.set()
+        if worker is not None:
+            worker.join(timeout=5)
+        _delete_created_records(db, task_id, user_id)
+
+
+def test_worker_heartbeat_database_failure_allows_safe_lease_recovery(
+    monkeypatch,
+) -> None:
+    monkeypatch.setattr(execution_module, "LEASE_SECONDS", 2)
+    entered_model_call = threading.Event()
+    heartbeat_attempted = threading.Event()
+    release_model_call = threading.Event()
+    worker_errors: list[Exception] = []
+
+    def fail_renew(*args, **kwargs):
+        heartbeat_attempted.set()
+        raise ConnectionError("heartbeat database unavailable")
+
+    def fake_run_analysis(*args, **kwargs):
+        entered_model_call.set()
+        assert release_model_call.wait(timeout=6)
+        return {
+            "plan": {"action": "direct_response", "route": None},
+            "terminal_result": {"outcome": "direct_response"},
+            "final_answer": "数据库故障期间的旧执行结果。",
+        }
+
+    monkeypatch.setattr(analysis_tasks, "renew_execution_lease", fail_renew)
+    monkeypatch.setattr(analysis_tasks, "run_analysis", fake_run_analysis)
+    db = SessionLocal()
+    task_id: int | None = None
+    user_id: int | None = None
+    worker: threading.Thread | None = None
+    try:
+        suffix = uuid4().hex
+        user = User(
+            name=f"heartbeat-failure-user-{suffix}",
+            api_key=f"heartbeat-failure-key-{suffix}",
+        )
+        db.add(user)
+        db.flush()
+        db.commit()
+        user_id = user.id
+        task = AnalysisTask(
+            user_id=user_id, question="销售额", status="queued", stage="queued"
+        )
+        db.add(task)
+        db.commit()
+        task_id = task.id
+
+        def run_worker() -> None:
+            try:
+                process_analysis_task.run(task_id=task_id)
+            except Exception as exc:  # noqa: BLE001 - surface arbitrary thread failure
+                worker_errors.append(exc)
+
+        worker = threading.Thread(target=run_worker)
+        worker.start()
+        assert entered_model_call.wait(timeout=5)
+        assert heartbeat_attempted.wait(timeout=4)
+        time.sleep(1.1)
+
+        assert recover_expired_executions(db) == [task_id]
+        release_model_call.set()
+        worker.join(timeout=5)
+        assert not worker.is_alive()
+        assert worker_errors == []
+
+        db.expire_all()
+        stored_task = db.get(AnalysisTask, task_id)
+        assert stored_task is not None
+        assert stored_task.status == "retrying"
+        assert stored_task.active_execution_id is None
+        assert stored_task.result_data is None
+        assert stored_task.result_summary is None
+    finally:
+        release_model_call.set()
+        if worker is not None:
+            worker.join(timeout=5)
+        _delete_created_records(db, task_id, user_id)
+
+
+def test_worker_retries_retryable_model_error(monkeypatch) -> None:
+    monkeypatch.setattr(
+        analysis_tasks,
+        "run_analysis",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            RetryableModelError("Model returned an empty JSON response")
+        ),
+    )
+    db = SessionLocal()
+    task_id: int | None = None
+    user_id: int | None = None
+    try:
+        suffix = uuid4().hex
+        user = User(
+            name=f"model-retry-user-{suffix}", api_key=f"model-retry-key-{suffix}"
+        )
+        db.add(user)
+        db.flush()
+        db.commit()
+        user_id = user.id
+        task = AnalysisTask(
+            user_id=user_id, question="销售额", status="queued", stage="queued"
+        )
+        db.add(task)
+        db.commit()
+        task_id = task.id
+
+        with pytest.raises(analysis_tasks.RetryableAnalysisTaskError):
+            process_analysis_task.run(task_id=task_id)
+
+        db.expire_all()
+        stored_task = db.get(AnalysisTask, task_id)
+        assert stored_task is not None
+        assert stored_task.status == "retrying"
+        assert stored_task.stage == "retrying"
+        assert stored_task.error_type == "RetryableModelError"
+    finally:
+        _delete_created_records(db, task_id, user_id)
+
+
+def test_worker_timeout_keeps_governed_call_unknown_then_retries(monkeypatch) -> None:
+    def timeout_after_reservation(*args, **kwargs):
+        scope = reserve_model_call(
+            provider="deepseek",
+            model_name="timeout-test-model",
+            estimated_prompt_tokens=12,
+            reserved_completion_tokens=8,
+        )
+        assert scope is not None
+        record_model_call(
+            scope,
+            provider="deepseek",
+            model_name="timeout-test-model",
+            result_category="retryable_error",
+            error_code="provider_timeout",
+        )
+        raise RetryableModelError("provider timeout")
+
+    monkeypatch.setattr(analysis_tasks, "run_analysis", timeout_after_reservation)
+    db = SessionLocal()
+    task_id: int | None = None
+    user_id: int | None = None
+    try:
+        suffix = uuid4().hex
+        user = User(
+            name=f"timeout-user-{suffix}", api_key=f"timeout-key-{suffix}"
+        )
+        db.add(user)
+        db.flush()
+        db.commit()
+        user_id = user.id
+        task = AnalysisTask(
+            user_id=user_id, question="超时账本", status="queued", stage="queued"
+        )
+        db.add(task)
+        db.commit()
+        task_id = task.id
+
+        with pytest.raises(analysis_tasks.RetryableAnalysisTaskError):
+            process_analysis_task.run(task_id=task_id)
+
+        db.expire_all()
+        stored_task = db.get(AnalysisTask, task_id)
+        record = db.query(ModelCallRecord).filter_by(task_id=task_id).one()
+        assert stored_task is not None
+        assert stored_task.status == "retrying"
+        assert stored_task.model_budget_usage["unknown_cost_calls"] == 1
+        assert record.billing_status == "unknown"
+        assert record.cost is None
+        assert record.error_code == "provider_timeout"
+        assert record.settled_at is not None
     finally:
         _delete_created_records(db, task_id, user_id)
 

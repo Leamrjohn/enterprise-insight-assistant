@@ -2,12 +2,12 @@
 
 import logging
 
-from app.modules.analysis.agent_protocol import Agent, AgentInput, AgentOutput
 from app.core.exceptions import (
     PermanentModelError,
     RetryableModelError,
     StructuredOutputError,
 )
+from app.modules.analysis.agent_protocol import Agent, AgentInput, AgentOutput
 from app.modules.analysis.planning import PlanningService
 from app.modules.analysis.tool_protocol import Tool
 
@@ -40,8 +40,12 @@ class PlannerAgent(Agent):
             kwargs = {"conversation_context": input.context.get("conversation_context")}
             if input.context.get("feedback") is not None:
                 kwargs["feedback"] = input.context["feedback"]
+            if input.context.get("retry_context") is not None:
+                kwargs["retry_context"] = input.context["retry_context"]
             if input.context.get("planner_memory"):
                 kwargs["planner_memory"] = input.context["planner_memory"]
+            if input.context.get("attachment_context"):
+                kwargs["attachment_context"] = input.context["attachment_context"]
             decision = self._planning_service.decide(input.question, **kwargs)
         except RetryableModelError as error:
             logger.warning("Planner model retryable failure exhausted")

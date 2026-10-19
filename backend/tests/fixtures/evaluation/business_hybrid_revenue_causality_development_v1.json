@@ -1,0 +1,39 @@
+{
+  "schema_version": "1.0",
+  "dataset_version": "business-hybrid-revenue-causality-development-v1",
+  "cases": [
+    {
+      "case_id": "hybrid-east-delivered-revenue-causality-boundary",
+      "scenario": "regional_revenue_causality_boundary",
+      "complexity": "complex",
+      "split": "development",
+      "coverage_tags": ["data_sql", "knowledge_rag", "normal_result", "causality_boundary"],
+      "question": "请给出华东区2025年8月状态为 delivered 的订单销售额；并根据资料说明 CUST-0001 合同到期与暂停采购的关系，且明确这些资料是否足以证明其是华东全部销售表现的唯一原因。",
+      "company_scope": "acme-demo",
+      "document_scope": ["events/2025-08-east-sales-review.md"],
+      "expected_route": "hybrid",
+      "expected_entities": ["华东", "CUST-0001"],
+      "expected_period": "2025-08",
+      "expected_query_requirements": [
+        "按区域名称过滤",
+        "固定筛选 sales_orders.status = delivered",
+        "聚合 sales_orders.total_amount",
+        "检索合同到期和暂停采购"
+      ],
+      "expected_result_fingerprint": {
+        "algorithm": "sha256",
+        "value": "7c587b5fb455ebe3e3a51ecfe11a23325708b41653cd4eb012798489a1bb46cd"
+      },
+      "expected_document_claim_terms": [
+        {"all_of": ["CUST-0001", "合同", "到期", "暂停采购"]}
+      ],
+      "expected_document_qualification_terms": [
+        {"all_of": ["不能", "唯一原因"]}
+      ],
+      "forbidden_claims": ["唯一原因"],
+      "expected_outcome": "completed",
+      "max_model_calls": 8,
+      "max_tokens": 16000
+    }
+  ]
+}

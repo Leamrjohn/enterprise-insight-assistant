@@ -13,6 +13,7 @@ class RetrievalBrief(BaseModel):
             return self.question
         return (
             f"用户问题：{self.question}\n"
-            "已确认经营事实（仅用于检索可能解释，不构成因果结论）：\n- "
+            "已确认经营事实（仅用于检索可能解释，不构成因果结论；"
+            "不得因资料未复述上述事实而否定或限定它）：\n- "
             + "\n- ".join(self.confirmed_fact_statements)
         )

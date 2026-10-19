@@ -1,0 +1,25 @@
+{
+  "schema_version": "1.0",
+  "dataset_version": "business-document-scope-rejection-development-v1",
+  "cases": [
+    {
+      "case_id": "security-forged-document-id-request",
+      "evaluation_kind": "security_rejection",
+      "scenario": "forged_document_id",
+      "complexity": "simple",
+      "split": "development",
+      "coverage_tags": ["security_scope", "document_scope", "request_rejection"],
+      "question": "提交不属于当前公司的伪造文档 ID。",
+      "company_scope": "disposable-development-tenant",
+      "document_scope": [],
+      "expected_route": null,
+      "expected_entities": ["伪造文档 ID"],
+      "expected_period": "not_applicable",
+      "expected_query_requirements": ["在创建任务前拒绝范围外文档"],
+      "expected_result_fingerprint": {"scenario": "forged_document_id_denied"},
+      "expected_outcome": "failed",
+      "max_model_calls": 0,
+      "max_tokens": 0
+    }
+  ]
+}

@@ -1,22 +1,33 @@
-from fastapi.testclient import TestClient
-import pytest
-from sqlalchemy.orm import Session
+import os
 
+import app.core.middleware as request_middleware
 import app.modules.conversations.api as conversations_api
 import app.modules.conversations.repository as conversation_repository
 import app.modules.conversations.service as conversation_service
-from app.modules.identity.authentication import get_current_user
+import app.modules.workflow.repository as workflow_repository
+import pytest
+from app.core.exceptions import (
+    TaskAdmissionLimitError,
+    TaskCapacityLowWatermarkError,
+    TaskCapacitySignalUnavailableError,
+)
+from app.core.settings import get_settings
 from app.main import app
-from app.modules.workflow.models import AnalysisTask
+from app.modules.conversations.models import ConversationMessage
+from app.modules.identity.authentication import get_current_user
+from app.modules.identity.models import User
 from app.modules.organizations.models import (
     BusinessDataSource,
     Company,
     CompanyMember,
     SchemaSnapshot,
 )
-from app.modules.conversations.models import ConversationMessage
+from app.modules.workflow.models import AnalysisTask
 from app.modules.workflow.outbox_models import AnalysisTaskOutboxEvent
-from app.modules.identity.models import User
+from app.modules.workflow.repository import create_task
+from app.modules.workflow import capacity
+from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session
 
 
 def _setup_company_data_source(
@@ -118,6 +129,29 @@ def test_recent_context_messages_are_scoped_filtered_and_ordered(
     ]
 
 
+def test_assistant_message_supports_awaiting_review_status(
+    db_session: Session,
+    test_user: User,
+) -> None:
+    conversation = conversation_repository.create_conversation(
+        db_session,
+        user_id=test_user.id,
+        title="待审核状态",
+    )
+    message = conversation_repository.create_message(
+        db_session,
+        conversation_id=conversation.id,
+        role="assistant",
+        content=None,
+        status="queued",
+    )
+
+    message.status = "awaiting_review"
+    db_session.flush()
+
+    assert message.status == "awaiting_review"
+
+
 def test_create_list_and_get_conversation(
     client: TestClient, db_session: Session, test_user: User
 ) -> None:
@@ -194,11 +228,10 @@ def test_send_message_creates_messages_and_task_after_commit(
     assert task.conversation_id == conversation_id
     assert task.input_message_id == payload["user_message"]["id"]
     assert task.request_id == "create-task-correlation-id"
-    assert task.context_snapshot == {
-        "version": "1.0",
-        "messages": [],
-        "history_truncated": False,
-    }
+    assert task.context_snapshot["version"] == "2.0"
+    assert task.context_snapshot["messages"] == []
+    assert task.context_snapshot["history_truncated"] is False
+    assert task.context_snapshot["context_manifest"]["fragments"] == []
 
     messages = client.get(f"/conversations/{conversation_id}/messages")
     assert messages.status_code == 200
@@ -218,6 +251,203 @@ def test_send_message_creates_messages_and_task_after_commit(
     assert task_response.json()["assistant_content"] is None
     assert task_response.json()["result_summary"] is None
     assert "result_data" not in task_response.json()
+
+
+def test_send_message_rejects_when_company_inflight_limit_is_reached(
+    client: TestClient,
+    db_session: Session,
+    test_user: User,
+    monkeypatch,
+) -> None:
+    source_id = _setup_company_data_source(client, db_session, test_user)
+    conversation_id = client.post(
+        "/conversations", json={"title": "admission limit", "data_source_id": source_id}
+    ).json()["id"]
+    settings = get_settings().model_copy(
+        update={
+            "analysis_task_company_inflight_limit": 1,
+            "analysis_task_global_inflight_limit": 2,
+            "analysis_task_admission_retry_after_seconds": 17,
+        }
+    )
+    monkeypatch.setattr(workflow_repository, "get_settings", lambda: settings)
+    recorded_rejections: list[dict] = []
+    monkeypatch.setattr(
+        request_middleware,
+        "record_analysis_request_rejection",
+        lambda **kwargs: recorded_rejections.append(kwargs),
+    )
+    monkeypatch.setattr(
+        conversations_api, "publish_analysis_task_event", lambda db, *, event_id: True
+    )
+
+    accepted = client.post(
+        f"/conversations/{conversation_id}/messages", json={"content": "first"}
+    )
+    rejected = client.post(
+        f"/conversations/{conversation_id}/messages", json={"content": "second"}
+    )
+
+    assert accepted.status_code == 202
+    assert rejected.status_code == 429
+    assert rejected.json()["code"] == "rate_limited"
+    assert rejected.headers["Retry-After"] == "17"
+    assert db_session.query(AnalysisTask).count() == 1
+    assert db_session.query(AnalysisTaskOutboxEvent).count() == 1
+    assert db_session.query(ConversationMessage).count() == 2
+    accepted_task = db_session.get(AnalysisTask, accepted.json()["task_id"])
+    assert accepted_task is not None
+    assert recorded_rejections == [
+        {
+            "company_id": accepted_task.company_id,
+            "request_id": rejected.headers["X-Request-ID"],
+            "operation": "conversation_message",
+            "status_code": 429,
+        }
+    ]
+
+
+def test_send_message_rejects_when_capacity_signal_is_unavailable(
+    client: TestClient,
+    db_session: Session,
+    test_user: User,
+    monkeypatch,
+) -> None:
+    source_id = _setup_company_data_source(client, db_session, test_user)
+    conversation_id = client.post(
+        "/conversations", json={"title": "capacity signal", "data_source_id": source_id}
+    ).json()["id"]
+    monkeypatch.setattr(
+        workflow_repository,
+        "require_task_capacity",
+        lambda _settings: (_ for _ in ()).throw(
+            TaskCapacitySignalUnavailableError(retry_after_seconds=23)
+        ),
+    )
+
+    response = client.post(
+        f"/conversations/{conversation_id}/messages", json={"content": "blocked"}
+    )
+
+    assert response.status_code == 503
+    assert response.json()["code"] == "service_unavailable"
+    assert response.headers["Retry-After"] == "23"
+    assert db_session.query(AnalysisTask).count() == 0
+    assert db_session.query(AnalysisTaskOutboxEvent).count() == 0
+    assert db_session.query(ConversationMessage).count() == 0
+
+
+@pytest.mark.e2e
+def test_real_capacity_signal_rejects_http_task_creation_before_writes(
+    client: TestClient,
+    db_session: Session,
+    test_user: User,
+    monkeypatch,
+) -> None:
+    if os.environ.get("RUN_CAPACITY_SIGNAL_E2E") != "1":
+        pytest.skip("requires the authenticated Compose capacity-signal service")
+
+    source_id = _setup_company_data_source(client, db_session, test_user)
+    conversation_id = client.post(
+        "/conversations",
+        json={"title": "real capacity signal", "data_source_id": source_id},
+    ).json()["id"]
+    settings = get_settings().model_copy(
+        update={
+            "analysis_task_capacity_admission_enabled": True,
+            "analysis_task_capacity_low_watermark_bytes": 9_223_372_036_854_775_807,
+            "analysis_task_admission_retry_after_seconds": 23,
+        }
+    )
+    with pytest.raises(TaskCapacityLowWatermarkError):
+        capacity.require_task_capacity(settings)
+    monkeypatch.setattr(workflow_repository, "get_settings", lambda: settings)
+
+    response = client.post(
+        f"/conversations/{conversation_id}/messages", json={"content": "blocked"}
+    )
+
+    assert response.status_code == 503
+    assert response.json()["code"] == "service_unavailable"
+    assert response.headers["Retry-After"] == "23"
+    assert db_session.query(AnalysisTask).count() == 0
+    assert db_session.query(AnalysisTaskOutboxEvent).count() == 0
+    assert db_session.query(ConversationMessage).count() == 0
+
+
+def test_cancelling_conversation_task_suppresses_unclaimed_outbox_replay(
+    client: TestClient,
+    db_session: Session,
+    test_user: User,
+    monkeypatch,
+) -> None:
+    source_id = _setup_company_data_source(client, db_session, test_user)
+    conversation_id = client.post(
+        "/conversations", json={"title": "cancel delivery", "data_source_id": source_id}
+    ).json()["id"]
+    monkeypatch.setattr(
+        conversations_api, "publish_analysis_task_event", lambda db, *, event_id: True
+    )
+
+    accepted = client.post(
+        f"/conversations/{conversation_id}/messages", json={"content": "cancel me"}
+    )
+    assert accepted.status_code == 202
+    task_id = accepted.json()["task_id"]
+    event = (
+        db_session.query(AnalysisTaskOutboxEvent)
+        .filter(AnalysisTaskOutboxEvent.task_id == task_id)
+        .one()
+    )
+    # Simulate the exact window after Broker acceptance but before a Worker claim.
+    event.status = "broker_accepted"
+    db_session.commit()
+
+    cancelled = client.post(f"/conversations/{conversation_id}/tasks/{task_id}/cancel")
+
+    assert cancelled.status_code == 200
+    assert cancelled.json()["status"] == "cancelled"
+    db_session.refresh(event)
+    assert event.status == "cancelled"
+    assert event.publish_lease_expires_at is None
+    assert event.last_error == "task_cancelled_before_worker_claim"
+
+
+def test_task_admission_enforces_the_global_inflight_limit(
+    db_session: Session,
+    test_user: User,
+    monkeypatch,
+) -> None:
+    first_company = Company(name="admission-first")
+    second_company = Company(name="admission-second")
+    db_session.add_all([first_company, second_company])
+    db_session.flush()
+    settings = get_settings().model_copy(
+        update={
+            "analysis_task_company_inflight_limit": 2,
+            "analysis_task_global_inflight_limit": 1,
+            "analysis_task_admission_retry_after_seconds": 17,
+        }
+    )
+    monkeypatch.setattr(workflow_repository, "get_settings", lambda: settings)
+
+    create_task(
+        db_session,
+        user_id=test_user.id,
+        company_id=first_company.id,
+        question="first",
+    )
+
+    with pytest.raises(TaskAdmissionLimitError) as exc_info:
+        create_task(
+            db_session,
+            user_id=test_user.id,
+            company_id=second_company.id,
+            question="second",
+        )
+
+    assert exc_info.value.scope == "global"
+    assert db_session.query(AnalysisTask).count() == 1
 
 
 def test_failed_conversation_task_can_create_a_linked_retry(
@@ -336,25 +566,31 @@ def test_send_message_persists_only_the_recent_context_window(
     assert response.status_code == 202
     task = db_session.get(AnalysisTask, response.json()["task_id"])
     assert task is not None
-    assert task.context_snapshot == {
-        "version": "1.0",
-        "messages": [
-            {
-                "id": message.id,
-                "role": message.role,
-                "content": message.content,
-                "content_truncated": False,
-            }
-            for message in previous_messages[-8:]
-        ],
-        "history_truncated": False,
-    }
+    assert task.context_snapshot["version"] == "2.0"
+    assert task.context_snapshot["messages"] == [
+        {
+            "id": message.id,
+            "role": message.role,
+            "content": message.content,
+            "content_truncated": False,
+        }
+        for message in previous_messages[-8:]
+    ]
+    assert task.context_snapshot["history_truncated"] is True
+    fragments = task.context_snapshot["context_manifest"]["fragments"]
+    assert fragments[0]["message_id"] == previous_messages[0].id
+    assert fragments[0]["decision"] == "omitted"
+    assert fragments[0]["reason"] == "message_count_limit"
+    assert [fragment["message_id"] for fragment in fragments[1:]] == [
+        message.id for message in previous_messages[-8:]
+    ]
 
 
 def test_conversation_resources_are_hidden_from_another_user(
     client: TestClient,
     db_session: Session,
     test_user: User,
+    monkeypatch,
 ) -> None:
     source_id = _setup_company_data_source(client, db_session, test_user)
     conversation_id = client.post(
@@ -374,6 +610,13 @@ def test_conversation_resources_are_hidden_from_another_user(
     )
     db_session.flush()
 
+    recorded_rejections: list[dict] = []
+    monkeypatch.setattr(
+        request_middleware,
+        "record_analysis_request_rejection",
+        lambda **kwargs: recorded_rejections.append(kwargs),
+    )
+
     app.dependency_overrides[get_current_user] = lambda: other_user
     try:
         assert client.get(f"/conversations/{conversation_id}").status_code == 404
@@ -389,6 +632,12 @@ def test_conversation_resources_are_hidden_from_another_user(
         )
     finally:
         app.dependency_overrides[get_current_user] = lambda: test_user
+
+    assert len(recorded_rejections) == 1
+    assert recorded_rejections[0]["company_id"] == other_company.id
+    assert recorded_rejections[0]["operation"] == "conversation_message"
+    assert recorded_rejections[0]["status_code"] == 404
+    assert recorded_rejections[0]["request_id"]
 
 
 def test_enqueue_failure_leaves_durable_pending_outbox_event(

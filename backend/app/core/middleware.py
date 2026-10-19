@@ -1,4 +1,5 @@
 import logging
+import re
 import time
 from uuid import uuid4
 
@@ -6,7 +7,7 @@ from fastapi import Request, Response
 from fastapi.responses import JSONResponse
 
 from app.core.logging import request_id_context
-
+from app.modules.observability.rejection_audit import record_analysis_request_rejection
 
 logger = logging.getLogger("app.request")
 
@@ -14,6 +15,17 @@ logger = logging.getLogger("app.request")
 _rate_limit_store: dict[str, list[float]] = {}
 RATE_LIMIT_MAX = 100  # 每分钟最多 100 次请求
 RATE_LIMIT_WINDOW = 60  # 滑动窗口 60 秒
+_CONVERSATION_MESSAGE_PATH = re.compile(r"^/conversations/\d+/messages$")
+_AUDITED_REJECTION_STATUSES = {403, 404, 409, 422, 429}
+
+
+def _is_audited_analysis_rejection(request: Request, response: Response) -> bool:
+    return (
+        request.method == "POST"
+        and _CONVERSATION_MESSAGE_PATH.fullmatch(request.url.path) is not None
+        and response.status_code in _AUDITED_REJECTION_STATUSES
+        and isinstance(getattr(request.state, "company_id", None), int)
+    )
 
 
 def _check_rate_limit(api_key: str) -> JSONResponse | None:
@@ -87,6 +99,13 @@ async def request_context_middleware(
             2,
         )
         response.headers["X-Request-ID"] = request_id
+        if _is_audited_analysis_rejection(request, response):
+            record_analysis_request_rejection(
+                company_id=request.state.company_id,
+                request_id=request_id,
+                operation="conversation_message",
+                status_code=response.status_code,
+            )
         logger.info(
             "Request completed",
             extra={

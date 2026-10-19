@@ -5,12 +5,17 @@
 2. 后续替换为真实的 OpenAI Gateway 时，调用方式完全一致
 """
 
-import logging
 import json
+import logging
 import re
 import time
-from app.core.gateway.base import ModelGateway, ModelCallRecord
-from app.modules.runtime.model_governance import record_model_call, reserve_model_call
+
+from app.core.gateway.base import ModelCallRecord, ModelGateway
+from app.modules.runtime.model_governance import (
+    prompt_provenance,
+    record_model_call,
+    reserve_model_call,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +37,7 @@ class LocalModelGateway(ModelGateway):
             model_name="local-simulator",
             estimated_prompt_tokens=self.count_tokens(prompt),
         )
+        provenance = prompt_provenance(prompt, system_prompt, json_mode=json_mode)
 
         # 模拟模型处理的耗时
         time.sleep(0.5)
@@ -86,6 +92,7 @@ class LocalModelGateway(ModelGateway):
             completion_tokens=completion_tokens,
             duration_ms=duration,
             result_category="success",
+            **provenance,
         )
 
         return response

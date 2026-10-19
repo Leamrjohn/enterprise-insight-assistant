@@ -40,7 +40,7 @@ WITH monthly_revenue AS (
           %(current_month)s,
           %(comparison_month)s
       ) + INTERVAL '1 month'
-      AND (%(region)s IS NULL OR c.region_code = %(region)s)
+      AND (%(region)s::text IS NULL OR c.region_code = %(region)s::text)
     GROUP BY c.region_code
 )
 SELECT

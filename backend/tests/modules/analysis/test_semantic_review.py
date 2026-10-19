@@ -2,10 +2,10 @@ import json
 
 from app.core.exceptions import RetryableModelError
 from app.modules.analysis.planner_decision import PlannerDecision
-from app.modules.reporting.semantic_review import EvidenceSemanticReview
-from app.modules.analysis.sql_candidate import SQLCandidate
-from app.modules.reporting.semantic_review_service import SemanticReviewService
 from app.modules.analysis.snapshot_catalog import SnapshotCatalog
+from app.modules.analysis.sql_candidate import SQLCandidate
+from app.modules.reporting.semantic_review import EvidenceSemanticReview
+from app.modules.reporting.semantic_review_service import SemanticReviewService
 
 
 class FakeGateway:
@@ -53,6 +53,37 @@ def test_sql_semantic_reviewer_blocks_unrelated_fallback_query() -> None:
     assert decision.missing_requirements == ["广告曝光量", "广告点击量"]
     assert gateway.calls[0]["json_mode"] is True
     assert "customers" in gateway.calls[0]["prompt"]
+
+
+def test_sql_semantic_reviewer_allows_a_hybrid_data_subquestion() -> None:
+    gateway = FakeGateway(
+        {"decision": "execute", "reason": "覆盖销售额比较。", "missing_requirements": []}
+    )
+    service = SemanticReviewService(gateway=gateway)
+
+    decision = service.review_sql(
+        question="SKU-UNKNOWN-2024 在2024年3月为何下降？",
+        plan={
+            "route": "hybrid",
+            "intent": {
+                "required_capabilities": ["产品销售额", "下降原因相关文档"],
+            },
+        },
+        candidate=SQLCandidate(
+            sql='SELECT SUM(total_amount) AS "销售额" FROM sales_orders',
+            purpose="验证产品销售额比较",
+            query_contract={
+                "required_concepts": ["产品销售额"],
+                "expected_columns": ["销售额"],
+                "result_kind": "comparison",
+            },
+        ),
+        catalog=SnapshotCatalog(tables={"sales_orders": {"total_amount"}}, joins=set()),
+    )
+
+    assert decision.decision == "execute"
+    assert "route=hybrid" in gateway.calls[0]["system_prompt"]
+    assert "数据子问题" in gateway.calls[0]["system_prompt"]
 
 
 def test_plan_semantic_reviewer_can_turn_cross_company_query_into_refusal() -> None:
@@ -112,7 +143,54 @@ def test_plan_semantic_reviewer_preserves_initial_plan_for_accept_vocabulary() -
         catalog=None,
     )
 
-    assert decision.model_dump() == proposed_plan
+    assert (
+        decision.model_dump()
+        == PlannerDecision.model_validate(proposed_plan).model_dump()
+    )
+
+
+def test_plan_semantic_reviewer_keeps_planner_scope_when_rewrite_omits_it() -> None:
+    gateway = FakeGateway(
+        {
+            "action": "analyze",
+            "route": "hybrid",
+            "reason": "需要同时核对销量与资料。",
+            "clarification_question": None,
+            "response_message": None,
+            "resolved_question": "某新产品在2024年3月销量下降的业务原因是什么？",
+            "clarification": None,
+            "intent": {
+                "kind": "business_cause",
+                "required_capabilities": ["销量", "文档证据"],
+                "specified_slots": ["product", "time_range"],
+            },
+        }
+    )
+    proposed_plan = {
+        "action": "analyze",
+        "route": "hybrid",
+        "reason": "需要数据和资料。",
+        "clarification_question": None,
+        "response_message": None,
+        "resolved_question": "某新产品在2024年3月销量下降的业务原因是什么？",
+        "clarification": None,
+        "intent": {
+            "kind": "business_cause",
+            "required_capabilities": ["销量", "文档证据"],
+            "specified_slots": ["product", "time_range"],
+        },
+        "evaluation_scope": {"entities": ["某新产品"], "period": "2024-03"},
+    }
+
+    decision = SemanticReviewService(gateway=gateway).review_plan(
+        question=proposed_plan["resolved_question"],
+        proposed_plan=proposed_plan,
+        catalog=None,
+    )
+
+    assert "九字段" in gateway.calls[0]["system_prompt"]
+    assert decision.evaluation_scope is not None
+    assert decision.evaluation_scope.model_dump() == proposed_plan["evaluation_scope"]
 
 
 def test_evidence_semantic_reviewer_marks_unrelated_data_as_unsupported() -> None:
@@ -134,6 +212,29 @@ def test_evidence_semantic_reviewer_marks_unrelated_data_as_unsupported() -> Non
 
     assert isinstance(decision, EvidenceSemanticReview)
     assert decision.verdict == "unsupported"
+
+
+def test_evidence_semantic_reviewer_keeps_hybrid_data_and_document_scopes_distinct() -> None:
+    gateway = FakeGateway(
+        {
+            "verdict": "supported",
+            "reason": "SQL 覆盖销售额，文档覆盖合同边界。",
+            "limitations": [],
+            "supported_document_chunk_ids": [42],
+            "document_qualifications": [],
+        }
+    )
+
+    decision = SemanticReviewService(gateway=gateway).review_evidence(
+        question="销售额是多少，合同资料能说明什么？",
+        plan={"action": "analyze", "route": "hybrid"},
+        data_result={"status": "ready", "evidence": [{"rows": [[1847604.72]]}]},
+        knowledge_result={"status": "ready", "evidences": [{"chunk_id": 42}]},
+        report={"status": "completed"},
+    )
+
+    assert decision.verdict == "supported"
+    assert "文档未重复 SQL 指标" in gateway.calls[0]["system_prompt"]
 
 
 def test_semantic_reviewer_retries_a_transient_model_failure() -> None:

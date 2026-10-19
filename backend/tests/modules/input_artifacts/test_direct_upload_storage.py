@@ -1,10 +1,10 @@
 from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
-from pydantic import SecretStr
-
+import pytest
 from app.core.settings import get_settings
 from app.modules.input_artifacts.direct_upload_storage import S3DirectUploadStorage
+from pydantic import SecretStr
 
 
 class _FakeS3Client:
@@ -19,15 +19,29 @@ class _FakeS3Client:
         }
 
 
-def test_s3_direct_upload_form_binds_exact_key_size_and_checksum(
-    monkeypatch,
+@pytest.mark.parametrize(
+    ("public_endpoint", "expected_endpoint"),
+    [
+        ("https://upload.example.test", "https://upload.example.test"),
+        (None, "https://s3.example.test"),
+    ],
+)
+def test_s3_direct_upload_form_binds_exact_key_size_checksum_and_public_endpoint(
+    monkeypatch, public_endpoint: str | None, expected_endpoint: str
 ) -> None:
     fake_client = _FakeS3Client()
-    fake_boto3 = SimpleNamespace(client=lambda *_args, **_kwargs: fake_client)
+    client_kwargs: dict[str, object] = {}
+
+    def client(*_args, **kwargs):
+        client_kwargs.update(kwargs)
+        return fake_client
+
+    fake_boto3 = SimpleNamespace(client=client)
     monkeypatch.setitem(__import__("sys").modules, "boto3", fake_boto3)
     settings = get_settings().model_copy(
         update={
             "input_artifact_object_storage_endpoint_url": "https://s3.example.test",
+            "input_artifact_object_storage_public_endpoint_url": public_endpoint,
             "input_artifact_object_storage_bucket": "quarantine-bucket",
             "input_artifact_object_storage_access_key_id": SecretStr("access-key"),
             "input_artifact_object_storage_secret_access_key": SecretStr("secret-key"),
@@ -43,6 +57,7 @@ def test_s3_direct_upload_form_binds_exact_key_size_and_checksum(
     )
 
     assert form.url == "https://object-storage.example.test/input-artifacts"
+    assert client_kwargs["endpoint_url"] == expected_endpoint
     assert fake_client.request is not None
     assert fake_client.request["Bucket"] == "quarantine-bucket"
     assert fake_client.request["Key"] == "input-artifacts/quarantine/7/session/payload"

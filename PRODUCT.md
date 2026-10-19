@@ -1,5 +1,7 @@
 # Enterprise Insight Assistant 产品说明
 
+> 本文维护产品用途与业务边界。生产级目标与验收以 [主路线图](docs/single_node_production_style_ai_application_roadmap.md) 为准；当前实现证据见 [项目审计](docs/project_core_audit_20260915.md)。
+
 ## 产品定位
 
 Enterprise Insight Assistant 是面向中小型公司的经营分析 Web 应用。它把公司授权的只读经营数据和内部文档组合为可追溯证据，输出事实、原因假设、行动建议和明确限制。
@@ -53,7 +55,7 @@ Enterprise Insight Assistant 是面向中小型公司的经营分析 Web 应用�
 
 - 用户原始 SQL 或无约束自然语言 SQL。
 - 写入经营数据库或自动执行经营动作。
-- 跨公司数据访问。
+- 未经明确授权的跨公司数据访问。双边审批的显式跨公司授权是目标设计，当前未验收前不得宣称支持。
 - 多 Agent 自由辩论。
 - 把文档陈述当作已经验证的数据事实。
 - 在没有真实测试或运行证据时宣称大规模、高可用或生产 SLA。
@@ -62,4 +64,4 @@ Enterprise Insight Assistant 是面向中小型公司的经营分析 Web 应用�
 
 当前仓库提供 FastAPI、React、PostgreSQL/pgvector、Redis/Celery、LangGraph、模型网关、受控 SQL、RAG、报告校验、审核和单机运维脚本。它适合本地演示、自动化回归和内部试用前验证。
 
-上线前仍需根据目标环境重新验证：密钥管理、外部访问控制、真实数据权限、容量、监控告警、备份恢复、模型成本、业务评测和故障演练。
+本次不上线，但密钥管理、权限、容量、监控告警、备份恢复、模型成本、业务评测和故障演练均属于当前全项目改造的验收范围；不能推迟到上线前才做。

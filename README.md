@@ -2,9 +2,13 @@
 
 面向中小型公司的证据驱动经营分析系统。用户用自然语言提出经营问题，系统在当前公司授权范围内查询只读经营数据库、检索内部文档，并生成可追溯的结构化报告。
 
-本仓库定位为可在单机验证的生产风格原型，不宣称已经证明大规模并发、高可用或真实客户数据效果。
+本项目目标是全模块符合明确适用范围的生产级设计与工程要求，并在单电脑与存储服务环境完成真实验证，不要求上线。当前实现尚未通过整体生产级验收；目标与进度分开记录。
 
-## 核心能力
+**查看计划与进度，从 [文档阅读导航](docs/README.md) 开始。**
+
+## 已有模块与能力基础
+
+以下是实现构成，不代表各项已通过完整生产级门禁；当前缺口与验证范围见 [项目审计](docs/project_core_audit_20260915.md)。
 
 - 公司级身份与权限：JWT 登录、成员角色、资源隔离和管理审批。
 - 文档知识库：TXT、Markdown、PDF 上传，异步解析、分块、向量化和 pgvector 检索。
@@ -155,7 +159,8 @@ docker compose config --quiet
 - `/auth/*`：登录、当前用户、密码和成员申请。
 - `/documents/*`：文档上传、编辑、处理状态和分块查询。
 - `/conversations/*`：会话、消息、分析任务创建与结果读取。
-- `/tasks/*`：任务查询、取消和兼容入口。
+- 任务操作位于会话主链；旧 `/tasks/*` 路由当前未在 `backend/app/api/router.py` 挂载。
+- 附件输入接口由 `input_artifacts` 模块提供，实际路径以 OpenAPI 为准。
 - `/company/*`：公司、成员、邀请、数据源和 Schema 快照。
 - `/review-requests/*`：报告审核。
 - `/observability/*`：任务指标。
@@ -181,6 +186,11 @@ docker-compose.yml      本地服务编排
 ```
 
 ## 项目文档
+
+- [阅读导航：目标、计划、当前进度与操作资料](docs/README.md)
+- [全项目生产级改造路线图](docs/single_node_production_style_ai_application_roadmap.md)
+- [已确认目标设计](docs/confirmed_production_design.md)
+- [当前代码审计与验证边界](docs/project_core_audit_20260915.md)
 
 - [产品定义与边界](PRODUCT.md)
 - [前端设计系统](DESIGN.md)

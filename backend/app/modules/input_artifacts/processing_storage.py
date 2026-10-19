@@ -38,11 +38,26 @@ class ArtifactProcessingStorage(Protocol):
         destination_path: Path,
     ) -> StoredProcessingObject: ...
 
+    def download_parsed_object(
+        self,
+        *,
+        object_key: str,
+        destination_path: Path,
+    ) -> StoredProcessingObject: ...
+
     def write_parsed_object(
         self,
         *,
         object_key: str,
         content: bytes,
+        content_type: str,
+    ) -> StoredProcessingObject: ...
+
+    def write_parsed_file(
+        self,
+        *,
+        object_key: str,
+        source_path: Path,
         content_type: str,
     ) -> StoredProcessingObject: ...
 
@@ -63,7 +78,39 @@ class S3ArtifactProcessingStorage:
         object_key: str,
         destination_path: Path,
     ) -> StoredProcessingObject:
-        _require_object_key(object_key, prefix=_QUARANTINE_PREFIX)
+        return self._download_object(
+            object_key=object_key,
+            destination_path=destination_path,
+            prefix=_QUARANTINE_PREFIX,
+            not_found_message="quarantined object was not found",
+            unavailable_message="object storage could not download the quarantined object",
+        )
+
+    def download_parsed_object(
+        self,
+        *,
+        object_key: str,
+        destination_path: Path,
+    ) -> StoredProcessingObject:
+        """Download a parser output for a task-scoped, integrity-checked read."""
+        return self._download_object(
+            object_key=object_key,
+            destination_path=destination_path,
+            prefix=_PARSED_PREFIX,
+            not_found_message="parsed object was not found",
+            unavailable_message="object storage could not download the parsed object",
+        )
+
+    def _download_object(
+        self,
+        *,
+        object_key: str,
+        destination_path: Path,
+        prefix: str,
+        not_found_message: str,
+        unavailable_message: str,
+    ) -> StoredProcessingObject:
+        _require_object_key(object_key, prefix=prefix)
         if destination_path.exists():
             raise ValueError("processing download destination already exists")
         destination_path.parent.mkdir(parents=True, exist_ok=True)
@@ -76,12 +123,8 @@ class S3ArtifactProcessingStorage:
         except Exception as exc:
             destination_path.unlink(missing_ok=True)
             if _is_not_found_error(exc):
-                raise ArtifactProcessingObjectNotFoundError(
-                    "quarantined object was not found"
-                ) from exc
-            raise ArtifactProcessingStorageUnavailableError(
-                "object storage could not download the quarantined object"
-            ) from exc
+                raise ArtifactProcessingObjectNotFoundError(not_found_message) from exc
+            raise ArtifactProcessingStorageUnavailableError(unavailable_message) from exc
         byte_size, sha256_hex = _file_size_and_sha256(destination_path)
         return StoredProcessingObject(object_key, byte_size, sha256_hex)
 
@@ -114,6 +157,38 @@ class S3ArtifactProcessingStorage:
                 "object storage could not write the parsed object"
             ) from exc
         return StoredProcessingObject(object_key, len(content), sha256_hex)
+
+    def write_parsed_file(
+        self,
+        *,
+        object_key: str,
+        source_path: Path,
+        content_type: str,
+    ) -> StoredProcessingObject:
+        _require_object_key(object_key, prefix=_PARSED_PREFIX)
+        if not source_path.is_file():
+            raise ValueError("parsed source_path must be an existing file")
+        if not isinstance(content_type, str) or not content_type.strip():
+            raise ValueError("parsed file content_type is invalid")
+        byte_size, sha256_hex = _file_size_and_sha256(source_path)
+        try:
+            with source_path.open("rb") as source:
+                self._client().put_object(
+                    Bucket=self._settings.input_artifact_object_storage_bucket,
+                    Key=object_key,
+                    Body=source,
+                    ContentLength=byte_size,
+                    ContentType=content_type.strip(),
+                    ChecksumAlgorithm="SHA256",
+                    ChecksumSHA256=base64.b64encode(
+                        bytes.fromhex(sha256_hex)
+                    ).decode("ascii"),
+                )
+        except Exception as exc:
+            raise ArtifactProcessingStorageUnavailableError(
+                "object storage could not write the parsed file"
+            ) from exc
+        return StoredProcessingObject(object_key, byte_size, sha256_hex)
 
     def _client(self):
         try:

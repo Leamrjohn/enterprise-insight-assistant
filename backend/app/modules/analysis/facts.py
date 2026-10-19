@@ -2,7 +2,6 @@
 
 from app.modules.reporting.schemas import ConfirmedFact, DataEvidence
 
-
 _COLUMN_DISPLAY_NAMES = {
     "order_count": "订单数量",
     "total_orders": "订单数量",
@@ -25,22 +24,8 @@ _COLUMN_DISPLAY_NAMES = {
 
 
 def render_evidence_purpose(purpose: object) -> str:
-    """Keep raw SQL and implementation names out of business-facing facts."""
-    if not isinstance(purpose, str) or not purpose.strip():
-        return "已授权经营数据"
-    normalized = purpose.strip()
-    lowered = normalized.lower()
-    if any(
-        token in lowered for token in ("select ", " from ", " join ", " where ", ";")
-    ):
-        return "已授权经营数据"
-    if " 的 " in normalized and any(
-        char.isascii() and char.isalpha() for char in normalized
-    ):
-        return "已授权经营数据"
-    if "_" in normalized:
-        return "已授权经营数据"
-    return normalized
+    """Never promote model-generated SQL purpose text into a business fact."""
+    return "已授权经营数据"
 
 
 def render_data_fields(columns: list[str], row: list[object]) -> str:
@@ -64,10 +49,12 @@ def build_data_evidence(data_result: dict) -> list[DataEvidence]:
         evidence_list.append(
             DataEvidence(
                 evidence_id=f"data-{index}",
-                purpose=evidence.get("purpose") or "受控经营数据查询",
+                purpose=render_evidence_purpose(evidence.get("purpose")),
                 sql=evidence.get("sql"),
                 columns=[str(column) for column in evidence.get("columns") or []],
                 rows=[list(row) for row in evidence.get("rows") or []],
+                metric_assessment=evidence.get("metric_assessment"),
+                claim_assessment=evidence.get("claim_assessment"),
             )
         )
     return evidence_list
@@ -77,6 +64,16 @@ def build_confirmed_facts(data_evidence: list[DataEvidence]) -> list[ConfirmedFa
     """No LLM is involved: a fact is a bounded rendering of one result row."""
     facts: list[ConfirmedFact] = []
     for evidence in data_evidence:
+        if (
+            evidence.metric_assessment is not None
+            and evidence.metric_assessment.status != "supported"
+        ):
+            continue
+        if (
+            evidence.claim_assessment is not None
+            and evidence.claim_assessment.status in {"refuted", "irrelevant"}
+        ):
+            continue
         for row in evidence.rows[:5]:
             if not evidence.columns or len(row) != len(evidence.columns):
                 continue

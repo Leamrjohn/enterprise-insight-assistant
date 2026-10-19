@@ -3,12 +3,11 @@
 from datetime import datetime
 from typing import Any
 
+from app.db.base import Base
+from app.modules.memory.sources import MemorySource
 from sqlalchemy import Boolean, DateTime, ForeignKey, String, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-
-from app.db.base import Base
-from app.modules.memory.sources import MemorySource
 
 
 class AnalysisMemory(Base):
@@ -28,7 +27,7 @@ class AnalysisMemory(Base):
         index=True,
     )
     memory_source_id: Mapped[int | None] = mapped_column(
-        ForeignKey("memory_sources.id", ondelete="SET NULL"), index=True
+        ForeignKey("memory_sources.id", ondelete="CASCADE"), index=True
     )
     memory_type: Mapped[str] = mapped_column(String(32), nullable=False)
     content: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)

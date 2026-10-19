@@ -20,6 +20,13 @@ def test_user_message_content_cannot_be_blank() -> None:
         ConversationMessageCreate(content="   ")
 
 
+def test_user_message_rejects_duplicate_or_non_positive_artifact_versions() -> None:
+    with pytest.raises(ValidationError):
+        ConversationMessageCreate(content="分析附件", artifact_version_ids=[7, 7])
+    with pytest.raises(ValidationError):
+        ConversationMessageCreate(content="分析附件", artifact_version_ids=[0])
+
+
 def test_queued_assistant_message_allows_null_content() -> None:
     now = datetime.now(timezone.utc)
 

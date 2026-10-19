@@ -13,6 +13,7 @@ from app.modules.input_artifacts.api import _build_upload_response
 from app.modules.input_artifacts.direct_upload_storage import (
     DirectUploadForm,
     DirectUploadObjectNotFoundError,
+    DirectUploadStorageUnavailableError,
     StoredQuarantineObject,
 )
 from app.modules.input_artifacts.models import (
@@ -340,8 +341,18 @@ def test_initiate_attachment_upload_session_never_falls_back_to_local_disk(
     client,
     db_session: Session,
     test_user: User,
+    monkeypatch,
 ) -> None:
     _, conversation = _create_context_and_conversation(db_session, test_user)
+
+    def unavailable_storage(_settings):
+        raise DirectUploadStorageUnavailableError("test storage is unavailable")
+
+    monkeypatch.setattr(
+        input_artifacts_api,
+        "get_direct_upload_storage",
+        unavailable_storage,
+    )
 
     response = client.post(
         f"/conversations/{conversation.id}/attachment-upload-sessions",

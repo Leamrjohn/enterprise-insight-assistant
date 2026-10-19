@@ -6,20 +6,39 @@ x-backend-environment: &backend-environment
   DATABASE_USER: agent_app
   DATABASE_PASSWORD: changeme_in_production
   REDIS_URL: redis://redis:6379/0
+  INPUT_ARTIFACT_OBJECT_STORAGE_ENDPOINT_URL: ${INPUT_ARTIFACT_OBJECT_STORAGE_ENDPOINT_URL:-http://localstack:4566}
+  INPUT_ARTIFACT_OBJECT_STORAGE_PUBLIC_ENDPOINT_URL: ${INPUT_ARTIFACT_OBJECT_STORAGE_PUBLIC_ENDPOINT_URL:-http://127.0.0.1:4566}
+  INPUT_ARTIFACT_OBJECT_STORAGE_REGION: ${INPUT_ARTIFACT_OBJECT_STORAGE_REGION:-us-east-1}
+  INPUT_ARTIFACT_OBJECT_STORAGE_BUCKET: ${INPUT_ARTIFACT_OBJECT_STORAGE_BUCKET:-agent-artifacts}
+  INPUT_ARTIFACT_OBJECT_STORAGE_ACCESS_KEY_ID: ${INPUT_ARTIFACT_OBJECT_STORAGE_ACCESS_KEY_ID:-local-artifacts}
+  INPUT_ARTIFACT_OBJECT_STORAGE_SECRET_ACCESS_KEY: ${INPUT_ARTIFACT_OBJECT_STORAGE_SECRET_ACCESS_KEY:-local-artifacts-development-only}
+  ANALYSIS_TASK_CAPACITY_ADMISSION_ENABLED: ${ANALYSIS_TASK_CAPACITY_ADMISSION_ENABLED:-true}
+  ANALYSIS_TASK_CAPACITY_SIGNAL_URL: ${ANALYSIS_TASK_CAPACITY_SIGNAL_URL:-http://capacity-signal:8081/v1/postgres-volume}
+  ANALYSIS_TASK_CAPACITY_SIGNAL_TOKEN: ${ANALYSIS_TASK_CAPACITY_SIGNAL_TOKEN:-local-capacity-signal-development-only}
+  ANALYSIS_TASK_CAPACITY_LOW_WATERMARK_BYTES: ${ANALYSIS_TASK_CAPACITY_LOW_WATERMARK_BYTES:-536870912}
+  ANALYSIS_TASK_CAPACITY_SIGNAL_MAX_AGE_SECONDS: ${ANALYSIS_TASK_CAPACITY_SIGNAL_MAX_AGE_SECONDS:-5}
+  ANALYSIS_TASK_CAPACITY_SIGNAL_TIMEOUT_SECONDS: ${ANALYSIS_TASK_CAPACITY_SIGNAL_TIMEOUT_SECONDS:-1}
   ACME_DEMO_DATABASE_PASSWORD: acme_demo_readonly_password
   BETA_DEMO_DATABASE_PASSWORD: beta_demo_readonly_password
+
+x-default-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
 
 services:
   postgres:
     image: pgvector/pgvector:0.8.0-pg16
     container_name: agent-platform-postgres
+    logging: *default-logging
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: changeme_in_production
       POSTGRES_DB: agent_platform
       # Applies only when a new data volume is initialized. C collation avoids
       # host libc-version drift for future local platform databases.
-      POSTGRES_INITDB_ARGS: "--lc-collate=C --lc-ctype=C"
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --lc-collate=C --lc-ctype=C"
     ports:
       - "5433:5432"
     volumes:
@@ -47,9 +66,30 @@ services:
           cpus: '0.1'
           memory: 128M
 
+  capacity-signal:
+    build:
+      context: ./backend
+    command: ["python", "scripts/capacity_signal_server.py"]
+    user: "10001:10001"
+    environment:
+      CAPACITY_SIGNAL_TOKEN: ${ANALYSIS_TASK_CAPACITY_SIGNAL_TOKEN:-local-capacity-signal-development-only}
+      CAPACITY_SIGNAL_ROOT: /var/lib/postgresql/data
+    volumes:
+      - postgres_data:/var/lib/postgresql/data:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "from urllib.request import urlopen; assert urlopen('http://127.0.0.1:8081/health/live', timeout=1).status == 200"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
   redis:
     image: redis:7
     container_name: agent-platform-redis
+    logging: *default-logging
     ports:
       - "6380:6379"
     healthcheck:
@@ -74,10 +114,50 @@ services:
           cpus: '0.1'
           memory: 128M
 
+  clamd:
+    image: clamav/clamav:1.5.4-debian
+    logging: *default-logging
+    volumes:
+      - clamav_database:/var/lib/clamav
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 1G
+
+  localstack:
+    image: localstack/localstack:3.8.1
+    logging: *default-logging
+    environment:
+      SERVICES: s3
+      AWS_DEFAULT_REGION: us-east-1
+      AWS_ACCESS_KEY_ID: local-artifacts
+      AWS_SECRET_ACCESS_KEY: local-artifacts-development-only
+    ports:
+      - "4566:4566"
+    volumes:
+      - localstack_data:/var/lib/localstack
+    restart: unless-stopped
+
+  localstack-init:
+    image: localstack/localstack:3.8.1
+    logging: *default-logging
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        until awslocal --endpoint-url=http://localstack:4566 s3 ls; do sleep 1; done;
+        awslocal --endpoint-url=http://localstack:4566 s3 mb s3://agent-artifacts || true
+    depends_on:
+      localstack:
+        condition: service_started
+
   migrate:
     build:
       context: ./backend
     command: ["python", "-m", "alembic", "upgrade", "head"]
+    logging: *default-logging
     env_file:
       - ./backend/.env
     environment:
@@ -91,6 +171,7 @@ services:
   api:
     build:
       context: ./backend
+    logging: *default-logging
     env_file:
       - ./backend/.env
     environment: *backend-environment
@@ -104,12 +185,17 @@ services:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
+      localstack-init:
+        condition: service_completed_successfully
+      capacity-signal:
+        condition: service_healthy
     restart: unless-stopped
 
   worker:
     build:
       context: ./backend
       dockerfile: Dockerfile.worker
+    logging: *default-logging
     command:
       [
         "celery",
@@ -117,6 +203,7 @@ services:
         "app.core.celery_app:celery_app",
         "worker",
         "--loglevel=INFO",
+        "--concurrency=1",
       ]
     env_file:
       - ./backend/.env
@@ -130,10 +217,15 @@ services:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
+      clamd:
+        condition: service_healthy
+      localstack-init:
+        condition: service_completed_successfully
     restart: unless-stopped
 
   frontend:
     image: node:22-alpine
+    logging: *default-logging
     working_dir: /app
     command: ["sh", "-c", "npm ci && npm run dev -- --host 0.0.0.0"]
     environment:
@@ -150,6 +242,7 @@ services:
   beat:
     build:
       context: ./backend
+    logging: *default-logging
     command:
       [
         "celery",
@@ -166,6 +259,8 @@ services:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
+      localstack-init:
+        condition: service_completed_successfully
     restart: unless-stopped
 
   worker-test:
@@ -173,6 +268,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile.worker
+    logging: *default-logging
     command:
       [
         "celery",
@@ -205,6 +301,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile.evaluation
+    logging: *default-logging
     env_file:
       - ./backend/.env
     environment:
@@ -222,6 +319,7 @@ services:
   report-worker:
     build:
       context: ./backend
+    logging: *default-logging
     command:
       [
         "celery",
@@ -230,6 +328,7 @@ services:
         "worker",
         "--loglevel=INFO",
         "--queues=reports",
+        "--concurrency=1",
         "--hostname=report-worker@%h",
       ]
     env_file:
@@ -334,6 +433,8 @@ volumes:
   business_data:
   demo_acme_business_data:
   demo_beta_business_data:
+  clamav_database:
+  localstack_data:
   frontend_node_modules:
 
 networks:

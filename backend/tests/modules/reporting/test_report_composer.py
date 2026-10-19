@@ -1,6 +1,8 @@
 """The report composer must preserve evidence links and uncertainty boundaries."""
 
+from app.modules.analysis.agent_protocol import AgentInput
 from app.modules.reporting.composer import compose_report
+from app.modules.reporting.reviewer_agent import ReviewerAgent
 
 
 def test_composes_completed_report_with_fact_hypothesis_and_recommendation() -> None:
@@ -58,6 +60,55 @@ def test_composes_partial_report_when_documents_are_insufficient() -> None:
     assert report.confirmed_facts
     assert report.hypotheses == []
     assert report.limitations[0].code == "insufficient_documents"
+
+
+def test_document_only_composer_prepares_a_finding_for_reviewer_validation() -> None:
+    report = compose_report(
+        route="knowledge_only",
+        data_result={"status": "not_run", "evidence": []},
+        knowledge_result={
+            "status": "ready",
+            "answer": "合同到期且客户暂停常规采购。",
+            "evidences": [
+                {
+                    "chunk_id": 42,
+                    "document_id": 9,
+                    "content": "合同到期且客户暂停常规采购。",
+                    "score": 0.93,
+                }
+            ],
+        },
+    )
+
+    assert report.status == "completed"
+    assert report.limitations == []
+    assert report.document_findings[0].citation_chunk_ids == [42]
+
+
+def test_hybrid_composer_preserves_a_document_finding_for_reviewer_validation() -> None:
+    report = compose_report(
+        route="hybrid",
+        data_result={
+            "status": "ready",
+            "evidence": [
+                {"columns": ["销售额"], "rows": [[1847604.72]], "purpose": "查询销售额"}
+            ],
+        },
+        knowledge_result={
+            "status": "ready",
+            "answer": "合同到期且客户暂停常规采购。",
+            "evidences": [
+                {
+                    "chunk_id": 42,
+                    "document_id": 9,
+                    "content": "合同到期且客户暂停常规采购。",
+                    "score": 0.93,
+                }
+            ],
+        },
+    )
+
+    assert report.document_findings[0].citation_chunk_ids == [42]
 
 
 def test_composes_business_facts_without_raw_english_field_names() -> None:
@@ -118,3 +169,38 @@ def test_composes_failed_report_without_data_or_document_evidence() -> None:
     assert report.confirmed_facts == []
     assert report.recommendations == []
     assert report.limitations
+
+
+def test_reviewer_returns_explicit_partial_result_for_refuted_claim() -> None:
+    result = ReviewerAgent().run(
+        AgentInput(
+            question="销售额是否大于 100？",
+            user_id=1,
+            context={
+                "plan": {"route": "data_only"},
+                "data_result": {
+                    "status": "ready",
+                    "evidence": [
+                        {
+                            "purpose": "查询销售额",
+                            "columns": ["销售额"],
+                            "rows": [[100]],
+                            "metric_assessment": {
+                                "status": "supported",
+                                "reason": "指标已验证。",
+                            },
+                            "claim_assessment": {
+                                "status": "refuted",
+                                "reason": "断言不成立。",
+                            },
+                        }
+                    ],
+                },
+            },
+        )
+    )
+
+    assert result.success is True
+    assert "不支持该数值断言" in (result.answer or "")
+    assert result.evidence[0]["report"]["status"] == "partial"
+    assert result.evidence[0]["report"]["confirmed_facts"] == []

@@ -1,5 +1,7 @@
 # 单机运行与故障恢复 Runbook
 
+> 本文提供现有工具的操作入口，不代表恢复与运行治理已经验收。生产级要求见 [主路线图](single_node_production_style_ai_application_roadmap.md)，已验证/未验证范围见 [项目审计](project_core_audit_20260915.md)。
+
 ## 运行拓扑
 
 单机环境由 FastAPI、平台 PostgreSQL/pgvector、Redis、Celery Worker、经营数据库、模型 Provider 和 React 前端组成。
@@ -37,6 +39,17 @@ Invoke-RestMethod http://localhost:8000/health/live
 Invoke-RestMethod http://localhost:8000/health/ready
 ```
 
+`/health/ready` verifies PostgreSQL, Redis, and the configured object store. Any unavailable required dependency returns HTTP `503`; `live` only proves that the API process is answering.
+
+If LocalStack alone is restarted, run its one-shot initializer again before treating the stack as ready:
+
+```powershell
+docker compose up -d --force-recreate localstack-init
+.\scripts\ops\verify-stack.ps1
+```
+
+The initializer is responsible for creating the local development bucket. A LocalStack container being healthy does not prove that bucket exists.
+
 ## 任务卡住或失败
 
 1. 从任务详情读取 `status`、`stage`、`attempt_count`、时间戳、`error_message` 和 `observability.latest_checkpoint`。
@@ -69,7 +82,15 @@ Redis 中的 key 数量不是队列积压。至少同时检查：
 - Celery 队列的 `LLEN`。
 - Worker 的 active、reserved 和 scheduled 任务。
 - Worker 实际监听的队列名称。
-- Outbox 中未发布或发布失败的记录。
+- Outbox 中未发布、过期 `broker_accepted` 或发布失败的记录。
+
+`inspect-queue.ps1` intentionally reports only these live Broker, Worker and durable-DB signals. Diagnose historical exceptions separately with a timestamp-bounded `docker compose logs` query; a raw log tail is not current queue health evidence.
+
+当前本机保护边界为每公司最多 5 个、全局最多 20 个 `queued`/`running`/`retrying` 分析任务。超过边界的消息请求返回 HTTP `429` 和 `Retry-After`，同一事务中不会留下新的消息、任务或 Outbox 记录。可通过 `ANALYSIS_TASK_COMPANY_INFLIGHT_LIMIT`、`ANALYSIS_TASK_GLOBAL_INFLIGHT_LIMIT` 和 `ANALYSIS_TASK_ADMISSION_RETRY_AFTER_SECONDS` 配置；这些是保守的防堆积阈值，尚不是测得的客户容量或 SLO。
+
+`inspect-queue.ps1` 同时输出在途总数、按公司在途数和最老待处理任务等待秒数。Celery 的 Redis 队列本身没有设置 `max_length`；因此必须以任务 admission 限额而不是 Redis key 数量判断是否已受控。
+
+每个 Compose 服务使用 Docker `json-file` 日志轮转，最多保留 3 个 10 MiB 文件。API 与 Worker 的 PostgreSQL Session pool 默认是 `size=5`、`max_overflow=10`、`timeout=5s`；`DATABASE_POOL_SIZE` 必须为正，`DATABASE_MAX_OVERFLOW` 不得为负，超出连接池边界应在超时后失败而非无限等待。
 
 ## 数据、权限与恢复
 
@@ -88,6 +109,10 @@ $restorePassword = Read-Host "agent_restore password" -AsSecureString
 .\scripts\ops\restore-drill.ps1 -BackupPath "<dump path>" -DatabasePassword $restorePassword -Confirm:$false
 ```
 
+备份会同时生成不可变清单（dump 的 SHA-256、大小、Alembic 版本、public 表数和关键执行/审计/账本表行数）。恢复演练会先校验清单和 dump 哈希，再在隔离数据库比对这些值；默认本地演练门禁为备份年龄（RPO）不超过 15 分钟、恢复耗时（RTO）不超过 900 秒。它们是本机演练目标，不是生产 SLA。
+
+该 PostgreSQL 演练尚不能单独证明对象存储原件、向量索引、撤回/删除水位、角色权限或报告引用一致性；完整验收须补主路线图 M4/P6-3 的检查。
+
 `restore-drill.ps1` 拒绝覆盖 `agent_platform` 和 `agent_platform_test`。正式恢复需要单独确认目标数据库、恢复时间点、停机范围和回滚方案。
 
 验证经营库只读账号：
@@ -101,5 +126,5 @@ $ownerPassword = Read-Host "business owner password" -AsSecureString
 
 - 单元测试：证明纯函数、Schema、路由决策和局部错误处理。
 - 集成测试：证明应用依赖、数据库持久化、权限和事务边界。
-- 真实 Worker E2E：证明 Redis 投递、Worker 消费、独立 Session、经营库、pgvector 和报告持久化链路。
+- 真实 Worker E2E：只有测试实际经过的 Redis、Worker、经营库、检索、模型和持久化环节才有证明力；取消任务或模型调用测试不能代替完整经营分析 E2E。
 - 业务评测：单独证明检索、引用、数字、拒答和报告质量；不能用“测试数量”替代。

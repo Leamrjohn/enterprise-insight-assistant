@@ -3,15 +3,14 @@
 from datetime import datetime
 from typing import TYPE_CHECKING
 
+from app.db.base import Base
 from sqlalchemy import DateTime, ForeignKey, Integer, String, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.db.base import Base
-
 if TYPE_CHECKING:
-    from app.modules.workflow.models import AnalysisTask
     from app.modules.workflow.execution_attempt import TaskExecutionAttempt
+    from app.modules.workflow.models import AnalysisTask
 
 
 class ToolCallRecord(Base):
@@ -25,6 +24,9 @@ class ToolCallRecord(Base):
         ForeignKey("task_execution_attempts.id", ondelete="SET NULL"), index=True
     )
     tool_name: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    tool_contract_version: Mapped[str] = mapped_column(
+        String(64), nullable=False, default="tool-contract/v1", server_default="tool-contract/v1"
+    )
     status: Mapped[str] = mapped_column(String(32), nullable=False)
     error_code: Mapped[str | None] = mapped_column(String(128))
     duration_ms: Mapped[int | None] = mapped_column(Integer)

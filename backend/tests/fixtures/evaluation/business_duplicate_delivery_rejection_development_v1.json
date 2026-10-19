@@ -1,0 +1,26 @@
+{
+  "schema_version": "1.0",
+  "dataset_version": "business-duplicate-delivery-rejection-development-v1",
+  "cases": [
+    {
+      "case_id": "duplicate-delivery-second-claim-rejected",
+      "evaluation_kind": "duplicate_delivery",
+      "scenario": "duplicate_delivery",
+      "complexity": "medium",
+      "split": "development",
+      "coverage_tags": ["workflow", "outbox", "idempotency"],
+      "question": "同一任务被重复投递时，第二次执行认领必须被拒绝。",
+      "company_scope": "disposable-development-tenant",
+      "document_scope": [],
+      "expected_route": null,
+      "expected_entities": ["执行认领"],
+      "expected_period": "not_applicable",
+      "expected_query_requirements": ["拒绝重复执行认领并保留单一终态结果"],
+      "expected_result_fingerprint": {"scenario": "duplicate_delivery"},
+      "expected_outcome": "completed",
+      "expected_duplicate_delivery_codes": ["execution_already_claimed"],
+      "max_model_calls": 0,
+      "max_tokens": 0
+    }
+  ]
+}

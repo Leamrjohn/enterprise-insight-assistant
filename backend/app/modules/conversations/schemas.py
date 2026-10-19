@@ -3,7 +3,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 MessageRole = Literal["user", "assistant"]
@@ -30,6 +30,21 @@ class ConversationMessageCreate(BaseModel):
 
     content: str = Field(min_length=1)
     document_ids: list[int] | None = None
+    artifact_version_ids: list[int] = Field(default_factory=list, max_length=20)
+
+    @field_validator("artifact_version_ids")
+    @classmethod
+    def validate_artifact_version_ids(cls, value: list[int]) -> list[int]:
+        if any(
+            isinstance(version_id, bool)
+            or not isinstance(version_id, int)
+            or version_id <= 0
+            for version_id in value
+        ):
+            raise ValueError("artifact_version_ids must contain positive integers")
+        if len(set(value)) != len(value):
+            raise ValueError("artifact_version_ids must not contain duplicates")
+        return value
 
 
 class ConversationOut(BaseModel):

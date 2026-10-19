@@ -1,11 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.exc import SQLAlchemyError
-from sqlalchemy.orm import Session
-
 from app.db.session import get_db
 from app.modules.observability.health_schemas import HealthResponse
 from app.modules.observability.health_service import get_readiness_service
-
+from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import JSONResponse
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import Session
 
 router = APIRouter()
 
@@ -23,9 +22,12 @@ def get_liveness():
 @router.get("/health/ready", response_model=HealthResponse)
 def get_readiness(db: Session = Depends(get_db)):
     try:
-        return get_readiness_service(db)
+        readiness = get_readiness_service(db)
     except SQLAlchemyError as exc:
         raise HTTPException(
             status_code=503,
             detail="database unavailable",
         ) from exc
+    if readiness["status"] != "ok":
+        return JSONResponse(status_code=503, content=readiness)
+    return readiness
