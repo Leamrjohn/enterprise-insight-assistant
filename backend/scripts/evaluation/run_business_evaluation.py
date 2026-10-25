@@ -161,7 +161,9 @@ def _select_cases(
 def _load_observations_from_run(path: Path, cases: list) -> list[EvaluationObservation]:
     """Replay saved normalized observations after their disposable tenant is removed."""
     try:
-        previous_run = EvaluationRun.model_validate_json(path.read_text(encoding="utf-8"))
+        previous_run = EvaluationRun.model_validate_json(
+            path.read_text(encoding="utf-8")
+        )
     except (OSError, ValueError) as error:
         raise ValueError(f"cannot read valid evaluation run: {path}") from error
     expected_ids = {case.case_id for case in cases}
@@ -336,7 +338,11 @@ def main() -> None:
             cases=cases,
             model_version=args.model_version,
         )
-    if threshold_contract is not None and threshold_contract.baseline_run_sha256 is not None and baseline_run is None:
+    if (
+        threshold_contract is not None
+        and threshold_contract.baseline_run_sha256 is not None
+        and baseline_run is None
+    ):
         parser.error("--baseline-run is required by the threshold contract")
     task_map = _load_task_map(args.task_map) if args.task_map else {}
     rejection_map = (
@@ -352,7 +358,9 @@ def main() -> None:
         if args.sql_validation_rejection_map
         else {}
     )
-    sql_timeout_map = _load_task_map(args.sql_timeout_map) if args.sql_timeout_map else {}
+    sql_timeout_map = (
+        _load_task_map(args.sql_timeout_map) if args.sql_timeout_map else {}
+    )
     sql_result_limit_map = (
         _load_task_map(args.sql_result_limit_map) if args.sql_result_limit_map else {}
     )
@@ -395,9 +403,7 @@ def main() -> None:
             case.case_id for case in cases if case.evaluation_kind == "sql_timeout"
         }
         sql_result_limit_case_ids = {
-            case.case_id
-            for case in cases
-            if case.evaluation_kind == "sql_result_limit"
+            case.case_id for case in cases if case.evaluation_kind == "sql_result_limit"
         }
         duplicate_delivery_case_ids = {
             case.case_id
@@ -421,8 +427,16 @@ def main() -> None:
                 set(sql_validation_rejection_map),
             ),
             ("sql-timeout-map", sql_timeout_case_ids, set(sql_timeout_map)),
-            ("sql-result-limit-map", sql_result_limit_case_ids, set(sql_result_limit_map)),
-            ("duplicate-delivery-map", duplicate_delivery_case_ids, set(duplicate_delivery_map)),
+            (
+                "sql-result-limit-map",
+                sql_result_limit_case_ids,
+                set(sql_result_limit_map),
+            ),
+            (
+                "duplicate-delivery-map",
+                duplicate_delivery_case_ids,
+                set(duplicate_delivery_map),
+            ),
             ("execution-fence-map", execution_fence_case_ids, set(execution_fence_map)),
         ):
             missing = sorted(expected_ids - actual_ids)
@@ -561,8 +575,7 @@ def main() -> None:
     print(args.output_dir)
     if threshold_violations:
         raise SystemExit(
-            "evaluation threshold contract failed: "
-            + ", ".join(threshold_violations)
+            "evaluation threshold contract failed: " + ", ".join(threshold_violations)
         )
 
 

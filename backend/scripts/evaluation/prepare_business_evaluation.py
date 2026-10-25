@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Prepare one disposable, auditable persisted-task evaluation scope.
 
 This script deliberately separates deterministic preparation from the later,

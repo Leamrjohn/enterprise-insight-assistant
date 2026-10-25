@@ -147,7 +147,9 @@ def cleanup(prepare_path: Path) -> None:
             or membership.company_id != company.id
             or membership.user_id != user.id
         ):
-            raise RuntimeError("refusing cleanup because the tagged candidate scope changed")
+            raise RuntimeError(
+                "refusing cleanup because the tagged candidate scope changed"
+            )
         set_tenant_scope(db, company.id)
         db.delete(task)
         db.flush()

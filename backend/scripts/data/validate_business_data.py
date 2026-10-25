@@ -8,8 +8,8 @@ import json
 from generate_business_data import CORPUS_DIR, db_connection
 
 
-def scalar(cur, sql: str) -> int:
-    cur.execute(sql)
+def scalar(cur, sql: str, parameters: tuple[object, ...] | None = None) -> int:
+    cur.execute(sql, parameters)
     return cur.fetchone()[0]
 
 
@@ -78,8 +78,8 @@ def validate_document_corpus(cur) -> int:
     for month in ("2024-01", "2025-08", "2025-12"):
         revenue = scalar(
             cur,
-            "SELECT COALESCE(SUM(total_amount),0) FROM sales_orders WHERE order_date >= %s::date AND order_date < (%s::date + INTERVAL '1 month')"
-            % (f"'{month}-01'", f"'{month}-01'"),
+            "SELECT COALESCE(SUM(total_amount),0) FROM sales_orders WHERE order_date >= %s::date AND order_date < (%s::date + INTERVAL '1 month')",
+            (f"{month}-01", f"{month}-01"),
         )
         expected = f"销售额：¥{revenue:,.2f}"
         content = (CORPUS_DIR / "monthly" / f"{month}.md").read_text(encoding="utf-8")

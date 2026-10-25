@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import os
 
-from psycopg import sql
-
 from generate_business_data import (
     create_indexes,
     db_connection,
@@ -13,6 +11,7 @@ from generate_business_data import (
     seed_dimensions,
     seed_transactions,
 )
+from psycopg import sql
 
 
 def seed_demo_business_data() -> None:

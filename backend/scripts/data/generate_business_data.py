@@ -7,16 +7,15 @@ events, so the Agent evaluation set has a stable ground truth.
 
 from __future__ import annotations
 
-import os
-import random
 import hashlib
 import json
+import os
+import random
 from datetime import date, timedelta
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import ROUND_HALF_UP, Decimal
 from pathlib import Path
 
 import psycopg
-
 
 SEED = 20260718
 RNG = random.Random(SEED)
@@ -32,7 +31,7 @@ WORKSPACE_ROOT = Path(__file__).resolve().parents[3]
 CORPUS_DIR = WORKSPACE_ROOT / "data" / "business_knowledge_base"
 
 
-def currency(value: Decimal | int | float | None) -> str:
+def currency(value: Decimal | float | None) -> str:
     """Render database values consistently in generated Chinese documents."""
     return f"¥{Decimal(value or 0):,.2f}"
 
@@ -241,9 +240,9 @@ def seed_dimensions(
                 industries[idx % len(industries)],
                 tier,
                 (idx - 1) % 16 + 1,
-                Decimal("5000000")
+                Decimal(5000000)
                 if tier == "strategic"
-                else (Decimal("2000000") if tier == "key" else Decimal("500000")),
+                else (Decimal(2000000) if tier == "key" else Decimal(500000)),
                 date(2025, 7, 31) if idx == 1 else None,
                 "active",
             )
@@ -284,8 +283,8 @@ def seed_transactions(
                 order_id += 1
                 order_date = month + timedelta(days=RNG.randint(0, 25))
                 chosen = RNG.sample(range(1, 121), RNG.randint(2, 4))
-                subtotal = Decimal("0")
-                discount = Decimal("0")
+                subtotal = Decimal(0)
+                discount = Decimal(0)
                 lines = []
                 for product_id in chosen:
                     item_id += 1
@@ -311,7 +310,7 @@ def seed_transactions(
                             "0.05"
                         )  # competitive discount pressure
                     gross = unit_price * qty
-                    line_amount = money(gross * (Decimal("1") - discount_rate))
+                    line_amount = money(gross * (Decimal(1) - discount_rate))
                     subtotal += gross
                     discount += gross - line_amount
                     lines.append(
@@ -383,12 +382,12 @@ def seed_transactions(
                         )
                     )
                 paid_ratio = (
-                    Decimal("1")
+                    Decimal(1)
                     if RNG.random() < 0.82
-                    else (Decimal("0.6") if RNG.random() < 0.7 else Decimal("0"))
+                    else (Decimal("0.6") if RNG.random() < 0.7 else Decimal(0))
                 )
                 if customer_id == 280 and month >= date(2025, 10, 1):
-                    paid_ratio = Decimal("0")  # receivable-risk scenario
+                    paid_ratio = Decimal(0)  # receivable-risk scenario
                 if paid_ratio:
                     payment_id += 1
                     payment_rows.append(
@@ -433,7 +432,7 @@ def seed_procurement_and_operations(
     returns_rows: list[tuple] = []
     notes: list[tuple] = []
     docs: list[tuple] = []
-    po_id = poi_id = expense_id = budget_id = ticket_id = return_id = doc_id = 0
+    po_id = poi_id = expense_id = budget_id = return_id = 0
     for month in month_starts():
         for center_id in range(1, 6):
             budget_id += 1
@@ -442,7 +441,7 @@ def seed_procurement_and_operations(
                     budget_id,
                     month,
                     center_id,
-                    Decimal("2800000") if center_id == 1 else None,
+                    Decimal(2800000) if center_id == 1 else None,
                     Decimal(180000 + center_id * 35000),
                 )
             )
@@ -470,7 +469,7 @@ def seed_procurement_and_operations(
                 continue
             po_id += 1
             picked = [p for p in products if p[4] == supplier[0]][:3]
-            total = Decimal("0")
+            total = Decimal(0)
             for product in picked:
                 poi_id += 1
                 qty = RNG.randint(35, 100)
@@ -495,26 +494,25 @@ def seed_procurement_and_operations(
     special_items = [
         row for row in item_rows if row[2] in {3, 28, 53, 78, 103} and row[1] > 0
     ]
-    for index, line in enumerate(
+    for ticket_id, line in enumerate(
         RNG.sample(special_items, min(48, len(special_items))), 1
     ):
-        ticket_id += 1
-        opened = date(2025, 5 if index <= 24 else 6, RNG.randint(1, 26))
+        opened = date(2025, 5 if ticket_id <= 24 else 6, RNG.randint(1, 26))
         tickets.append(
             (
                 ticket_id,
                 f"TKT-2025-{ticket_id:04d}",
-                1 if index <= 20 else RNG.randint(2, 100),
+                1 if ticket_id <= 20 else RNG.randint(2, 100),
                 line[1],
                 line[2],
                 opened,
                 "产品质量",
-                "high" if index <= 36 else "medium",
+                "high" if ticket_id <= 36 else "medium",
                 "closed",
                 RNG.randint(3, 12),
             )
         )
-        if index <= 32:
+        if ticket_id <= 32:
             return_id += 1
             returns_rows.append(
                 (
@@ -524,7 +522,7 @@ def seed_procurement_and_operations(
                     opened + timedelta(days=RNG.randint(3, 10)),
                     1,
                     "供应商批次质量异常",
-                    money(Decimal(line[5]) * (Decimal("1") - Decimal(line[6]))),
+                    money(Decimal(line[5]) * (Decimal(1) - Decimal(line[6]))),
                     "refunded",
                 )
             )
@@ -620,8 +618,7 @@ def seed_procurement_and_operations(
             ),
         ]
     )
-    for month in month_starts():
-        doc_id += 1
+    for doc_id, month in enumerate(month_starts(), 1):
         docs.append(
             (
                 10 + doc_id,

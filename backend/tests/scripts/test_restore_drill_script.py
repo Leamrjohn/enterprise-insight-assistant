@@ -8,7 +8,9 @@ PROJECT_ROOT = Path(__file__).resolve().parents[3]
 RESTORE_SCRIPT = PROJECT_ROOT / "scripts" / "ops" / "restore-drill.ps1"
 
 
-def _run_restore_script(backup_path: Path, target_database: str) -> subprocess.CompletedProcess[str]:
+def _run_restore_script(
+    backup_path: Path, target_database: str
+) -> subprocess.CompletedProcess[str]:
     escaped_script = str(RESTORE_SCRIPT).replace("'", "''")
     escaped_backup = str(backup_path).replace("'", "''")
     command = (
@@ -44,7 +46,9 @@ def _write_manifest(backup_path: Path, *, checksum: str) -> None:
     )
 
 
-def test_restore_drill_rejects_checksum_mismatch_before_database_access(tmp_path: Path) -> None:
+def test_restore_drill_rejects_checksum_mismatch_before_database_access(
+    tmp_path: Path,
+) -> None:
     backup_path = tmp_path / "corrupt.dump"
     backup_path.write_bytes(b"not a PostgreSQL dump")
     _write_manifest(backup_path, checksum="0" * 64)

@@ -80,7 +80,8 @@ def prepare(output_dir: Path) -> None:
         ).execute(SQLTool(), ToolInput(parameters={"sql": _QUERY}))
         row_count = (
             len(result.data["rows"])
-            if result.success and isinstance(result.data, dict)
+            if result.success
+            and isinstance(result.data, dict)
             and isinstance(result.data.get("rows"), list)
             else None
         )
@@ -99,9 +100,7 @@ def prepare(output_dir: Path) -> None:
             raise RuntimeError("candidate task lost execution ownership")
 
         output_dir.mkdir(parents=True, exist_ok=True)
-        _write_json(
-            output_dir / "sql-result-limit-map.json", {_CASE_ID: task.id}
-        )
+        _write_json(output_dir / "sql-result-limit-map.json", {_CASE_ID: task.id})
         _write_json(
             output_dir / "prepare.json",
             {
@@ -152,7 +151,9 @@ def cleanup(prepare_path: Path) -> None:
             or membership.company_id != company.id
             or membership.user_id != user.id
         ):
-            raise RuntimeError("refusing cleanup because the tagged candidate scope changed")
+            raise RuntimeError(
+                "refusing cleanup because the tagged candidate scope changed"
+            )
         set_tenant_scope(db, company.id)
         db.delete(task)
         db.flush()

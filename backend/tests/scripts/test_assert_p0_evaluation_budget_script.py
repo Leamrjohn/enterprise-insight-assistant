@@ -21,7 +21,9 @@ def _write_run(path: Path, *, cost_status: str, settled_cost: str | None) -> Non
     )
 
 
-def _run_budget_check(*paths: Path, planned_cost: str = "0") -> subprocess.CompletedProcess[str]:
+def _run_budget_check(
+    *paths: Path, planned_cost: str = "0"
+) -> subprocess.CompletedProcess[str]:
     escaped_script = str(SCRIPT).replace("'", "''")
     escaped_paths = ", ".join(
         "'{}'".format(str(path).replace("'", "''")) for path in paths
