@@ -2,19 +2,21 @@ import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.api.router import router
+from app.core.exceptions import (
+    http_exception_handler,
+    request_validation_handler,
+    unhandled_exception_handler,
+)
 from app.core.logging import configure_logging
 from app.core.middleware import request_context_middleware
-from app.core.exceptions import unhandled_exception_handler, http_exception_handler
-from app.core.exceptions import request_validation_handler
 from app.core.settings import get_settings
 from app.db.session import engine
-from starlette.exceptions import HTTPException as StarletteHTTPException
-from fastapi.exceptions import RequestValidationError
-
 
 logger = logging.getLogger(__name__)
 

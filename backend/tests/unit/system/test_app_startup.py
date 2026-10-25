@@ -1,8 +1,8 @@
 """Production-style import smoke tests that do not inherit pytest model imports."""
 
-from pathlib import Path
 import subprocess
 import sys
+from pathlib import Path
 
 from app.main import app
 

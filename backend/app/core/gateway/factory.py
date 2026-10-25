@@ -1,10 +1,10 @@
 from functools import lru_cache
 
 from app.core.gateway.base import ModelGateway
+from app.core.gateway.deepseek import DeepSeekGateway
 from app.core.gateway.local import LocalModelGateway
 from app.core.gateway.openai import OpenAIGateway
 from app.core.settings import get_settings
-from app.core.gateway.deepseek import DeepSeekGateway
 
 
 @lru_cache

@@ -2,7 +2,6 @@ import os
 from collections.abc import Generator
 from pathlib import Path
 
-
 os.environ["APP_ENV"] = "test"
 os.environ["DATABASE_NAME"] = "agent_platform_test"
 os.environ["MIGRATION_DATABASE_USER"] = "agent_migrator"
@@ -14,14 +13,12 @@ os.environ["STORAGE_DIR"] = "./.test-storage"
 import pytest
 from alembic import command
 from alembic.config import Config
-from fastapi.testclient import TestClient
-from sqlalchemy.orm import Session
-
 from app.db.session import engine, get_db
 from app.main import app
 from app.modules.identity.authentication import get_current_user
 from app.modules.identity.models import User
-
+from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 

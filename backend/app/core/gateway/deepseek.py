@@ -70,8 +70,11 @@ class DeepSeekGateway(ModelGateway):
         max_output_tokens = frozen_max_output_tokens(self.max_output_tokens)
         timeout_seconds = frozen_timeout_seconds(self.timeout_seconds)
         provenance = prompt_provenance(
-            prompt, system_prompt, json_mode=json_mode,
-            timeout_seconds=timeout_seconds, temperature=self.temperature,
+            prompt,
+            system_prompt,
+            json_mode=json_mode,
+            timeout_seconds=timeout_seconds,
+            temperature=self.temperature,
             max_output_tokens=max_output_tokens,
         )
         governance_scope = reserve_model_call(

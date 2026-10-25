@@ -175,9 +175,7 @@ class Settings(BaseSettings):
                 "analysis task model calls per node must not exceed total calls"
             )
         if self.analysis_task_model_max_repairs > self.analysis_task_model_max_calls:
-            raise ValueError(
-                "analysis task model repairs must not exceed total calls"
-            )
+            raise ValueError("analysis task model repairs must not exceed total calls")
         if self.analysis_task_model_max_total_tokens < self.llm_max_output_tokens:
             raise ValueError(
                 "analysis task total model tokens must cover one model output"

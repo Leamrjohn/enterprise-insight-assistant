@@ -8,7 +8,6 @@ import secrets
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerificationError
 
-
 _password_hasher = PasswordHasher()
 
 

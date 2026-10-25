@@ -6,7 +6,6 @@ from logging.handlers import RotatingFileHandler
 
 from app.core.settings import Settings
 
-
 request_id_context: ContextVar[str] = ContextVar(
     "request_id",
     default="-",
