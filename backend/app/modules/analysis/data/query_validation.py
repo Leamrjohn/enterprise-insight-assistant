@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from app.modules.analysis.data.query_contract import QueryContract, QueryResultAssessment
+from app.modules.analysis.data.query_contract import (
+    QueryContract,
+    QueryResultAssessment,
+)
 
 
 def assess_query_result(
@@ -43,10 +46,12 @@ def assess_query_result(
                 status="invalid_result_shape",
                 reason="查询未返回约定的业务结果列：" + "、".join(missing_columns),
             )
+        first_row = normalized_rows[0]
+        assert isinstance(first_row, (list, tuple))
         if (
             contract.result_kind == "aggregate"
             and len(normalized_rows) == 1
-            and all(value is None for value in normalized_rows[0])
+            and all(value is None for value in first_row)
         ):
             return QueryResultAssessment(
                 status="no_matching_records",

@@ -3,7 +3,6 @@ import json
 from app.core.exceptions import StructuredOutputError
 from app.core.gateway.base import ModelGateway
 from app.core.gateway.factory import get_model_gateway
-from app.modules.analysis.metrics.metric_catalog import METRIC_DEFINITIONS
 from app.modules.analysis.catalog.semantic_catalog import (
     BUSINESS_JOINS,
     BUSINESS_TABLES,
@@ -14,6 +13,7 @@ from app.modules.analysis.catalog.semantic_catalog import (
 )
 from app.modules.analysis.catalog.snapshot_catalog import SnapshotCatalog
 from app.modules.analysis.data.sql_candidate import SQLCandidate
+from app.modules.analysis.metrics.metric_catalog import METRIC_DEFINITIONS
 from pydantic import ValidationError
 
 _REPAIR_GUIDANCE = {
@@ -231,7 +231,8 @@ def _metric_contract_lines(catalog: SnapshotCatalog | None) -> list[str]:
         if mandatory_filters:
             details.append(mandatory_filters)
         lines.append(
-            f"- {definition.reference}: {definition.display_name}，" + "；".join(details)
+            f"- {definition.reference}: {definition.display_name}，"
+            + "；".join(details)
         )
     return lines or ["- 无；快照没有已登记的可验证指标，必须说明数据不足。"]
 

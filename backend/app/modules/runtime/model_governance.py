@@ -10,8 +10,8 @@ from uuid import uuid4
 
 from app.core.settings import MAX_LLM_TIMEOUT_SECONDS
 from app.db.clock import database_now
-from app.modules.workflow.lifecycle.execution_attempt import TaskExecutionAttempt
 from app.modules.workflow.audit.model_call import ModelCallRecord
+from app.modules.workflow.lifecycle.execution_attempt import TaskExecutionAttempt
 from app.modules.workflow.models import AnalysisTask
 from sqlalchemy.orm import Session
 
@@ -471,7 +471,9 @@ def record_model_call(
     record.cost = (
         Decimal(0)
         if billing_status == "settled" and is_local_resource
-        else priced_cost if billing_status == "settled" else None
+        else priced_cost
+        if billing_status == "settled"
+        else None
     )
     record.duration_ms = round(duration_ms)
     if resource_usage is not None:

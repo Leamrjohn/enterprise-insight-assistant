@@ -1,7 +1,7 @@
+from app.core.gateway.deepseek import DeepSeekGateway
 from app.core.gateway.factory import get_model_gateway
 from app.core.gateway.local import LocalModelGateway
 from app.core.settings import get_settings
-from app.core.gateway.deepseek import DeepSeekGateway
 
 
 def test_gateway_factory_returns_deepseek_gateway(monkeypatch):

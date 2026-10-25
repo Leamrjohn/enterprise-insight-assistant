@@ -1,9 +1,9 @@
 import json
 
 from app.core.exceptions import RetryableModelError
-from app.modules.analysis.planner.planner_decision import PlannerDecision
 from app.modules.analysis.catalog.snapshot_catalog import SnapshotCatalog
 from app.modules.analysis.data.sql_candidate import SQLCandidate
+from app.modules.analysis.planner.planner_decision import PlannerDecision
 from app.modules.reporting.semantic_review import EvidenceSemanticReview
 from app.modules.reporting.semantic_review_service import SemanticReviewService
 
@@ -57,7 +57,11 @@ def test_sql_semantic_reviewer_blocks_unrelated_fallback_query() -> None:
 
 def test_sql_semantic_reviewer_allows_a_hybrid_data_subquestion() -> None:
     gateway = FakeGateway(
-        {"decision": "execute", "reason": "覆盖销售额比较。", "missing_requirements": []}
+        {
+            "decision": "execute",
+            "reason": "覆盖销售额比较。",
+            "missing_requirements": [],
+        }
     )
     service = SemanticReviewService(gateway=gateway)
 
@@ -214,7 +218,9 @@ def test_evidence_semantic_reviewer_marks_unrelated_data_as_unsupported() -> Non
     assert decision.verdict == "unsupported"
 
 
-def test_evidence_semantic_reviewer_keeps_hybrid_data_and_document_scopes_distinct() -> None:
+def test_evidence_semantic_reviewer_keeps_hybrid_data_and_document_scopes_distinct() -> (
+    None
+):
     gateway = FakeGateway(
         {
             "verdict": "supported",

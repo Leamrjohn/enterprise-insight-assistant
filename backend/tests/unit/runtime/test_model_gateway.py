@@ -207,7 +207,9 @@ def test_deepseek_gateway_records_empty_json_as_retryable_provider_output(monkey
             usage=None,
         )
         gateway.client = SimpleNamespace(
-            chat=SimpleNamespace(completions=SimpleNamespace(create=Mock(return_value=response)))
+            chat=SimpleNamespace(
+                completions=SimpleNamespace(create=Mock(return_value=response))
+            )
         )
         recorded: list[dict] = []
         monkeypatch.setattr(

@@ -1,11 +1,10 @@
 """Read-only SQL validation with a tenant snapshot table boundary."""
 
 import sqlglot
-from sqlglot import exp
-from sqlglot.errors import ParseError
-
 from app.modules.analysis.catalog.semantic_catalog import is_allowed_table
 from app.modules.analysis.catalog.snapshot_catalog import SnapshotCatalog
+from sqlglot import exp
+from sqlglot.errors import ParseError
 
 
 def validate_sql(
@@ -38,7 +37,8 @@ def _parse_single_select(sql: str) -> exp.Select:
 
     statement = statements[0]
     if not isinstance(statement, exp.Select):
-        raise ValueError("仅允许SELECT语句")
+        # The caller supplied SQL text; its statement kind violates the value contract.
+        raise ValueError("仅允许SELECT语句")  # noqa: TRY004
 
     return statement
 

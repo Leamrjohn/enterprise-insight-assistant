@@ -1,11 +1,10 @@
 """只执行仓库登记查询的经营数据工具。"""
 
-from pydantic import ValidationError
-
 from app.modules.analysis.data.data_request import DataRequest
 from app.modules.analysis.data.query_registry import compile_business_query
 from app.modules.analysis.data.sql_executor import execute_registered_readonly_query
 from app.modules.analysis.tool_protocol import Tool, ToolInput, ToolOutput
+from pydantic import ValidationError
 
 
 class TemplateQueryTool(Tool):
@@ -43,7 +42,7 @@ class TemplateQueryTool(Tool):
                 compiled.sql,
                 compiled.parameters,
             )
-        except Exception:
+        except Exception:  # noqa: BLE001 - Keep driver details out of the tool response.
             return ToolOutput(
                 success=False,
                 error="经营数据查询暂时无法完成。",

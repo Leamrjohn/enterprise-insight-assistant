@@ -1,5 +1,8 @@
 import pytest
-from app.modules.analysis.data.sql_executor import _apply_row_limit, execute_readonly_sql
+from app.modules.analysis.data.sql_executor import (
+    _apply_row_limit,
+    execute_readonly_sql,
+)
 
 ALLOWED_TABLES = {
     "customers",
@@ -44,15 +47,21 @@ def test_existing_limit_is_preserved_with_a_trailing_semicolon():
 
 
 def test_existing_large_limit_is_capped():
-    assert _apply_row_limit("SELECT sales_orders.id FROM sales_orders LIMIT 100000;", 5) == (
-        "SELECT sales_orders.id FROM sales_orders LIMIT 5"
-    )
+    assert _apply_row_limit(
+        "SELECT sales_orders.id FROM sales_orders LIMIT 100000;", 5
+    ) == ("SELECT sales_orders.id FROM sales_orders LIMIT 5")
 
 
 def test_limit_token_in_a_literal_does_not_bypass_the_cap():
     assert _apply_row_limit("SELECT 'LIMIT' AS marker FROM sales_orders", 5) == (
         "SELECT 'LIMIT' AS marker FROM sales_orders LIMIT 5"
     )
+
+
+@pytest.mark.parametrize("sql", ["DELETE FROM sales_orders", "SELECT 1; SELECT 2"])
+def test_row_limit_requires_one_select(sql):
+    with pytest.raises(ValueError):
+        _apply_row_limit(sql, 5)
 
 
 def test_invalid_sql_rejected():

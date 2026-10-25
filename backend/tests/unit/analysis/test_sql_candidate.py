@@ -1,7 +1,6 @@
 import pytest
-from pydantic import ValidationError
-
 from app.modules.analysis.data.sql_candidate import SQLCandidate
+from pydantic import ValidationError
 
 
 def test_parses_valid_model_json() -> None:

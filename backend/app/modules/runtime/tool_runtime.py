@@ -18,9 +18,9 @@ from app.modules.runtime.schemas import (
     ToolPolicy,
 )
 from app.modules.workflow.audit.events import append_workflow_event
+from app.modules.workflow.audit.tool_call import ToolCallRecord
 from app.modules.workflow.lifecycle.execution_attempt import TaskExecutionAttempt
 from app.modules.workflow.models import AnalysisTask
-from app.modules.workflow.audit.tool_call import ToolCallRecord
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
@@ -343,7 +343,7 @@ class ToolRuntime:
             result = tool.execute(input)
             if not isinstance(result, ToolOutput):
                 raise TypeError("tool returned an invalid result contract")
-        except Exception:
+        except Exception:  # noqa: BLE001 - Persist a failed tool receipt without exception text.
             result = ToolOutput(
                 success=False,
                 error="工具执行暂时不可用。",

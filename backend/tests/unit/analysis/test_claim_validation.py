@@ -1,5 +1,5 @@
-from app.modules.analysis.metrics.claim_validation import assess_numeric_assertion
 from app.modules.analysis.data.query_contract import NumericAssertion
+from app.modules.analysis.metrics.claim_validation import assess_numeric_assertion
 
 
 def _assertion(**overrides: object) -> NumericAssertion:
@@ -30,7 +30,9 @@ def test_numeric_claim_is_refuted_by_one_metric_result() -> None:
     assert assessment.status == "refuted"
 
 
-def test_numeric_claim_is_insufficient_without_a_supported_single_numeric_result() -> None:
+def test_numeric_claim_is_insufficient_without_a_supported_single_numeric_result() -> (
+    None
+):
     assessment = assess_numeric_assertion(
         _assertion(),
         columns=["销售额"],

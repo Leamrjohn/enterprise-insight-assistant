@@ -1,7 +1,6 @@
 import pytest
-from pydantic import ValidationError
-
 from app.modules.analysis.planner.plan_schemas import AnalysisPlan
+from pydantic import ValidationError
 
 
 def test_plan_rejects_route_mismatch() -> None:

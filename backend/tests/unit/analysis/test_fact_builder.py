@@ -1,4 +1,7 @@
-from app.modules.analysis.metrics.facts import build_confirmed_facts, build_data_evidence
+from app.modules.analysis.metrics.facts import (
+    build_confirmed_facts,
+    build_data_evidence,
+)
 
 
 def test_fact_builder_derives_bounded_fact_from_controlled_row() -> None:

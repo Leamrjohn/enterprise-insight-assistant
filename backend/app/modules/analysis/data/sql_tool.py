@@ -91,7 +91,7 @@ class SQLTool(Tool):
                 error_code="sql_semantic_error",
                 repairable=True,
             )
-        except Exception:
+        except Exception:  # noqa: BLE001 - Return a non-repairable failure without driver details.
             return ToolOutput(
                 success=False,
                 error="经营数据查询暂时无法完成。",

@@ -1,9 +1,8 @@
 from datetime import date
 
 import pytest
-from pydantic import ValidationError
-
 from app.modules.analysis.data.data_request import DataRequest
+from pydantic import ValidationError
 
 
 def test_data_request_accepts_valid_monthly_comparison():

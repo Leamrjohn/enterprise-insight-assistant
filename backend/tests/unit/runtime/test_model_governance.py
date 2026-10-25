@@ -1,8 +1,8 @@
 from datetime import datetime, timezone
+from decimal import Decimal
 
 import pytest
 from app.core.gateway.local import LocalModelGateway
-from app.modules.workflow.audit.model_call import ModelCallRecord
 from app.modules.runtime.model_governance import (
     ModelBudgetExceeded,
     estimate_chat_prompt_tokens,
@@ -12,6 +12,7 @@ from app.modules.runtime.model_governance import (
     reserve_local_resource_call,
     reserve_model_call,
 )
+from app.modules.workflow.audit.model_call import ModelCallRecord
 
 
 class FakeDb:
@@ -40,15 +41,22 @@ class FakeDb:
 
 class Task:
     id = 7
-    model_policy_snapshot = {}
-    model_budget_snapshot = {
-        "max_calls": 1,
-        "max_calls_per_node": 1,
-        "max_total_tokens": 1000,
-        "max_cost": "1.00",
-        "max_repairs": 2,
-    }
-    model_budget_usage = {"calls": 0, "tokens": 0, "cost": "0.00", "calls_by_node": {}}
+
+    def __init__(self) -> None:
+        self.model_policy_snapshot = {}
+        self.model_budget_snapshot = {
+            "max_calls": 1,
+            "max_calls_per_node": 1,
+            "max_total_tokens": 1000,
+            "max_cost": "1.00",
+            "max_repairs": 2,
+        }
+        self.model_budget_usage = {
+            "calls": 0,
+            "tokens": 0,
+            "cost": "0.00",
+            "calls_by_node": {},
+        }
 
 
 def test_chat_reservation_includes_system_user_and_message_framing() -> None:
@@ -58,6 +66,17 @@ def test_chat_reservation_includes_system_user_and_message_framing() -> None:
 
 class Attempt:
     id = 9
+
+
+def test_fake_tasks_do_not_share_mutable_budget_state() -> None:
+    first, second = Task(), Task()
+    assert first.model_policy_snapshot is not second.model_policy_snapshot
+    assert first.model_budget_snapshot is not second.model_budget_snapshot
+    assert first.model_budget_usage is not second.model_budget_usage
+    assert (
+        first.model_budget_usage["calls_by_node"]
+        is not second.model_budget_usage["calls_by_node"]
+    )
 
 
 def test_budget_is_reserved_before_gateway_request_and_audited_without_text() -> None:
@@ -83,9 +102,11 @@ def test_budget_exhaustion_stops_before_provider_call() -> None:
     task.model_budget_usage = {"calls": 1, "calls_by_node": {"planner": 1}}
     db = FakeDb(task)
 
-    with model_call_scope(db, task=task, attempt=Attempt(), node_name="planner"):
-        with pytest.raises(ModelBudgetExceeded, match="budget exhausted"):
-            reserve_model_call(provider="local", model_name="local-simulator")
+    with (
+        model_call_scope(db, task=task, attempt=Attempt(), node_name="planner"),
+        pytest.raises(ModelBudgetExceeded, match="budget exhausted"),
+    ):
+        reserve_model_call(provider="local", model_name="local-simulator")
 
     assert db.records == []
 
@@ -109,9 +130,11 @@ def test_prompt_token_and_repair_budgets_are_enforced_before_call() -> None:
                 model_name="local-simulator",
                 estimated_prompt_tokens=5,
             )
-        with model_node_scope("data", is_repair=True):
-            with pytest.raises(ModelBudgetExceeded, match="repair budget"):
-                reserve_model_call(provider="local", model_name="local-simulator")
+        with (
+            model_node_scope("data", is_repair=True),
+            pytest.raises(ModelBudgetExceeded, match="repair budget"),
+        ):
+            reserve_model_call(provider="local", model_name="local-simulator")
 
 
 def test_output_reservation_stops_a_call_before_it_can_exceed_total_budget() -> None:
@@ -222,6 +245,8 @@ def test_paid_call_has_one_pre_request_id_and_settles_from_frozen_price() -> Non
         assert len(db.records) == 1
         assert db.records[0].billing_status == "reserved"
         assert db.records[0].pricing_key == "openai-gpt-json"
+        assert isinstance(db.records[0].reserved_cost, Decimal)
+        assert db.records[0].reserved_cost == Decimal("0.0008")
         record_model_call(
             scope,
             provider="openai",
@@ -244,6 +269,7 @@ def test_paid_call_has_one_pre_request_id_and_settles_from_frozen_price() -> Non
     record = db.records[0]
     assert len(db.records) == 1
     assert record.billing_status == "settled"
+    assert isinstance(record.cost, Decimal)
     assert str(record.cost) == "0.00020"
     assert task.model_budget_usage["tokens"] == 15
     assert task.model_budget_usage["cost"] == "0.00020"

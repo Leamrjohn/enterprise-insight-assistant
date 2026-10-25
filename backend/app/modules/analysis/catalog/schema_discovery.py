@@ -7,7 +7,6 @@ import json
 import os
 
 import psycopg
-
 from app.modules.organizations.models import BusinessDataSource
 
 
@@ -19,28 +18,30 @@ def discover_postgres_schema(source: BusinessDataSource) -> tuple[dict, str]:
         raise ValueError("Configured database credential is unavailable")
     config = source.connection_config
     schema = config["schema"]
-    with psycopg.connect(
-        host=config["host"],
-        port=config["port"],
-        dbname=config["database"],
-        user=config["user"],
-        password=password,
-        connect_timeout=5,
-        options="-c default_transaction_read_only=on",
-    ) as connection:
-        with connection.cursor() as cursor:
-            cursor.execute(
-                """
+    with (
+        psycopg.connect(
+            host=config["host"],
+            port=config["port"],
+            dbname=config["database"],
+            user=config["user"],
+            password=password,
+            connect_timeout=5,
+            options="-c default_transaction_read_only=on",
+        ) as connection,
+        connection.cursor() as cursor,
+    ):
+        cursor.execute(
+            """
                 SELECT table_name, column_name, data_type, is_nullable
                 FROM information_schema.columns
                 WHERE table_schema = %s
                 ORDER BY table_name, ordinal_position
                 """,
-                (schema,),
-            )
-            rows = cursor.fetchall()
-            cursor.execute(
-                """
+            (schema,),
+        )
+        rows = cursor.fetchall()
+        cursor.execute(
+            """
                 SELECT
                     child_table.relname AS left_table,
                     child_column.attname AS left_column,
@@ -65,9 +66,9 @@ def discover_postgres_schema(source: BusinessDataSource) -> tuple[dict, str]:
                   AND array_length(foreign_key.confkey, 1) = 1
                 ORDER BY child_table.relname, child_column.attname
                 """,
-                (schema,),
-            )
-            join_rows = cursor.fetchall()
+            (schema,),
+        )
+        join_rows = cursor.fetchall()
     tables: dict[str, list[dict]] = {}
     for table_name, column_name, data_type, is_nullable in rows:
         tables.setdefault(table_name, []).append(

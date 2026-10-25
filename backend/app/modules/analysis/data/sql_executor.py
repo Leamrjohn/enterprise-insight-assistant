@@ -6,10 +6,9 @@ import re
 from typing import LiteralString, TypedDict, cast
 
 import psycopg
-import sqlglot
 from app.core.settings import get_settings
 from app.modules.analysis.catalog.snapshot_catalog import SnapshotCatalog
-from app.modules.analysis.data.sql_validator import validate_sql
+from app.modules.analysis.data.sql_validator import _parse_single_select, validate_sql
 from app.modules.organizations.models import BusinessDataSource
 from psycopg import sql as psycopg_sql
 from sqlglot import exp
@@ -20,7 +19,7 @@ logger = logging.getLogger(__name__)
 def _apply_row_limit(sql: str, max_rows: int) -> str:
     """Keep a bounded top-level LIMIT or enforce the execution cap."""
     normalized_sql = sql.strip()
-    statement = sqlglot.parse_one(normalized_sql, read="postgres")
+    statement = _parse_single_select(normalized_sql)
     limit = statement.args.get("limit")
     if limit is not None:
         expression = limit.expression

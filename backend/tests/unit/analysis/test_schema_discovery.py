@@ -1,6 +1,7 @@
 """Schema discovery only reads metadata and records actual foreign keys."""
 
 from types import SimpleNamespace
+from typing import Self
 
 from app.modules.analysis.catalog.schema_discovery import discover_postgres_schema
 
@@ -10,7 +11,7 @@ class FakeCursor:
         self.executions: list[tuple[str, tuple[str]]] = []
         self._fetch_index = 0
 
-    def __enter__(self) -> "FakeCursor":
+    def __enter__(self) -> Self:
         return self
 
     def __exit__(self, *_: object) -> None:
@@ -38,7 +39,7 @@ class FakeConnection:
     def __init__(self) -> None:
         self.cursor_instance = FakeCursor()
 
-    def __enter__(self) -> "FakeConnection":
+    def __enter__(self) -> Self:
         return self
 
     def __exit__(self, *_: object) -> None:
@@ -52,7 +53,8 @@ def test_discovers_columns_and_foreign_keys(monkeypatch) -> None:
     connection = FakeConnection()
     monkeypatch.setenv("ACME_DB_PASSWORD", "not-a-real-password")
     monkeypatch.setattr(
-        "app.modules.analysis.catalog.schema_discovery.psycopg.connect", lambda **_: connection
+        "app.modules.analysis.catalog.schema_discovery.psycopg.connect",
+        lambda **_: connection,
     )
     source = SimpleNamespace(
         dialect="postgresql",

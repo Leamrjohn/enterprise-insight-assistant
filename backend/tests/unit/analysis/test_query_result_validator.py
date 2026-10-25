@@ -1,5 +1,21 @@
+import pytest
 from app.modules.analysis.data.query_contract import QueryContract
 from app.modules.analysis.data.query_validation import assess_query_result
+
+
+@pytest.mark.parametrize("row", [None, 1, "bad", {"销售额": 1}, [], [1, 2]])
+def test_malformed_row_is_rejected_before_aggregate_check(row) -> None:
+    assessment = assess_query_result(
+        columns=["销售额"],
+        rows=[row],
+        contract=QueryContract(
+            required_concepts=["销售额"],
+            expected_columns=["销售额"],
+            result_kind="aggregate",
+        ),
+    )
+
+    assert assessment.status == "invalid_result_shape"
 
 
 def test_empty_rows_are_not_promoted_to_supported_evidence() -> None:

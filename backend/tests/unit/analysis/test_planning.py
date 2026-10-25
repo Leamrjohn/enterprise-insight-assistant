@@ -74,7 +74,9 @@ def test_planning_service_normalizes_explicit_document_evidence_question() -> No
     assert _route_after_planner({"plan": decision.model_dump()}) == "knowledge_node"
 
 
-def test_planning_service_routes_explicit_sales_metric_and_document_evidence_to_hybrid() -> None:
+def test_planning_service_routes_explicit_sales_metric_and_document_evidence_to_hybrid() -> (
+    None
+):
     gateway = FakeGateway(
         '{"action":"analyze","route":"knowledge_only",'
         '"reason":"需要数据和资料。",'
@@ -243,10 +245,12 @@ def test_planning_service_repairs_an_incomplete_json_response() -> None:
     gateway = FakeGateway(
         [
             '{"action":"analyze","route":"data_only","reason":"查询数据"}',
-            '{"action":"analyze","route":"data_only",'
-            '"reason":"查询数据","clarification_question":null,'
-            '"response_message":null,'
-            '"resolved_question":"查询华东区销售额。"}',
+            (
+                '{"action":"analyze","route":"data_only",'
+                '"reason":"查询数据","clarification_question":null,'
+                '"response_message":null,'
+                '"resolved_question":"查询华东区销售额。"}'
+            ),
         ]
     )
 
@@ -261,14 +265,18 @@ def test_planning_service_repairs_an_incomplete_json_response() -> None:
 def test_planning_service_repairs_missing_clarification_question() -> None:
     gateway = FakeGateway(
         [
-            '{"action":"needs_clarification","route":null,'
-            '"reason":"缺少时间范围","clarification_question":null,'
-            '"response_message":null,"resolved_question":null,"clarification":null}',
-            '{"action":"needs_clarification","route":null,'
-            '"reason":"缺少时间范围",'
-            '"clarification_question":"请补充要比较的两个时间段。",'
-            '"response_message":null,"resolved_question":null,'
-            '"clarification":{"missing_slots":["comparison_period"],"examples":[]}}',
+            (
+                '{"action":"needs_clarification","route":null,'
+                '"reason":"缺少时间范围","clarification_question":null,'
+                '"response_message":null,"resolved_question":null,"clarification":null}'
+            ),
+            (
+                '{"action":"needs_clarification","route":null,'
+                '"reason":"缺少时间范围",'
+                '"clarification_question":"请补充要比较的两个时间段。",'
+                '"response_message":null,"resolved_question":null,'
+                '"clarification":{"missing_slots":["comparison_period"],"examples":[]}}'
+            ),
         ]
     )
 
@@ -283,10 +291,12 @@ def test_planning_service_retries_a_transient_model_error(monkeypatch) -> None:
     gateway = FakeGateway(
         [
             RetryableModelError("模型服务超时"),
-            '{"action":"analyze","route":"data_only",'
-            '"reason":"查询数据","clarification_question":null,'
-            '"response_message":null,'
-            '"resolved_question":"查询华东区销售额。"}',
+            (
+                '{"action":"analyze","route":"data_only",'
+                '"reason":"查询数据","clarification_question":null,'
+                '"response_message":null,'
+                '"resolved_question":"查询华东区销售额。"}'
+            ),
         ]
     )
 
@@ -444,10 +454,12 @@ def test_planning_repair_prompt_keeps_execution_feedback() -> None:
     gateway = FakeGateway(
         [
             '{"action":"analyze"}',
-            '{"action":"needs_clarification","route":null,'
-            '"reason":"资料不足","clarification_question":"请补充资料。",'
-            '"response_message":null,"resolved_question":null,'
-            '"clarification":{"missing_slots":["object"],"examples":[]}}',
+            (
+                '{"action":"needs_clarification","route":null,'
+                '"reason":"资料不足","clarification_question":"请补充资料。",'
+                '"response_message":null,"resolved_question":null,'
+                '"clarification":{"missing_slots":["object"],"examples":[]}}'
+            ),
         ]
     )
     PlanningService(gateway=gateway).decide(

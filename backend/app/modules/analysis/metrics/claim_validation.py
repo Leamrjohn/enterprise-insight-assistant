@@ -45,4 +45,9 @@ def assess_numeric_assertion(
     else:
         supported = actual < assertion.value
     status = "supported" if supported else "refuted"
-    return ClaimAssessment(status, "数值断言已由受控查询结果验证。" if supported else "数值断言与受控查询结果不一致。")
+    return ClaimAssessment(
+        status,
+        "数值断言已由受控查询结果验证。"
+        if supported
+        else "数值断言与受控查询结果不一致。",
+    )

@@ -9,14 +9,14 @@ from app.core.exceptions import (
     StructuredOutputError,
 )
 from app.modules.analysis.agent_protocol import Agent, AgentInput, AgentOutput
+from app.modules.analysis.catalog.snapshot_catalog import SnapshotCatalog
+from app.modules.analysis.data.query_contract import QueryContract
+from app.modules.analysis.data.query_validation import assess_query_result
+from app.modules.analysis.data.sql_generation import SQLGenerationService
+from app.modules.analysis.data.sql_tool import SQLTool
 from app.modules.analysis.metrics.claim_validation import assess_numeric_assertion
 from app.modules.analysis.metrics.metric_validation import assess_metric_query
 from app.modules.analysis.planner.planner_decision import EvaluationScope
-from app.modules.analysis.data.query_contract import QueryContract
-from app.modules.analysis.data.query_validation import assess_query_result
-from app.modules.analysis.catalog.snapshot_catalog import SnapshotCatalog
-from app.modules.analysis.data.sql_generation import SQLGenerationService
-from app.modules.analysis.data.sql_tool import SQLTool
 from app.modules.analysis.tool_protocol import Tool, ToolInput
 from app.modules.organizations.models import BusinessDataSource
 from app.modules.reporting.semantic_review_service import SemanticReviewService
@@ -48,9 +48,7 @@ def _make_json_safe(value):
 
 
 def _validated_evaluation_scope(plan: object) -> dict[str, object] | None:
-    if not isinstance(plan, dict) or not isinstance(
-        plan.get("evaluation_scope"), dict
-    ):
+    if not isinstance(plan, dict) or not isinstance(plan.get("evaluation_scope"), dict):
         return None
     try:
         scope = EvaluationScope.model_validate(plan["evaluation_scope"])
@@ -131,17 +129,12 @@ class DataAgent(Agent):
         for attempt_index in range(MAX_DATA_ATTEMPTS):
             try:
                 attempts["model_attempts"] += 1
-                generation_kwargs = {
-                    "repair_reason": repair_reason,
-                    "previous_sql": previous_sql,
-                }
-                if data_required_capabilities:
-                    generation_kwargs["required_concepts"] = data_required_capabilities
-                if evaluation_scope is not None:
-                    generation_kwargs["evaluation_scope"] = evaluation_scope
                 candidate = self._sql_generator.generate(
                     input.question,
-                    **generation_kwargs,
+                    repair_reason=repair_reason,
+                    previous_sql=previous_sql,
+                    required_concepts=data_required_capabilities or None,
+                    evaluation_scope=evaluation_scope,
                 )
             except PermanentModelError as error:
                 return AgentOutput(
@@ -472,9 +465,7 @@ class DataAgent(Agent):
                         metric_definition.time_column if metric_definition else None
                     ),
                     "time_semantics": (
-                        metric_definition.time_semantics
-                        if metric_definition
-                        else None
+                        metric_definition.time_semantics if metric_definition else None
                     ),
                     "lineage_columns": list(metric_assessment.lineage_columns),
                 },

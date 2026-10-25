@@ -66,9 +66,7 @@ def test_generates_candidate_with_json_mode() -> None:
 
 
 def test_includes_frozen_required_concepts_in_generation_prompt() -> None:
-    gateway = FakeGateway(
-        '{"sql":"SELECT 1 AS \\"销售额\\"","purpose":"查询销售额"}'
-    )
+    gateway = FakeGateway('{"sql":"SELECT 1 AS \\"销售额\\"","purpose":"查询销售额"}')
     service = SQLGenerationService(gateway=gateway)
 
     service.generate("查询销售额", required_concepts=["销售额指标", "华东区维度"])
@@ -80,9 +78,7 @@ def test_includes_frozen_required_concepts_in_generation_prompt() -> None:
 
 
 def test_includes_frozen_planner_scope_in_generation_prompt() -> None:
-    gateway = FakeGateway(
-        '{"sql":"SELECT 1 AS \\"销售额\\"","purpose":"查询销售额"}'
-    )
+    gateway = FakeGateway('{"sql":"SELECT 1 AS \\"销售额\\"","purpose":"查询销售额"}')
     service = SQLGenerationService(gateway=gateway)
 
     service.generate(
@@ -124,9 +120,7 @@ def test_builds_safe_repair_prompt_for_sql_semantic_error() -> None:
 
 
 def test_builds_safe_repair_prompt_for_insufficient_metric_contract() -> None:
-    gateway = FakeGateway(
-        '{"sql":"SELECT 1 AS \\"销售额\\"","purpose":"查询销售额"}'
-    )
+    gateway = FakeGateway('{"sql":"SELECT 1 AS \\"销售额\\"","purpose":"查询销售额"}')
     service = SQLGenerationService(gateway=gateway)
 
     service.generate(

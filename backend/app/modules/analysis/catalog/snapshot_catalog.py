@@ -14,15 +14,16 @@ class SnapshotCatalog:
     joins: frozenset[tuple[str, str, str, str]]
 
     @classmethod
-    def from_snapshot(cls, snapshot: dict[str, Any]) -> "SnapshotCatalog":
+    def from_snapshot(cls, snapshot: dict[str, Any]) -> SnapshotCatalog:
+        # Malformed persisted JSON is an invalid snapshot value, not an API type error.
         raw_tables = snapshot.get("tables")
         if not isinstance(raw_tables, dict):
-            raise ValueError("Schema snapshot is missing tables metadata")
+            raise ValueError("Schema snapshot is missing tables metadata")  # noqa: TRY004
 
         tables: dict[str, frozenset[str]] = {}
         for table_name, raw_columns in raw_tables.items():
             if not isinstance(table_name, str) or not isinstance(raw_columns, list):
-                raise ValueError("Schema snapshot contains invalid table metadata")
+                raise ValueError("Schema snapshot contains invalid table metadata")  # noqa: TRY004
             columns = {
                 column["name"]
                 for column in raw_columns
@@ -35,10 +36,10 @@ class SnapshotCatalog:
         joins: set[tuple[str, str, str, str]] = set()
         raw_joins = snapshot.get("joins", [])
         if not isinstance(raw_joins, list):
-            raise ValueError("Schema snapshot contains invalid join metadata")
+            raise ValueError("Schema snapshot contains invalid join metadata")  # noqa: TRY004
         for join in raw_joins:
             if not isinstance(join, dict):
-                raise ValueError("Schema snapshot contains invalid join metadata")
+                raise ValueError("Schema snapshot contains invalid join metadata")  # noqa: TRY004
             left_table = join.get("left_table")
             left_column = join.get("left_column")
             right_table = join.get("right_table")

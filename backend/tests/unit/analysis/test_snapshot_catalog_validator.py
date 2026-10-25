@@ -1,9 +1,24 @@
 """Tenant schema snapshots must constrain generated SQL before execution."""
 
 import pytest
-
 from app.modules.analysis.catalog.snapshot_catalog import SnapshotCatalog
 from app.modules.analysis.data.sql_validator import validate_sql
+
+
+@pytest.mark.parametrize(
+    "snapshot",
+    [
+        {},
+        {"tables": []},
+        {"tables": {"orders": "not-columns"}},
+        {"tables": {1: [{"name": "id"}]}},
+        {"tables": {"orders": [{"name": "id"}]}, "joins": {}},
+        {"tables": {"orders": [{"name": "id"}]}, "joins": ["not-a-join"]},
+    ],
+)
+def test_malformed_snapshot_contents_keep_value_error_contract(snapshot):
+    with pytest.raises(ValueError, match="Schema snapshot"):
+        SnapshotCatalog.from_snapshot(snapshot)
 
 
 CATALOG = SnapshotCatalog.from_snapshot(

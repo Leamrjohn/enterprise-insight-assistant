@@ -1,10 +1,8 @@
 """受控经营数据 SQL 校验器的规则测试。"""
 
 import pytest
-
 from app.modules.analysis.catalog.semantic_catalog import BUSINESS_TABLES
 from app.modules.analysis.data.sql_validator import validate_sql
-
 
 ALLOWED_TABLES = set(BUSINESS_TABLES)
 

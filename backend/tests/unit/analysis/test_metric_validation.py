@@ -1,5 +1,5 @@
-from app.modules.analysis.metrics.metric_validation import assess_metric_query
 from app.modules.analysis.data.query_contract import QueryContract
+from app.modules.analysis.metrics.metric_validation import assess_metric_query
 
 
 def _revenue_contract(**overrides: object) -> QueryContract:
@@ -16,13 +16,13 @@ def _revenue_contract(**overrides: object) -> QueryContract:
 
 def test_revenue_metric_requires_aggregate_filter_time_and_lineage() -> None:
     assessment = assess_metric_query(
-        '''
+        """
         SELECT SUM(o.total_amount) AS "销售额"
         FROM sales_orders AS o
         WHERE o.status = 'delivered'
           AND o.order_date >= DATE '2025-08-01'
           AND o.order_date < DATE '2025-09-01'
-        ''',
+        """,
         _revenue_contract(),
     )
 
@@ -39,12 +39,12 @@ def test_revenue_metric_requires_aggregate_filter_time_and_lineage() -> None:
 
 def test_revenue_metric_rejects_missing_mandatory_delivered_filter() -> None:
     assessment = assess_metric_query(
-        '''
+        """
         SELECT SUM(o.total_amount) AS "销售额"
         FROM sales_orders AS o
         WHERE o.order_date >= DATE '2025-08-01'
           AND o.order_date < DATE '2025-09-01'
-        ''',
+        """,
         _revenue_contract(),
     )
 
@@ -54,7 +54,7 @@ def test_revenue_metric_rejects_missing_mandatory_delivered_filter() -> None:
 
 def test_metric_contract_rejects_unknown_metric_as_irrelevant() -> None:
     assessment = assess_metric_query(
-        "SELECT COUNT(*) AS \"广告点击率\" FROM sales_orders",
+        'SELECT COUNT(*) AS "广告点击率" FROM sales_orders',
         _revenue_contract(metric_definition_ref="advertising_ctr/v1"),
     )
 
@@ -63,7 +63,7 @@ def test_metric_contract_rejects_unknown_metric_as_irrelevant() -> None:
 
 def test_metric_contract_rejects_multiple_sql_statements() -> None:
     assessment = assess_metric_query(
-        "SELECT SUM(total_amount) AS \"销售额\" FROM sales_orders; SELECT 1",
+        'SELECT SUM(total_amount) AS "销售额" FROM sales_orders; SELECT 1',
         _revenue_contract(),
     )
 
@@ -73,13 +73,13 @@ def test_metric_contract_rejects_multiple_sql_statements() -> None:
 
 def test_metric_contract_requires_frozen_comparison_months_in_time_predicate() -> None:
     assessment = assess_metric_query(
-        '''
+        """
         SELECT SUM(o.total_amount) AS "销售额"
         FROM sales_orders AS o
         WHERE o.status = 'delivered'
           AND o.order_date >= DATE '2025-08-01'
           AND o.order_date < DATE '2025-09-01'
-        ''',
+        """,
         _revenue_contract(),
         evaluation_scope={"period": "2025-08 compared_to 2025-07"},
     )
@@ -90,13 +90,13 @@ def test_metric_contract_requires_frozen_comparison_months_in_time_predicate() -
 
 def test_metric_contract_accepts_a_range_covering_frozen_comparison_months() -> None:
     assessment = assess_metric_query(
-        '''
+        """
         SELECT SUM(o.total_amount) AS "销售额"
         FROM sales_orders AS o
         WHERE o.status = 'delivered'
           AND o.order_date >= DATE '2025-07-01'
           AND o.order_date < DATE '2025-09-01'
-        ''',
+        """,
         _revenue_contract(),
         evaluation_scope={"period": "2025-08 compared_to 2025-07"},
     )

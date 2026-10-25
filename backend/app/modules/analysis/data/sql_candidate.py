@@ -1,6 +1,5 @@
-from pydantic import BaseModel, Field
-
 from app.modules.analysis.data.query_contract import QueryContract
+from pydantic import BaseModel, Field
 
 
 class SQLCandidate(BaseModel):

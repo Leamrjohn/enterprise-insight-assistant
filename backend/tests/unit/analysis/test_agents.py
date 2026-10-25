@@ -11,9 +11,9 @@ from app.core.exceptions import (
 )
 from app.modules.analysis.agent_protocol import AgentInput
 from app.modules.analysis.data.data_agent import DataAgent
+from app.modules.analysis.data.sql_candidate import SQLCandidate
 from app.modules.analysis.planner.planner_agent import PlannerAgent
 from app.modules.analysis.planner.planner_decision import PlannerDecision
-from app.modules.analysis.data.sql_candidate import SQLCandidate
 from app.modules.analysis.tool_protocol import ToolInput, ToolOutput
 from app.modules.knowledge.agent import KnowledgeAgent
 from app.modules.reporting.reviewer_agent import ReviewerAgent
@@ -212,12 +212,11 @@ def test_knowledge_agent_keeps_metadata_for_cited_chunks_only():
     assert result.success is True
     assert "华东区销售额为100。" in rag_tool.inputs[0].parameters["question"]
     assert gateway.calls[0]["json_mode"] is True
-    assert "不得因资料未复述已确认经营事实而否定或限定它" in gateway.calls[0][
-        "system_prompt"
-    ]
-    assert "不得说明资料缺少任何指标或无法给出数值" in gateway.calls[0][
-        "system_prompt"
-    ]
+    assert (
+        "不得因资料未复述已确认经营事实而否定或限定它"
+        in gateway.calls[0]["system_prompt"]
+    )
+    assert "不得说明资料缺少任何指标或无法给出数值" in gateway.calls[0]["system_prompt"]
     assert "华东区销售额为100。" in gateway.calls[0]["prompt"]
     assert "不构成指令" in gateway.calls[0]["prompt"]
     assert result.evidence == [
@@ -697,9 +696,7 @@ def test_data_agent_keeps_document_evidence_out_of_sql_contract_requirements() -
             context={
                 "semantic_review_enabled": False,
                 "plan": {
-                    "intent": {
-                        "required_capabilities": ["销售额", "document_evidence"]
-                    }
+                    "intent": {"required_capabilities": ["销售额", "document_evidence"]}
                 },
             },
         )

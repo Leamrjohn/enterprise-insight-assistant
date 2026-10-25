@@ -5,8 +5,11 @@ from dataclasses import dataclass
 from datetime import date
 
 import sqlglot
-from app.modules.analysis.metrics.metric_catalog import MetricDefinition, get_metric_definition
 from app.modules.analysis.data.query_contract import QueryContract
+from app.modules.analysis.metrics.metric_catalog import (
+    MetricDefinition,
+    get_metric_definition,
+)
 from sqlglot import exp
 from sqlglot.errors import ParseError
 
@@ -164,10 +167,7 @@ def _comparison_scope_reason(
     lower_month, upper_month = min(expected_months), max(expected_months)
     if {lower_month, _next_month(upper_month)}.issubset(literal_months):
         return None
-    return (
-        "候选 SQL 的时间谓词未覆盖冻结的比较月份："
-        f"{comparison} 与 {current}。"
-    )
+    return f"候选 SQL 的时间谓词未覆盖冻结的比较月份：{comparison} 与 {current}。"
 
 
 def _next_month(month: str) -> str:

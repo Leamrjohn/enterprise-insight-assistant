@@ -14,9 +14,9 @@ from app.modules.knowledge.mcp_adapter import (
 from app.modules.organizations.models import Company, CompanyMember
 from app.modules.runtime.tool_runtime import ToolRuntime, ToolRuntimeContext
 from app.modules.workflow.audit.events_models import WorkflowEvent
+from app.modules.workflow.audit.tool_call import ToolCallRecord
 from app.modules.workflow.lifecycle.execution_attempt import TaskExecutionAttempt
 from app.modules.workflow.models import AnalysisTask
-from app.modules.workflow.audit.tool_call import ToolCallRecord
 
 
 class _FakeRagTool(Tool):
@@ -193,7 +193,7 @@ def test_tool_runtime_records_redacted_start_and_completion_events(db_session) -
 
 @pytest.mark.parametrize(
     "failure",
-    [TimeoutError("database endpoint disappeared"), {"status": "ready"}],
+    [TimeoutError("private-driver-detail-must-not-persist"), {"status": "ready"}],
 )
 def test_tool_runtime_degrades_exception_and_malformed_result_without_leaking_details(
     db_session, failure
@@ -228,6 +228,10 @@ def test_tool_runtime_degrades_exception_and_malformed_result_without_leaking_de
     )
     assert record.status == "failed"
     assert record.error_code == "tool_runtime_unexpected_error"
+    persisted = repr([vars(event) for event in events] + [vars(record)])
+    assert "private-driver-detail-must-not-persist" not in persisted
+    assert "secret document text" not in persisted
+    assert "private-driver-detail-must-not-persist" not in repr(result)
 
 
 def test_tool_runtime_denies_document_ids_outside_frozen_scope(db_session) -> None:

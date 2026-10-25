@@ -368,7 +368,8 @@ def test_sql_tool_passes_tenant_source_and_snapshot_catalog_to_executor(monkeypa
         return ["on_hand"], [(12,)]
 
     monkeypatch.setattr(
-        "app.modules.analysis.data.sql_tool.execute_readonly_sql", fake_execute_readonly_sql
+        "app.modules.analysis.data.sql_tool.execute_readonly_sql",
+        fake_execute_readonly_sql,
     )
 
     result = SQLTool(data_source=source, snapshot_catalog=catalog).execute(
