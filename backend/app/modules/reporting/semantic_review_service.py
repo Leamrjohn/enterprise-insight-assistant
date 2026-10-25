@@ -9,9 +9,9 @@ from typing import Any
 from app.core.exceptions import RetryableModelError, StructuredOutputError
 from app.core.gateway.base import ModelGateway
 from app.core.gateway.factory import get_model_gateway
-from app.modules.analysis.planner.planner_decision import PlannerDecision
 from app.modules.analysis.catalog.snapshot_catalog import SnapshotCatalog
 from app.modules.analysis.data.sql_candidate import SQLCandidate
+from app.modules.analysis.planner.planner_decision import PlannerDecision
 from app.modules.reporting.semantic_review import (
     EvidenceSemanticReview,
     SQLSemanticReview,

@@ -1,11 +1,10 @@
 """Document routes infer company scope from the approved membership."""
 
-from fastapi.testclient import TestClient
-
-from app.modules.identity.authentication import get_current_user
 from app.main import app
-from app.modules.organizations.models import CompanyMember
+from app.modules.identity.authentication import get_current_user
 from app.modules.identity.models import User
+from app.modules.organizations.models import CompanyMember
+from fastapi.testclient import TestClient
 
 
 def test_document_routes_ignore_client_company_id(

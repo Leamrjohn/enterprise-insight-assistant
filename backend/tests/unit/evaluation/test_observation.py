@@ -5,6 +5,7 @@ from app.db.session import set_tenant_scope
 from app.modules.documents.chunks import DocumentChunk
 from app.modules.documents.models import Documents
 from app.modules.evaluation.observation import (
+    _persisted_data_status,
     observation_from_duplicate_delivery,
     observation_from_execution_fence,
     observation_from_persisted_task,
@@ -17,10 +18,22 @@ from app.modules.organizations.models import Company
 from app.modules.reporting.schemas import FinalAnalysisReport
 from app.modules.reviews.models import ReviewRequest
 from app.modules.workflow.audit.events_models import WorkflowEvent
-from app.modules.workflow.lifecycle.execution_attempt import TaskExecutionAttempt
 from app.modules.workflow.audit.model_call import ModelCallRecord
-from app.modules.workflow.models import AnalysisTask, AnalysisTaskDocument
 from app.modules.workflow.audit.tool_call import ToolCallRecord
+from app.modules.workflow.lifecycle.execution_attempt import TaskExecutionAttempt
+from app.modules.workflow.models import AnalysisTask, AnalysisTaskDocument
+
+
+@pytest.mark.parametrize("value", [None, [], {}, 1, True, "unexpected"])
+def test_malformed_data_status_remains_unknown(value) -> None:
+    assert _persisted_data_status(value) is None
+
+
+@pytest.mark.parametrize(
+    "value", ["ready", "insufficient_evidence", "failed", "not_run"]
+)
+def test_known_data_status_is_preserved(value) -> None:
+    assert _persisted_data_status(value) == value
 
 
 def test_runtime_tool_rejection_observation_reads_denial_without_execution(

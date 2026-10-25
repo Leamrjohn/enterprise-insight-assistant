@@ -194,11 +194,11 @@ def _verbatim_document_qualifications(
     """Retain only review boundaries that are verbatim in cited retrieved text."""
     if semantic_review is None:
         return []
-    content_by_chunk = {
-        evidence["chunk_id"]: evidence.get("content")
+    content_by_chunk: dict[int, str] = {
+        chunk_id: content
         for evidence in knowledge_evidences
-        if isinstance(evidence.get("chunk_id"), int)
-        and isinstance(evidence.get("content"), str)
+        if isinstance(chunk_id := evidence.get("chunk_id"), int)
+        and isinstance(content := evidence.get("content"), str)
     }
     qualifications: list[DocumentQualification] = []
     for proposed in semantic_review.document_qualifications:
@@ -637,8 +637,7 @@ class ReviewerAgent(Agent):
                     }
                 )
             answer = (
-                "当前契约快照或可用数据不足以回答该问题。"
-                "请补充所需指标或数据源后重试。"
+                "当前契约快照或可用数据不足以回答该问题。请补充所需指标或数据源后重试。"
             )
             valid, validation = _validate_final_answer(
                 answer=answer,

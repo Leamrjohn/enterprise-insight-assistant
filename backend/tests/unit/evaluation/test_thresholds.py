@@ -56,13 +56,16 @@ def test_threshold_contract_rejects_unknown_cost_and_fixture_drift() -> None:
         require_hard_gate_passed=False,
     )
 
-    assert evaluate_threshold_contract(
-        contract,
-        fixture_bytes=fixture_bytes,
-        cases=[case],
-        observations=[observation],
-        metrics=metrics,
-    ) == []
+    assert (
+        evaluate_threshold_contract(
+            contract,
+            fixture_bytes=fixture_bytes,
+            cases=[case],
+            observations=[observation],
+            metrics=metrics,
+        )
+        == []
+    )
     assert evaluate_threshold_contract(
         contract,
         fixture_bytes=b"different",
@@ -136,6 +139,16 @@ def test_threshold_contract_rejects_candidate_relative_regression() -> None:
         baseline_run_sha256="a" * 64,
     ) == ["cost_per_trusted_success_multiplier"]
 
+    assert evaluate_threshold_contract(
+        contract.model_copy(update={"max_cost_per_trusted_success_multiplier": None}),
+        fixture_bytes=fixture_bytes,
+        cases=[case],
+        observations=[observation],
+        metrics=metrics.model_copy(update={"success_count": 1, "duration_p95_ms": 100}),
+        baseline_metrics=baseline_metrics.model_copy(update={"success_count": 1}),
+        baseline_run_sha256="a" * 64,
+    ) == ["cost_per_trusted_success_multiplier"]
+
 
 def test_v2_threshold_compares_machine_execution_time_not_review_wait() -> None:
     fixture_path = (
@@ -193,15 +206,20 @@ def test_v2_threshold_compares_machine_execution_time_not_review_wait() -> None:
         baseline_metrics=baseline_metrics,
         baseline_run_sha256="b" * 64,
     ) == ["machine_execution_duration_p95_multiplier"]
-    assert evaluate_threshold_contract(
-        contract,
-        fixture_bytes=fixture_bytes,
-        cases=[case],
-        observations=[observation],
-        metrics=metrics.model_copy(update={"machine_execution_duration_p95_ms": 120}),
-        baseline_metrics=baseline_metrics,
-        baseline_run_sha256="b" * 64,
-    ) == []
+    assert (
+        evaluate_threshold_contract(
+            contract,
+            fixture_bytes=fixture_bytes,
+            cases=[case],
+            observations=[observation],
+            metrics=metrics.model_copy(
+                update={"machine_execution_duration_p95_ms": 120}
+            ),
+            baseline_metrics=baseline_metrics,
+            baseline_run_sha256="b" * 64,
+        )
+        == []
+    )
 
 
 def test_machine_duration_baseline_contract_is_development_only() -> None:
@@ -219,7 +237,9 @@ def test_machine_duration_baseline_contract_is_development_only() -> None:
     )
     fixture_bytes = fixture_path.read_bytes()
     fixture = EvaluationFixture.model_validate_json(fixture_bytes)
-    contract = EvaluationThresholdContract.model_validate_json(contract_path.read_bytes())
+    contract = EvaluationThresholdContract.model_validate_json(
+        contract_path.read_bytes()
+    )
 
     assert [case.split for case in fixture.cases] == ["development"]
     assert contract.schema_version == "p0-evaluation-thresholds-v2"
@@ -241,9 +261,13 @@ def test_machine_duration_candidate_contract_locks_the_r55_baseline() -> None:
         / "evaluation"
         / "p0_development_single_machine_duration_candidate_thresholds_v2.json"
     )
-    contract = EvaluationThresholdContract.model_validate_json(contract_path.read_bytes())
+    contract = EvaluationThresholdContract.model_validate_json(
+        contract_path.read_bytes()
+    )
 
-    assert contract.fixture_sha256 == hashlib.sha256(fixture_path.read_bytes()).hexdigest()
+    assert (
+        contract.fixture_sha256 == hashlib.sha256(fixture_path.read_bytes()).hexdigest()
+    )
     assert contract.baseline_run_sha256 == (
         "dbb6efc142e7f97a9b40558748830263dea7abb0bc03bb0907c0075ec7cca600"
     )
@@ -290,7 +314,9 @@ def test_threshold_contract_rejects_case_model_call_and_token_limits() -> None:
     ) == ["max_model_calls", "max_tokens"]
 
 
-def test_repair_measurement_contract_is_development_only_and_not_a_promotion_gate() -> None:
+def test_repair_measurement_contract_is_development_only_and_not_a_promotion_gate() -> (
+    None
+):
     fixture_path = (
         Path(__file__).parents[2]
         / "fixtures"
@@ -305,7 +331,9 @@ def test_repair_measurement_contract_is_development_only_and_not_a_promotion_gat
     )
     fixture_bytes = fixture_path.read_bytes()
     fixture = EvaluationFixture.model_validate_json(fixture_bytes)
-    contract = EvaluationThresholdContract.model_validate_json(contract_path.read_bytes())
+    contract = EvaluationThresholdContract.model_validate_json(
+        contract_path.read_bytes()
+    )
 
     assert [case.split for case in fixture.cases] == ["development"]
     assert fixture.cases[0].max_model_calls == 5
@@ -330,7 +358,9 @@ def test_semantic_projection_repair_contract_is_development_only() -> None:
     )
     fixture_bytes = fixture_path.read_bytes()
     fixture = EvaluationFixture.model_validate_json(fixture_bytes)
-    contract = EvaluationThresholdContract.model_validate_json(contract_path.read_bytes())
+    contract = EvaluationThresholdContract.model_validate_json(
+        contract_path.read_bytes()
+    )
 
     assert [case.split for case in fixture.cases] == ["development"]
     assert fixture.cases[0].expected_semantic_result_fingerprint is not None

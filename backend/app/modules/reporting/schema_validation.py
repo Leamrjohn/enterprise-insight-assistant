@@ -23,14 +23,22 @@ def validate_schema(
         return (False, errors)
 
     # 规则2：只有文档证据需要在展示文本中标明引用；数据证据在结构化报告中可追溯。
-    if citation_required and evidence_count > 0:
-        if "[来源:" not in answer and "[引用" not in answer:
-            errors.append(f"有{evidence_count}条证据，但答案未包含引用标记")
+    if (
+        citation_required
+        and evidence_count > 0
+        and "[来源:" not in answer
+        and "[引用" not in answer
+    ):
+        errors.append(f"有{evidence_count}条证据，但答案未包含引用标记")
 
     # 规则3：当调用方要求无证据拒答时，答案应该明确说明限制。
-    if citation_required and evidence_count == 0:
-        if "无法回答" not in answer and "资料不足" not in answer:
-            errors.append("无证据时，答案未明确说明无法回答")
+    if (
+        citation_required
+        and evidence_count == 0
+        and "无法回答" not in answer
+        and "资料不足" not in answer
+    ):
+        errors.append("无证据时，答案未明确说明无法回答")
 
     if not errors:
         return (True, [])

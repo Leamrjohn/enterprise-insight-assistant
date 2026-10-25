@@ -93,7 +93,11 @@ def revenue_month_comparison_fingerprint_from_data_result(
 ) -> dict[str, str] | None:
     """Hash one validated two-month ``revenue/v1`` result, or fail closed."""
     months = _comparison_months(period)
-    if months is None or not isinstance(data_result, dict) or data_result.get("status") != "ready":
+    if (
+        months is None
+        or not isinstance(data_result, dict)
+        or data_result.get("status") != "ready"
+    ):
         return None
     evidence = data_result.get("evidence")
     if not isinstance(evidence, list) or len(evidence) != 1:
@@ -119,7 +123,9 @@ def revenue_month_comparison_fingerprint_from_data_result(
     ):
         return None
     month_index = next(
-        index for index, column in enumerate(normalized_columns) if column in _MONTH_COLUMNS
+        index
+        for index, column in enumerate(normalized_columns)
+        if column in _MONTH_COLUMNS
     )
     revenue_index = 1 - month_index
     month_revenue: dict[str, str] = {}
@@ -136,7 +142,9 @@ def revenue_month_comparison_fingerprint_from_data_result(
     canonical_json = json.dumps(
         {
             "metric_definition_ref": "revenue/v1",
-            "month_revenue": [[month, month_revenue[month]] for month in sorted(months)],
+            "month_revenue": [
+                [month, month_revenue[month]] for month in sorted(months)
+            ],
         },
         ensure_ascii=False,
         separators=(",", ":"),

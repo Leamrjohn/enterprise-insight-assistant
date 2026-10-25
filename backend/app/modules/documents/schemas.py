@@ -1,6 +1,7 @@
-from pydantic import BaseModel, Field, StringConstraints
-from typing import Annotated
 from datetime import datetime
+from typing import Annotated
+
+from pydantic import BaseModel, Field, StringConstraints
 
 NonBlankStr = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1)]
 DocumentMinViewRole = Annotated[str, Field(pattern="^(any|admin|owner)$")]

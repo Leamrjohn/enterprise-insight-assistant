@@ -1,11 +1,12 @@
+from uuid import uuid4
+
 import pytest
-from fastapi.testclient import TestClient
+from app.db.session import get_db
 from app.main import app
 from app.modules.documents import api as document_api
 from app.modules.identity.models import User
 from app.modules.organizations.models import Company, CompanyMember
-from uuid import uuid4
-from app.db.session import get_db
+from fastapi.testclient import TestClient
 
 
 def test_unhandled_error_returns_safe_response(

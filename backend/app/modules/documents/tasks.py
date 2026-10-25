@@ -3,8 +3,8 @@ import logging
 from app.core.celery_app import celery_app
 from app.core.settings import get_settings
 from app.db.session import SessionLocal, set_tenant_scope
-from app.modules.documents.models import Documents
 from app.modules.documents.ingestion import process_document_chunks
+from app.modules.documents.models import Documents
 from sqlalchemy import update
 
 logger = logging.getLogger(__name__)

@@ -45,7 +45,9 @@ def test_fingerprint_ignores_sql_and_purpose() -> None:
     assert second == first
 
 
-def test_fingerprint_uses_the_validated_single_metric_concept_not_its_display_alias() -> None:
+def test_fingerprint_uses_the_validated_single_metric_concept_not_its_display_alias() -> (
+    None
+):
     first = result_fingerprint_from_data_result(
         _data_result(
             evidence=[
@@ -123,7 +125,9 @@ def test_fingerprint_keeps_a_validated_no_matching_records_result() -> None:
     )
 
 
-def test_revenue_month_comparison_fingerprint_normalizes_aliases_and_row_order() -> None:
+def test_revenue_month_comparison_fingerprint_normalizes_aliases_and_row_order() -> (
+    None
+):
     expected = revenue_month_comparison_fingerprint_from_data_result(
         {
             "status": "ready",

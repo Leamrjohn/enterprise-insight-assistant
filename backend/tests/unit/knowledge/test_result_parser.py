@@ -1,5 +1,4 @@
 import pytest
-
 from app.core.exceptions import StructuredOutputError
 from app.modules.knowledge.rag.result_parser import parse_analysis_result
 

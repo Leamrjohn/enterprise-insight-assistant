@@ -15,7 +15,6 @@ from app.modules.evaluation.business_schemas import (
 )
 from app.modules.reporting.schemas import FinalAnalysisReport
 from app.modules.workflow.models import AnalysisTask
-
 from scripts.evaluation import run_business_evaluation as evaluation_cli
 
 
@@ -247,9 +246,7 @@ def test_cli_uses_rejection_observation_for_security_case(
     )
     rejection_map_path = tmp_path / "rejection_map.json"
     rejection_map_path.write_text(
-        json.dumps(
-            {"security-case": {"company_id": 7, "request_id": "request-7"}}
-        ),
+        json.dumps({"security-case": {"company_id": 7, "request_id": "request-7"}}),
         encoding="utf-8",
     )
     environment_path = tmp_path / "environment.json"
@@ -307,7 +304,9 @@ def test_cli_uses_rejection_observation_for_security_case(
     ).read_text(encoding="utf-8")
 
 
-def test_cli_uses_runtime_tool_rejection_observation(tmp_path: Path, monkeypatch) -> None:
+def test_cli_uses_runtime_tool_rejection_observation(
+    tmp_path: Path, monkeypatch
+) -> None:
     fixture_path = tmp_path / "fixture.json"
     fixture_path.write_text(
         json.dumps(
@@ -392,9 +391,9 @@ def test_cli_uses_runtime_tool_rejection_observation(tmp_path: Path, monkeypatch
     evaluation_cli.main()
 
     assert calls == [("runtime-tool-case", 12)]
-    assert json.loads((output_dir / "run.json").read_text(encoding="utf-8"))["results"][0][
-        "passed"
-    ]
+    assert json.loads((output_dir / "run.json").read_text(encoding="utf-8"))["results"][
+        0
+    ]["passed"]
 
 
 def test_cli_uses_sql_validation_rejection_observation(
@@ -484,9 +483,9 @@ def test_cli_uses_sql_validation_rejection_observation(
     evaluation_cli.main()
 
     assert calls == [("sql-validation-case", 13)]
-    assert json.loads((output_dir / "run.json").read_text(encoding="utf-8"))["results"][0][
-        "passed"
-    ]
+    assert json.loads((output_dir / "run.json").read_text(encoding="utf-8"))["results"][
+        0
+    ]["passed"]
 
 
 def test_cli_uses_sql_timeout_observation(tmp_path: Path, monkeypatch) -> None:
@@ -611,7 +610,9 @@ def test_cli_uses_duplicate_delivery_observation(tmp_path: Path, monkeypatch) ->
         encoding="utf-8",
     )
     task_map_path = tmp_path / "duplicate-delivery-map.json"
-    task_map_path.write_text(json.dumps({"duplicate-delivery-case": 14}), encoding="utf-8")
+    task_map_path.write_text(
+        json.dumps({"duplicate-delivery-case": 14}), encoding="utf-8"
+    )
     environment_path = tmp_path / "environment.json"
     environment_path.write_text(json.dumps({"database": "test"}), encoding="utf-8")
     calls: list[tuple[str, int]] = []
@@ -664,9 +665,9 @@ def test_cli_uses_duplicate_delivery_observation(tmp_path: Path, monkeypatch) ->
     evaluation_cli.main()
 
     assert calls == [("duplicate-delivery-case", 14)]
-    assert json.loads((output_dir / "run.json").read_text(encoding="utf-8"))["results"][0][
-        "passed"
-    ]
+    assert json.loads((output_dir / "run.json").read_text(encoding="utf-8"))["results"][
+        0
+    ]["passed"]
 
 
 def test_cli_rejects_incomplete_task_map_before_opening_database(
@@ -790,13 +791,12 @@ def test_cli_simulates_an_unavailable_30_case_run_without_opening_database(
     monkeypatch,
 ) -> None:
     fixture_path = (
-        Path(__file__).parents[2]
-        / "fixtures"
-        / "evaluation"
-        / "business_gold_v1.json"
+        Path(__file__).parents[2] / "fixtures" / "evaluation" / "business_gold_v1.json"
     )
     environment_path = tmp_path / "environment.json"
-    environment_path.write_text(json.dumps({"execution": "simulated"}), encoding="utf-8")
+    environment_path.write_text(
+        json.dumps({"execution": "simulated"}), encoding="utf-8"
+    )
 
     def fail_if_database_is_opened():
         raise AssertionError("simulation must not open a database session")
@@ -834,9 +834,9 @@ def test_cli_simulates_an_unavailable_30_case_run_without_opening_database(
     assert run_data["parameters"]["simulation_mode"] == "unavailable"
     assert len(run_data["observations"]) == 30
     assert {item["source"] for item in run_data["observations"]} == {"simulated"}
-    assert "simulated unavailable-run baseline" in (
-        output_dir / "report.md"
-    ).read_text(encoding="utf-8")
+    assert "simulated unavailable-run baseline" in (output_dir / "report.md").read_text(
+        encoding="utf-8"
+    )
 
 
 def test_cli_builds_observations_in_fixture_order(
@@ -1143,6 +1143,6 @@ def test_cli_uses_sql_result_limit_observation(tmp_path: Path, monkeypatch) -> N
     evaluation_cli.main()
 
     assert calls == [("sql-result-limit-case", 12)]
-    assert json.loads((output_dir / "run.json").read_text(encoding="utf-8"))["results"][0][
-        "passed"
-    ]
+    assert json.loads((output_dir / "run.json").read_text(encoding="utf-8"))["results"][
+        0
+    ]["passed"]

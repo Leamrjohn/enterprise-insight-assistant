@@ -73,8 +73,10 @@ def test_planner_memory_is_scoped_to_active_company_membership(
     assert memory.source is not None
     assert memory.source.idempotency_key == f"validated-report:{task.id}"
     assert memory.expires_at is not None
-    assert datetime.now(timezone.utc) < memory.expires_at <= (
-        datetime.now(timezone.utc) + DEFAULT_MEMORY_TTL
+    assert (
+        datetime.now(timezone.utc)
+        < memory.expires_at
+        <= (datetime.now(timezone.utc) + DEFAULT_MEMORY_TTL)
     )
     assert db_session.query(MemorySource).count() == 1
     assert (
@@ -130,7 +132,9 @@ def test_memory_write_gate_rejects_unpublished_or_factless_reports(
     assert db_session.query(AnalysisMemory).count() == 0
 
 
-def test_expired_or_deleted_source_memory_is_never_selected(db_session, test_user) -> None:
+def test_expired_or_deleted_source_memory_is_never_selected(
+    db_session, test_user
+) -> None:
     company = Company(name="memory-expiry-company")
     db_session.add(company)
     db_session.flush()
@@ -166,7 +170,9 @@ def test_expired_or_deleted_source_memory_is_never_selected(db_session, test_use
     db_session.add(expired)
     db_session.commit()
 
-    assert planner_memories(db_session, company_id=company.id, user_id=test_user.id) == []
+    assert (
+        planner_memories(db_session, company_id=company.id, user_id=test_user.id) == []
+    )
 
     expired.expires_at = datetime.now(timezone.utc) + timedelta(days=1)
     db_session.commit()
@@ -175,7 +181,9 @@ def test_expired_or_deleted_source_memory_is_never_selected(db_session, test_use
     db_session.delete(source)
     db_session.commit()
     assert db_session.query(AnalysisMemory).count() == 0
-    assert planner_memories(db_session, company_id=company.id, user_id=test_user.id) == []
+    assert (
+        planner_memories(db_session, company_id=company.id, user_id=test_user.id) == []
+    )
 
 
 def test_planner_memory_selection_has_a_token_budget_and_metadata_only_manifest(

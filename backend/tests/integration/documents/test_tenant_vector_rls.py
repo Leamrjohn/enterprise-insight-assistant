@@ -1,13 +1,12 @@
 """Database-enforced tenant isolation for document vectors."""
 
-from sqlalchemy import create_engine, text
-from sqlalchemy.orm import Session
-
 from app.db.session import engine, set_tenant_scope
-from app.modules.organizations.models import Company, CompanyMember
 from app.modules.documents.chunks import DocumentChunk
 from app.modules.documents.models import Documents
 from app.modules.identity.models import User
+from app.modules.organizations.models import Company, CompanyMember
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import Session
 
 
 def _create_company_member(db_session, suffix: str) -> tuple[Company, User]:

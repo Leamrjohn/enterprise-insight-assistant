@@ -5,7 +5,7 @@ import json
 import sys
 from hashlib import sha256
 from importlib.metadata import PackageNotFoundError, version
-from typing import Any
+from typing import Any, TypeGuard
 
 from app.core.settings import get_settings
 from app.modules.analysis.tool_protocol import Tool, ToolInput, ToolOutput
@@ -69,8 +69,8 @@ def runtime_context_sha256(context: dict[str, Any]) -> str:
 
 
 def _is_valid_runtime_context(
-    context: Any, *, company_id: int, document_ids: list[int] | None
-) -> bool:
+    context: object, *, company_id: int, document_ids: list[int] | None
+) -> TypeGuard[dict[str, Any]]:
     if not isinstance(context, dict) or set(context) != _RUNTIME_CONTEXT_KEYS:
         return False
     if (

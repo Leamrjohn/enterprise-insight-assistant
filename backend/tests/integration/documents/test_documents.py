@@ -1,10 +1,10 @@
-from fastapi.testclient import TestClient
 import pytest
-from app.modules.identity.authentication import get_current_user
 from app.main import app
+from app.modules.documents import api as document_api
+from app.modules.identity.authentication import get_current_user
 from app.modules.identity.models import User
 from app.modules.organizations.models import Company, CompanyMember
-from app.modules.documents import api as document_api
+from fastapi.testclient import TestClient
 
 
 @pytest.fixture(autouse=True)

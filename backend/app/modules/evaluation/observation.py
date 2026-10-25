@@ -5,24 +5,31 @@ from collections import Counter
 from decimal import Decimal
 
 from app.db.session import set_tenant_scope
-from app.modules.analysis.data.query_contract import ClarificationSpec
+from app.modules.analysis.data.query_contract import (
+    ClarificationSlot,
+    ClarificationSpec,
+)
 from app.modules.documents.chunks import DocumentChunk
 from app.modules.documents.models import Documents
-from app.modules.evaluation.business_schemas import CheckStatus, EvaluationObservation
+from app.modules.evaluation.business_schemas import (
+    CheckStatus,
+    EvaluationObservation,
+    Outcome,
+)
 from app.modules.observability.rejection_audit import AnalysisRequestRejection
 from app.modules.reporting.schemas import FinalAnalysisReport
 from app.modules.reviews.models import ReviewRequest
 from app.modules.workflow.audit.events_models import WorkflowEvent
-from app.modules.workflow.lifecycle.execution_attempt import TaskExecutionAttempt
 from app.modules.workflow.audit.model_call import ModelCallRecord
-from app.modules.workflow.models import AnalysisTask, AnalysisTaskDocument
 from app.modules.workflow.audit.tool_call import ToolCallRecord
+from app.modules.workflow.lifecycle.execution_attempt import TaskExecutionAttempt
+from app.modules.workflow.models import AnalysisTask, AnalysisTaskDocument
 from pydantic import ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
-_TERMINAL_OUTCOMES = {
+_TERMINAL_OUTCOMES: dict[str, Outcome] = {
     "completed": "completed",
     "partial": "partial",
     "failed": "failed",
@@ -48,7 +55,12 @@ def _execution_timing_ms(db: Session, *, task: AnalysisTask) -> int | None:
         if attempt.finished_at is None or attempt.finished_at < attempt.started_at:
             return None
         durations.append(
-            max(0, round((attempt.finished_at - attempt.started_at).total_seconds() * 1000))
+            max(
+                0,
+                round(
+                    (attempt.finished_at - attempt.started_at).total_seconds() * 1000
+                ),
+            )
         )
     return sum(durations)
 
@@ -60,7 +72,9 @@ def _human_review_wait_ms(db: Session, *, task: AnalysisTask) -> int | None:
         return 0
     if review.reviewed_at is None or review.reviewed_at < review.created_at:
         return None
-    return max(0, round((review.reviewed_at - review.created_at).total_seconds() * 1000))
+    return max(
+        0, round((review.reviewed_at - review.created_at).total_seconds() * 1000)
+    )
 
 
 def _check_status(value: object) -> CheckStatus:
@@ -88,7 +102,8 @@ def _persisted_period(value: object) -> str | None:
 def _persisted_data_status(value: object) -> str | None:
     return (
         value
-        if value in {"ready", "insufficient_evidence", "failed", "not_run"}
+        if isinstance(value, str)
+        and value in {"ready", "insufficient_evidence", "failed", "not_run"}
         else None
     )
 
@@ -101,7 +116,9 @@ def _persisted_data_error_code(value: object) -> str | None:
     )
 
 
-def _persisted_clarification_missing_fields(value: object) -> list[str] | None:
+def _persisted_clarification_missing_fields(
+    value: object,
+) -> list[ClarificationSlot] | None:
     try:
         return ClarificationSpec.model_validate({"missing_slots": value}).missing_slots
     except ValidationError:
@@ -163,13 +180,13 @@ def _citation_document_paths(
         )
     except SQLAlchemyError:
         return None
-    paths_by_document = dict(documents)
+    paths_by_document = {document_id: path for document_id, path in documents}
     if set(paths_by_document) != document_ids or any(
         not isinstance(path, str) or not path.strip()
         for path in paths_by_document.values()
     ):
         return None
-    document_by_chunk = dict(rows)
+    document_by_chunk = {chunk_id: document_id for chunk_id, document_id in rows}
     return [
         paths_by_document[document_by_chunk[citation.chunk_id]]
         for citation in report.document_citations
@@ -281,12 +298,16 @@ def observation_from_persisted_task(
         if isinstance(validation_checks, dict)
         else None
     )
-    deterministic_validation_status = (
+    raw_validation_status = (
         deterministic_validation.get("status")
         if isinstance(deterministic_validation, dict)
-        and deterministic_validation.get("status") in {"passed", "failed", "unknown"}
-        else "unknown"
+        else None
     )
+    deterministic_validation_status: CheckStatus = "unknown"
+    if raw_validation_status == "passed":
+        deterministic_validation_status = "passed"
+    elif raw_validation_status == "failed":
+        deterministic_validation_status = "failed"
     cost, cost_status = _model_cost_observation(calls)
     machine_execution_duration_ms = _execution_timing_ms(db, task=task)
     human_review_wait_ms = _human_review_wait_ms(db, task=task)
@@ -494,13 +515,9 @@ def observation_from_runtime_tool_rejection(
         report_persisted=bool(task.report),
         numeric_checks_passed=False,
         deterministic_validation_passed=False,
-        security_check_status=(
-            "passed" if execution_prevented else "failed"
-        ),
+        security_check_status=("passed" if execution_prevented else "failed"),
         runtime_tool_denial_status="passed" if denial_observed else "failed",
-        tool_execution_prevented_status=(
-            "passed" if execution_prevented else "failed"
-        ),
+        tool_execution_prevented_status=("passed" if execution_prevented else "failed"),
         actual_tool_denial_codes=sorted(
             {
                 call.error_code
@@ -580,12 +597,8 @@ def observation_from_sql_validation_rejection(
         numeric_checks_passed=False,
         deterministic_validation_passed=False,
         security_check_status="passed" if result_prevented else "failed",
-        sql_validation_rejection_status=(
-            "passed" if validation_observed else "failed"
-        ),
-        business_result_prevented_status=(
-            "passed" if result_prevented else "failed"
-        ),
+        sql_validation_rejection_status=("passed" if validation_observed else "failed"),
+        business_result_prevented_status=("passed" if result_prevented else "failed"),
         actual_sql_validation_codes=sorted(
             {
                 call.error_code
@@ -637,7 +650,9 @@ def observation_from_sql_result_limit(
         and isinstance(call.metadata_json.get("row_count"), int)
         and not isinstance(call.metadata_json.get("row_count"), bool)
     ]
-    row_count = bounded_calls[0].metadata_json["row_count"] if len(bounded_calls) == 1 else None
+    row_count = (
+        bounded_calls[0].metadata_json["row_count"] if len(bounded_calls) == 1 else None
+    )
     completed = (
         len(tool_calls) == 1
         and row_count is not None
@@ -857,9 +872,7 @@ def observation_from_execution_fence(
         )
     )
     events = list(
-        db.scalars(
-            select(WorkflowEvent).where(WorkflowEvent.task_id == task.id)
-        )
+        db.scalars(select(WorkflowEvent).where(WorkflowEvent.task_id == task.id))
     )
     fence_events = [
         event
@@ -880,9 +893,7 @@ def observation_from_execution_fence(
         and task.active_execution_id is None
         and any(attempt.status == "cancelled" for attempt in attempts)
     )
-    rejected_attempt_ids = {
-        event.execution_attempt_id for event in fence_events
-    }
+    rejected_attempt_ids = {event.execution_attempt_id for event in fence_events}
     replacement_result_preserved = (
         task.status == "completed"
         and task.active_execution_id is None
@@ -895,19 +906,23 @@ def observation_from_execution_fence(
     )
     fence_state = (
         "cancelled_without_result"
-        if cancellation_persisted and task.result_data is None and task.result_summary is None
+        if cancellation_persisted
+        and task.result_data is None
+        and task.result_summary is None
         else "replacement_result_preserved"
         if replacement_result_preserved
         else None
     )
-    late_write_prevented = (
-        fence_state is not None and bool(fence_events)
-    )
+    late_write_prevented = fence_state is not None and bool(fence_events)
     cost, cost_status = _model_cost_observation(calls)
     return EvaluationObservation(
         case_id=case_id,
         source="execution_fence",
-        actual_outcome="cancelled" if fence_state == "cancelled_without_result" else "completed" if fence_state == "replacement_result_preserved" else "failed",
+        actual_outcome="cancelled"
+        if fence_state == "cancelled_without_result"
+        else "completed"
+        if fence_state == "replacement_result_preserved"
+        else "failed",
         model_calls=sum(call.charge_kind == "provider_model" for call in calls),
         provider_model_calls_by_node=dict(
             sorted(

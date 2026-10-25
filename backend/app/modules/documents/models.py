@@ -1,16 +1,17 @@
+from datetime import datetime
+
+from app.db.base import Base
 from sqlalchemy import (
+    BigInteger,
+    CheckConstraint,
+    DateTime,
     ForeignKey,
     String,
     Text,
-    BigInteger,
-    DateTime,
-    CheckConstraint,
-    func,
     UniqueConstraint,
+    func,
 )
-from app.db.base import Base
 from sqlalchemy.orm import Mapped, mapped_column
-from datetime import datetime
 
 
 class Documents(Base):

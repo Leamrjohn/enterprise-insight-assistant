@@ -1,6 +1,6 @@
-from sqlalchemy.orm import Session
 from app.modules.documents.models import Documents
 from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 
 def allowed_min_view_roles(role: str) -> tuple[str, ...]:

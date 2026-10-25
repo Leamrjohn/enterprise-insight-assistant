@@ -11,6 +11,7 @@ from app.modules.evaluation.business_schemas import (
     EvaluationKind,
     EvaluationMetrics,
     EvaluationObservation,
+    RequiredTerms,
 )
 
 _REGISTERED_REGION_NAMES = frozenset(
@@ -81,7 +82,10 @@ def _contains_document_term(term: str, item: str) -> bool:
 
 
 def _contains_required_terms(
-    expected: object, actual: list[str], *, reject_negated_claims: bool = False
+    expected: list[RequiredTerms],
+    actual: list[str],
+    *,
+    reject_negated_claims: bool = False,
 ) -> bool:
     """Require every term group in one returned item without using an LLM judge."""
     return all(
@@ -98,7 +102,9 @@ def _contains_required_terms(
     )
 
 
-def _p95_duration(observations: list[EvaluationObservation], attribute: str) -> int | None:
+def _p95_duration(
+    observations: list[EvaluationObservation], attribute: str
+) -> int | None:
     durations = sorted(
         value
         for observation in observations
@@ -151,7 +157,7 @@ def _security_rejection_result(
         ),
         "security_gate_passed": security_gate_status,
     }
-    statuses = {
+    statuses: dict[str, CheckStatus] = {
         name: value if isinstance(value, str) else ("passed" if value else "failed")
         for name, value in checks.items()
     }
@@ -170,9 +176,9 @@ def _security_rejection_result(
         required_claims_supported=None,
         required_recommendation_actions_present=None,
         forbidden_claim_free=None,
-        outcome_correct=checks["outcome_correct"],
+        outcome_correct=statuses["outcome_correct"] == "passed",
         limitations_correct=None,
-        within_budget=checks["within_budget"],
+        within_budget=statuses["within_budget"] == "passed",
         report_persisted=None,
         deterministic_validation_passed=None,
         security_gate_passed=security_gate_status == "passed",
@@ -207,7 +213,7 @@ def _runtime_tool_rejection_result(
         ),
         "security_gate_passed": security_gate_status,
     }
-    statuses = {
+    statuses: dict[str, CheckStatus] = {
         name: value if isinstance(value, str) else ("passed" if value else "failed")
         for name, value in checks.items()
     }
@@ -226,9 +232,9 @@ def _runtime_tool_rejection_result(
         required_claims_supported=None,
         required_recommendation_actions_present=None,
         forbidden_claim_free=None,
-        outcome_correct=checks["outcome_correct"],
+        outcome_correct=statuses["outcome_correct"] == "passed",
         limitations_correct=None,
-        within_budget=checks["within_budget"],
+        within_budget=statuses["within_budget"] == "passed",
         report_persisted=None,
         deterministic_validation_passed=None,
         security_gate_passed=security_gate_status == "passed",
@@ -257,9 +263,9 @@ def _sql_validation_rejection_result(
     checks: dict[str, bool | CheckStatus] = {
         "sql_validation_rejection": observation.sql_validation_rejection_status,
         "business_result_prevented": observation.business_result_prevented_status,
-        "sql_validation_codes_match": set(
-            case.expected_sql_validation_codes
-        ).issubset(observation.actual_sql_validation_codes),
+        "sql_validation_codes_match": set(case.expected_sql_validation_codes).issubset(
+            observation.actual_sql_validation_codes
+        ),
         "outcome_correct": case.expected_outcome == observation.actual_outcome,
         "within_budget": (
             observation.model_calls <= case.max_model_calls
@@ -267,7 +273,7 @@ def _sql_validation_rejection_result(
         ),
         "security_gate_passed": security_gate_status,
     }
-    statuses = {
+    statuses: dict[str, CheckStatus] = {
         name: value if isinstance(value, str) else ("passed" if value else "failed")
         for name, value in checks.items()
     }
@@ -286,9 +292,9 @@ def _sql_validation_rejection_result(
         required_claims_supported=None,
         required_recommendation_actions_present=None,
         forbidden_claim_free=None,
-        outcome_correct=checks["outcome_correct"],
+        outcome_correct=statuses["outcome_correct"] == "passed",
         limitations_correct=None,
-        within_budget=checks["within_budget"],
+        within_budget=statuses["within_budget"] == "passed",
         report_persisted=None,
         deterministic_validation_passed=None,
         security_gate_passed=security_gate_status == "passed",
@@ -308,6 +314,7 @@ def _sql_validation_rejection_result(
 def _sql_result_limit_result(
     case: EvaluationCase, observation: EvaluationObservation
 ) -> EvaluationCaseResult:
+    assert case.expected_sql_result_max_rows is not None
     """Evaluate a persisted SQL call whose returned rows stay capped."""
     security_gate_status: CheckStatus = (
         "failed"
@@ -328,7 +335,7 @@ def _sql_result_limit_result(
         ),
         "security_gate_passed": security_gate_status,
     }
-    statuses = {
+    statuses: dict[str, CheckStatus] = {
         name: value if isinstance(value, str) else ("passed" if value else "failed")
         for name, value in checks.items()
     }
@@ -347,9 +354,9 @@ def _sql_result_limit_result(
         required_claims_supported=None,
         required_recommendation_actions_present=None,
         forbidden_claim_free=None,
-        outcome_correct=checks["outcome_correct"],
+        outcome_correct=statuses["outcome_correct"] == "passed",
         limitations_correct=None,
-        within_budget=checks["within_budget"],
+        within_budget=statuses["within_budget"] == "passed",
         report_persisted=None,
         deterministic_validation_passed=None,
         security_gate_passed=security_gate_status == "passed",
@@ -384,7 +391,7 @@ def _sql_timeout_result(
         ),
         "security_gate_passed": security_gate_status,
     }
-    statuses = {
+    statuses: dict[str, CheckStatus] = {
         name: value if isinstance(value, str) else ("passed" if value else "failed")
         for name, value in checks.items()
     }
@@ -403,9 +410,9 @@ def _sql_timeout_result(
         required_claims_supported=None,
         required_recommendation_actions_present=None,
         forbidden_claim_free=None,
-        outcome_correct=checks["outcome_correct"],
+        outcome_correct=statuses["outcome_correct"] == "passed",
         limitations_correct=None,
-        within_budget=checks["within_budget"],
+        within_budget=statuses["within_budget"] == "passed",
         report_persisted=None,
         deterministic_validation_passed=None,
         security_gate_passed=security_gate_status == "passed",
@@ -444,7 +451,7 @@ def _duplicate_delivery_result(
         ),
         "security_gate_passed": security_gate_status,
     }
-    statuses = {
+    statuses: dict[str, CheckStatus] = {
         name: value if isinstance(value, str) else ("passed" if value else "failed")
         for name, value in checks.items()
     }
@@ -463,15 +470,13 @@ def _duplicate_delivery_result(
         required_claims_supported=None,
         required_recommendation_actions_present=None,
         forbidden_claim_free=None,
-        outcome_correct=checks["outcome_correct"],
+        outcome_correct=statuses["outcome_correct"] == "passed",
         limitations_correct=None,
-        within_budget=checks["within_budget"],
+        within_budget=statuses["within_budget"] == "passed",
         report_persisted=None,
         deterministic_validation_passed=None,
         security_gate_passed=security_gate_status == "passed",
-        duplicate_delivery_observed=(
-            observation.duplicate_delivery_status == "passed"
-        ),
+        duplicate_delivery_observed=(observation.duplicate_delivery_status == "passed"),
         duplicate_execution_prevented=(
             observation.duplicate_execution_prevented_status == "passed"
         ),
@@ -510,7 +515,7 @@ def _execution_fence_result(
         ),
         "security_gate_passed": security_gate_status,
     }
-    statuses = {
+    statuses: dict[str, CheckStatus] = {
         name: value if isinstance(value, str) else ("passed" if value else "failed")
         for name, value in checks.items()
     }
@@ -529,9 +534,9 @@ def _execution_fence_result(
         required_claims_supported=None,
         required_recommendation_actions_present=None,
         forbidden_claim_free=None,
-        outcome_correct=checks["outcome_correct"],
+        outcome_correct=statuses["outcome_correct"] == "passed",
         limitations_correct=None,
-        within_budget=checks["within_budget"],
+        within_budget=statuses["within_budget"] == "passed",
         report_persisted=None,
         deterministic_validation_passed=None,
         security_gate_passed=security_gate_status == "passed",
@@ -566,7 +571,7 @@ def _clarification_result(
         ),
         "security_gate_passed": security_gate_status,
     }
-    statuses = {
+    statuses: dict[str, CheckStatus] = {
         name: value if isinstance(value, str) else ("passed" if value else "failed")
         for name, value in checks.items()
     }
@@ -576,7 +581,7 @@ def _clarification_result(
         evaluation_kind=case.evaluation_kind,
         passed=hard_gate_status == "passed",
         hard_gate_status=hard_gate_status,
-        route_correct=checks["route_correct"],
+        route_correct=statuses["route_correct"] == "passed",
         clarification_missing_fields_correct=clarification_fields_correct,
         entity_scope_correct=None,
         sql_result_equivalent=None,
@@ -586,9 +591,9 @@ def _clarification_result(
         required_claims_supported=None,
         required_recommendation_actions_present=None,
         forbidden_claim_free=None,
-        outcome_correct=checks["outcome_correct"],
+        outcome_correct=statuses["outcome_correct"] == "passed",
         limitations_correct=None,
-        within_budget=checks["within_budget"],
+        within_budget=statuses["within_budget"] == "passed",
         report_persisted=None,
         deterministic_validation_passed=None,
         security_gate_passed=security_gate_status == "passed",
@@ -636,8 +641,7 @@ def evaluate_case(
             "passed"
             if (
                 {
-                    _canonical_entity_scope(entity)
-                    for entity in case.expected_entities
+                    _canonical_entity_scope(entity) for entity in case.expected_entities
                 }.issubset(
                     {
                         _canonical_entity_scope(entity)
@@ -666,9 +670,7 @@ def evaluate_case(
         sql_result_equivalent = "unknown"
     else:
         sql_result_equivalent = (
-            "passed"
-            if expected_fingerprint == actual_fingerprint
-            else "failed"
+            "passed" if expected_fingerprint == actual_fingerprint else "failed"
         )
     numeric_consistent = observation.numeric_check_status == "passed"
 
@@ -743,7 +745,7 @@ def evaluate_case(
         "deterministic_validation_passed": observation.deterministic_validation_status,
         "security_gate_passed": security_gate_status,
     }
-    statuses = {
+    statuses: dict[str, CheckStatus] = {
         name: value if isinstance(value, str) else ("passed" if value else "failed")
         for name, value in checks.items()
     }
@@ -753,7 +755,7 @@ def evaluate_case(
             raise ValueError(f"hard gate cannot be marked inapplicable: {name}")
         if not reason.strip():
             raise ValueError(f"inapplicable hard gate requires a reason: {name}")
-    applicable_statuses = {
+    applicable_statuses: dict[str, CheckStatus] = {
         name: status
         for name, status in statuses.items()
         if name not in inapplicable_checks
@@ -780,19 +782,16 @@ def evaluate_case(
         violations=violations,
         unknown_checks=unknown_checks,
         inapplicable_checks=inapplicable_checks,
-        **{
-            name: value
-            for name, value in checks.items()
-            if name
-            not in {
-                "numeric_consistent",
-                "citation_scope_correct",
-                "deterministic_validation_passed",
-                "security_gate_passed",
-                "entity_scope_correct",
-                "sql_result_equivalent",
-            }
-        },
+        route_correct=route_correct,
+        required_facts_confirmed=required_facts_confirmed,
+        required_claims_supported=required_claims_supported,
+        document_qualifications_supported=document_qualifications_supported,
+        required_recommendation_actions_present=required_recommendation_actions_present,
+        forbidden_claim_free=forbidden_claim_free,
+        outcome_correct=outcome_correct,
+        limitations_correct=limitations_correct,
+        within_budget=within_budget,
+        report_persisted=observation.report_persisted,
     )
 
 
@@ -838,22 +837,22 @@ def evaluate_run(
         evaluate_case(case, observations_by_case[case.case_id]) for case in cases
     ]
     p95 = _p95_duration(observations, "duration_ms")
-    machine_execution_p95 = _p95_duration(
-        observations, "machine_execution_duration_ms"
-    )
+    machine_execution_p95 = _p95_duration(observations, "machine_execution_duration_ms")
     human_review_wait_p95 = _p95_duration(observations, "human_review_wait_ms")
     incidents = sum(len(observation.security_incidents) for observation in observations)
-    statuses = [result.hard_gate_status for result in results]
+    statuses: list[CheckStatus] = [result.hard_gate_status for result in results]
     hard_gate_status = _and_status(statuses)
     cost_status = _and_status([observation.cost_status for observation in observations])
     settled_cost: str | None = None
     if cost_status == "passed":
         try:
+            total_cost = Decimal(0)
+            for observation in observations:
+                if observation.cost is None:
+                    raise TypeError("settled observation cost is missing")
+                total_cost += Decimal(observation.cost)
             settled_cost = format(
-                sum(
-                    (Decimal(observation.cost) for observation in observations),
-                    Decimal(0),
-                ).quantize(Decimal("0.000001")),
+                total_cost.quantize(Decimal("0.000001")),
                 "f",
             )
         except (InvalidOperation, TypeError):

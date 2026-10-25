@@ -112,6 +112,4 @@ def check_sufficiency(
         evidence.rerank_score if evidence.rerank_score is not None else evidence.score
         for evidence in evidences
     ) / len(evidences)
-    if avg_score < min_avg_score:
-        return False
-    return True
+    return not avg_score < min_avg_score

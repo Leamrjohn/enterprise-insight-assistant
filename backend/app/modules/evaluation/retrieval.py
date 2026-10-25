@@ -53,7 +53,9 @@ def evaluate_retrieval(
         cases=len(cases),
         case_hit_rate=case_hits / len(cases),
         chunk_recall=(matched_chunks / expected_chunks if expected_chunks else 1.0),
-        chunk_precision=(matched_chunks / retrieved_chunks if retrieved_chunks else 1.0),
+        chunk_precision=(
+            matched_chunks / retrieved_chunks if retrieved_chunks else 1.0
+        ),
         citation_in_retrieval_rate=(
             citation_valid / citation_total if citation_total else 1.0
         ),

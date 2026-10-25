@@ -1,7 +1,6 @@
 import pytest
-from pydantic import ValidationError
-
 from app.modules.knowledge.analysis_result import AnalysisResult
+from pydantic import ValidationError
 
 
 def test_analysis_result_accepts_valid_data():

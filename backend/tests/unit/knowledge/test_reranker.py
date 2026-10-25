@@ -1,5 +1,4 @@
 import pytest
-
 from app.core.exceptions import RerankingError
 from app.modules.knowledge.rag.engine import EvidenceRef, check_sufficiency
 from app.modules.knowledge.rag.reranker import rerank_evidences

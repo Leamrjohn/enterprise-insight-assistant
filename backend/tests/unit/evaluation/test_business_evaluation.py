@@ -91,9 +91,7 @@ def test_uncomparable_result_fingerprint_shapes_are_unknown_not_failed() -> None
 
 def test_comparable_result_fingerprint_hash_mismatch_still_fails() -> None:
     result = evaluate_case(
-        _case(
-            expected_result_fingerprint={"algorithm": "sha256", "value": "0" * 64}
-        ),
+        _case(expected_result_fingerprint={"algorithm": "sha256", "value": "0" * 64}),
         _observation(
             actual_result_fingerprint={"algorithm": "sha256", "value": "1" * 64}
         ),
@@ -779,6 +777,15 @@ def test_run_reports_unknown_cost_without_a_false_settled_total() -> None:
             _observation(cost="0.030000", cost_status="passed"),
             _observation(case_id="second", cost=None, cost_status="unknown"),
         ],
+    )
+
+    assert metrics.settled_cost is None
+    assert metrics.cost_status == "unknown"
+
+
+def test_run_keeps_missing_settled_cost_unknown() -> None:
+    _, metrics = evaluate_run(
+        [_case()], [_observation(cost=None, cost_status="passed")]
     )
 
     assert metrics.settled_cost is None

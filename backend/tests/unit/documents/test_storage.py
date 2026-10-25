@@ -23,7 +23,9 @@ class _DiskFullTarget:
         raise OSError(errno.ENOSPC, "No space left on device")
 
 
-def test_document_storage_maps_disk_full_and_removes_partial_file(tmp_path, monkeypatch) -> None:
+def test_document_storage_maps_disk_full_and_removes_partial_file(
+    tmp_path, monkeypatch
+) -> None:
     settings = get_settings().model_copy(update={"storage_dir": tmp_path})
     original_open = Path.open
 

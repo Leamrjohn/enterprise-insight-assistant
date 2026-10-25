@@ -100,7 +100,11 @@ def select_planner_memories(
         selected.append(payload)
         manifest["selected_tokens"] += tokens
         fragment.update(
-            {"decision": "selected", "reason": "within_budget", "selected_tokens": tokens}
+            {
+                "decision": "selected",
+                "reason": "within_budget",
+                "selected_tokens": tokens,
+            }
         )
         manifest["fragments"].append(fragment)
     return selected, manifest

@@ -1,8 +1,8 @@
 import json
 
-from pydantic import ValidationError
 from app.core.exceptions import StructuredOutputError
 from app.modules.knowledge.analysis_result import AnalysisResult
+from pydantic import ValidationError
 
 
 def parse_analysis_result(

@@ -5,8 +5,8 @@ import re
 from app.db.session import SessionLocal, set_tenant_scope
 from app.modules.documents.chunks import DocumentChunk
 from app.modules.documents.models import Documents
-from app.modules.organizations.models import CompanyMember
 from app.modules.documents.repository import allowed_min_view_roles
+from app.modules.organizations.models import CompanyMember
 
 
 def validate_citations(
@@ -64,7 +64,5 @@ def validate_citations(
         if not invalid:
             return (True, [])
         return (False, invalid)
-    except Exception:
-        raise
     finally:
         db.close()

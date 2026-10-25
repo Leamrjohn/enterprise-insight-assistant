@@ -1,5 +1,4 @@
 import pytest
-
 from app.modules.reporting.validation import ReportValidationError, validate_report
 
 

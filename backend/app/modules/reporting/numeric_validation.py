@@ -34,7 +34,7 @@ def _display_matches_source(
     candidates = list(source_numbers)
     if has_percent_sign:
         candidates.extend(
-            number * 100 for number in source_numbers if Decimal("-1") <= number <= 1
+            number * 100 for number in source_numbers if Decimal(-1) <= number <= 1
         )
     for candidate in candidates:
         if candidate == answer_number:

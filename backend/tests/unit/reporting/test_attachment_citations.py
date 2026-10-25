@@ -1,7 +1,6 @@
 import hashlib
 
 import pytest
-
 from app.modules.reporting.schemas import build_attachment_citation_id
 from app.modules.reporting.validation import ReportValidationError, validate_report
 
@@ -51,12 +50,18 @@ def _draft(citation: dict[str, object]) -> dict[str, object]:
         "document_citations": [],
         "attachment_citations": [citation],
         "limitations": [
-            {"code": "partial", "message": "附件线索尚未验证。", "next_step": "补充核验数据。"}
+            {
+                "code": "partial",
+                "message": "附件线索尚未验证。",
+                "next_step": "补充核验数据。",
+            }
         ],
     }
 
 
-def test_report_accepts_a_task_scoped_attachment_reference_without_persisting_text() -> None:
+def test_report_accepts_a_task_scoped_attachment_reference_without_persisting_text() -> (
+    None
+):
     citation = _attachment_citation()
 
     report = validate_report(
@@ -71,7 +76,9 @@ def test_report_accepts_a_task_scoped_attachment_reference_without_persisting_te
 
 
 def test_report_rejects_an_attachment_reference_outside_the_frozen_scope() -> None:
-    with pytest.raises(ReportValidationError, match="attachments outside the frozen task scope"):
+    with pytest.raises(
+        ReportValidationError, match="attachments outside the frozen task scope"
+    ):
         validate_report(
             _draft(_attachment_citation()),
             allowed_attachment_citation_ids=set(),

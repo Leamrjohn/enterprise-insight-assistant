@@ -3,9 +3,8 @@
 from collections.abc import Iterable
 from typing import Any
 
-from pydantic import ValidationError
-
 from app.modules.reporting.schemas import FinalAnalysisReport
+from pydantic import ValidationError
 
 
 class ReportValidationError(ValueError):
@@ -33,5 +32,7 @@ def validate_report(
         allowed_attachment_citation_ids is not None
         and not attachment_citations.issubset(set(allowed_attachment_citation_ids))
     ):
-        raise ReportValidationError("report cites attachments outside the frozen task scope")
+        raise ReportValidationError(
+            "report cites attachments outside the frozen task scope"
+        )
     return report

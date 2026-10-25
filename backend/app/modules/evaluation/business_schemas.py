@@ -164,7 +164,9 @@ class EvaluationCase(BaseModel):
             if self.expected_outcome != "failed":
                 raise ValueError("sql validation rejection cases must expect failed")
             if self.expected_route is not None:
-                raise ValueError("sql validation rejection cases must have a null route")
+                raise ValueError(
+                    "sql validation rejection cases must have a null route"
+                )
             if not self.expected_sql_validation_codes:
                 raise ValueError(
                     "sql validation rejection cases require expected validation codes"
@@ -206,7 +208,9 @@ class EvaluationCase(BaseModel):
                 )
         elif self.evaluation_kind == "execution_fence":
             if self.expected_outcome not in {"cancelled", "completed"}:
-                raise ValueError("execution fence cases must expect cancelled or completed")
+                raise ValueError(
+                    "execution fence cases must expect cancelled or completed"
+                )
             if self.expected_route is not None:
                 raise ValueError("execution fence cases must have a null route")
             if not self.expected_execution_fence_codes:
@@ -249,9 +253,7 @@ class EvaluationCase(BaseModel):
             self.evaluation_kind != "duplicate_delivery"
             and self.expected_duplicate_delivery_codes
         ):
-            raise ValueError(
-                "only duplicate delivery cases may expect rejection codes"
-            )
+            raise ValueError("only duplicate delivery cases may expect rejection codes")
         if (
             self.evaluation_kind != "sql_result_limit"
             and self.expected_sql_result_max_rows is not None
@@ -259,16 +261,11 @@ class EvaluationCase(BaseModel):
             raise ValueError(
                 "only sql result limit cases may expect a maximum row count"
             )
-        if (
-            self.evaluation_kind != "execution_fence"
-            and (
-                self.expected_execution_fence_codes
-                or self.expected_execution_fence_state is not None
-            )
+        if self.evaluation_kind != "execution_fence" and (
+            self.expected_execution_fence_codes
+            or self.expected_execution_fence_state is not None
         ):
-            raise ValueError(
-                "only execution fence cases may expect rejection codes"
-            )
+            raise ValueError("only execution fence cases may expect rejection codes")
         sql_gates = {"sql_result_equivalent", "numeric_consistent"}
         requested = set(self.inapplicable_hard_gates)
         unknown = requested - {

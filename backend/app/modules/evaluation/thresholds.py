@@ -19,7 +19,9 @@ class EvaluationThresholdContract(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    schema_version: Literal["p0-evaluation-thresholds-v1", "p0-evaluation-thresholds-v2"]
+    schema_version: Literal[
+        "p0-evaluation-thresholds-v1", "p0-evaluation-thresholds-v2"
+    ]
     fixture_sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
     required_split: Literal["development", "heldout"]
     expected_case_count: int = Field(gt=0)
@@ -30,9 +32,7 @@ class EvaluationThresholdContract(BaseModel):
     max_machine_execution_duration_p95_multiplier: Decimal | None = Field(
         default=None, gt=0
     )
-    max_cost_per_trusted_success_multiplier: Decimal | None = Field(
-        default=None, gt=0
-    )
+    max_cost_per_trusted_success_multiplier: Decimal | None = Field(default=None, gt=0)
     require_persisted_task_observations: bool = True
     require_hard_gate_passed: bool = True
     require_settled_cost: bool = True
@@ -64,9 +64,16 @@ class EvaluationThresholdContract(BaseModel):
             )
         if self.schema_version == "p0-evaluation-thresholds-v1":
             if self.max_machine_execution_duration_p95_multiplier is not None:
-                raise ValueError("v1 does not support machine execution duration thresholds")
-        elif self.max_duration_p95_ms is not None or self.max_duration_p95_multiplier is not None:
-            raise ValueError("v2 compares machine execution duration, not end-to-end duration")
+                raise ValueError(
+                    "v1 does not support machine execution duration thresholds"
+                )
+        elif (
+            self.max_duration_p95_ms is not None
+            or self.max_duration_p95_multiplier is not None
+        ):
+            raise ValueError(
+                "v2 compares machine execution duration, not end-to-end duration"
+            )
         return self
 
 
@@ -93,7 +100,9 @@ def evaluate_threshold_contract(
         observation.source != "persisted_task" for observation in observations
     ):
         violations.append("persisted_task_observation")
-    observations_by_case_id = {observation.case_id: observation for observation in observations}
+    observations_by_case_id = {
+        observation.case_id: observation for observation in observations
+    }
     if any(
         (observation := observations_by_case_id.get(case.case_id)) is not None
         and observation.model_calls > case.max_model_calls
@@ -112,14 +121,14 @@ def evaluate_threshold_contract(
         metrics.cost_status != "passed" or metrics.settled_cost is None
     ):
         violations.append("settled_cost")
-    elif metrics.settled_cost is not None and Decimal(metrics.settled_cost) > contract.max_total_settled_cost_usd:
+    elif (
+        metrics.settled_cost is not None
+        and Decimal(metrics.settled_cost) > contract.max_total_settled_cost_usd
+    ):
         violations.append("max_total_settled_cost_usd")
-    if (
-        contract.max_duration_p95_ms is not None
-        and (
-            metrics.duration_p95_ms is None
-            or metrics.duration_p95_ms > contract.max_duration_p95_ms
-        )
+    if contract.max_duration_p95_ms is not None and (
+        metrics.duration_p95_ms is None
+        or metrics.duration_p95_ms > contract.max_duration_p95_ms
     ):
         violations.append("max_duration_p95_ms")
     if contract.baseline_run_sha256 is not None:
@@ -154,6 +163,7 @@ def evaluate_threshold_contract(
                 or metrics.cost_status != "passed"
                 or metrics.settled_cost is None
                 or metrics.success_count == 0
+                or contract.max_cost_per_trusted_success_multiplier is None
                 or Decimal(metrics.settled_cost) / metrics.success_count
                 > Decimal(baseline_metrics.settled_cost)
                 / baseline_metrics.success_count

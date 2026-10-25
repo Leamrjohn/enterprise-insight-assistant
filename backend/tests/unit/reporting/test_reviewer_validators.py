@@ -1,10 +1,34 @@
+import pytest
 from app.modules.analysis.agent_protocol import AgentInput
 from app.modules.reporting.citation_validation import validate_citations
 from app.modules.reporting.composer import render_evidence_purpose
 from app.modules.reporting.coverage import calculate_coverage
 from app.modules.reporting.numeric_validation import validate_numbers
-from app.modules.reporting.reviewer_agent import ReviewerAgent, _format_data_result
+from app.modules.reporting.reviewer_agent import (
+    ReviewerAgent,
+    _format_data_result,
+    _verbatim_document_qualifications,
+)
 from app.modules.reporting.semantic_review import EvidenceSemanticReview
+
+
+@pytest.mark.parametrize("content", [None, 7, {}, [], "different text"])
+def test_qualification_requires_actual_matching_text(content) -> None:
+    review = EvidenceSemanticReview(
+        verdict="supported",
+        reason="test",
+        document_qualifications=[
+            {"statement": "document boundary", "citation_chunk_ids": [42]}
+        ],
+    )
+    assert (
+        _verbatim_document_qualifications(
+            semantic_review=review,
+            supported_chunk_ids={42},
+            knowledge_evidences=[{"chunk_id": 42, "content": content}],
+        )
+        == []
+    )
 
 
 def test_reviewer_hides_model_answer_when_database_citation_check_fails() -> None:
@@ -75,7 +99,9 @@ def test_coverage_calculator_accepts_workflow_dictionary_evidence() -> None:
 
 
 def test_reviewer_does_not_treat_model_generated_purpose_as_fact() -> None:
-    assert render_evidence_purpose("资料未提供销售额，因此无法回答。") == "已授权经营数据"
+    assert (
+        render_evidence_purpose("资料未提供销售额，因此无法回答。") == "已授权经营数据"
+    )
 
 
 def test_numeric_validator_rejects_ten_percent_near_match() -> None:
@@ -237,7 +263,9 @@ def test_reviewer_validates_hybrid_empty_evidence_and_persists_its_limitation() 
     ]
 
 
-def test_reviewer_does_not_expose_unverified_numeric_diagnostic_on_insufficient_data() -> None:
+def test_reviewer_does_not_expose_unverified_numeric_diagnostic_on_insufficient_data() -> (
+    None
+):
     result = ReviewerAgent().run(
         AgentInput(
             question="SKU-UNKNOWN-2024 在2024年3月为何下降？",

@@ -1,12 +1,12 @@
-import pytest
-from fastapi.testclient import TestClient
 from uuid import uuid4
 
-from app.modules.documents import api as document_api
-from app.main import app
-from app.modules.organizations.models import Company, CompanyMember
-from app.modules.identity.models import User
+import pytest
 from app.db.session import get_db
+from app.main import app
+from app.modules.documents import api as document_api
+from app.modules.identity.models import User
+from app.modules.organizations.models import Company, CompanyMember
+from fastapi.testclient import TestClient
 
 
 def _add_company_membership(db_session, user: User) -> None:
