@@ -19,8 +19,8 @@ from app.modules.input_artifacts.processing.processing_jobs import (
     complete_scan_job_processing,
     fail_parse_job_processing,
     fail_scan_job_processing,
-    reject_scan_job_processing,
     recover_expired_scan_job,
+    reject_scan_job_processing,
 )
 from app.modules.input_artifacts.processing.processing_outbox import (
     publish_artifact_processing_event,

@@ -15,7 +15,9 @@ from app.modules.input_artifacts.models import (
     InputArtifact,
     InputArtifactVersion,
 )
-from app.modules.input_artifacts.processing.processing_storage import ArtifactProcessingStorage
+from app.modules.input_artifacts.processing.processing_storage import (
+    ArtifactProcessingStorage,
+)
 from app.modules.workflow.models import AnalysisTaskInputArtifactVersion
 from sqlalchemy.orm import Session
 
@@ -31,11 +33,14 @@ class AttachmentContextLimits:
     max_total_chars: int = 12_000
 
     def __post_init__(self) -> None:
-        if min(
-            self.max_attachments,
-            self.max_chars_per_attachment,
-            self.max_total_chars,
-        ) < 1:
+        if (
+            min(
+                self.max_attachments,
+                self.max_chars_per_attachment,
+                self.max_total_chars,
+            )
+            < 1
+        ):
             raise ValueError("attachment context limits must be positive")
 
 
@@ -59,7 +64,7 @@ def build_task_attachment_context(
     db: Session,
     *,
     task_id: int,
-    company_id: int,
+    company_id: int | None,
     storage: ArtifactProcessingStorage | None,
     limits: AttachmentContextLimits = _DEFAULT_ATTACHMENT_CONTEXT_LIMITS,
 ) -> TaskAttachmentContext:
@@ -78,8 +83,14 @@ def build_task_attachment_context(
     if not frozen_ids:
         return TaskAttachmentContext(
             planner_payload=[],
-            selection_manifest={"attachment_count": 0, "selected_char_count": 0, "items": []},
+            selection_manifest={
+                "attachment_count": 0,
+                "selected_char_count": 0,
+                "items": [],
+            },
         )
+    if company_id is None:
+        raise AttachmentContextError("attachment_company_scope_missing")
     if storage is None:
         raise AttachmentContextError("attachment_storage_unavailable")
 
@@ -161,7 +172,9 @@ def build_task_attachment_context(
         planner_payload=payload,
         selection_manifest={
             "attachment_count": len(rows),
-            "selected_char_count": sum(item["selected_char_count"] for item in manifest_items),
+            "selected_char_count": sum(
+                item["selected_char_count"] for item in manifest_items
+            ),
             "items": manifest_items,
         },
     )
@@ -183,7 +196,10 @@ def _read_verified_manifest(
         payload = json.loads(destination_path.read_text(encoding="utf-8"))
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise AttachmentContextError("attachment_manifest_invalid") from exc
-    if not isinstance(payload, dict) or payload.get("content_trust_level") != "untrusted":
+    if (
+        not isinstance(payload, dict)
+        or payload.get("content_trust_level") != "untrusted"
+    ):
         raise AttachmentContextError("attachment_manifest_untrusted_contract_missing")
     return payload
 

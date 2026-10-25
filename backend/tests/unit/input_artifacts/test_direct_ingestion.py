@@ -1,14 +1,15 @@
 from io import BytesIO
 
 import pytest
-from sqlalchemy.orm import Session
-
 from app.core.settings import get_settings
 from app.db.session import set_tenant_scope
-from app.modules.organizations.models import Company
-from app.modules.input_artifacts.models import InputArtifact, InputArtifactVersion
 from app.modules.identity.models import User
-from app.modules.input_artifacts.upload.direct_ingestion import ingest_received_input_artifact
+from app.modules.input_artifacts.models import InputArtifact, InputArtifactVersion
+from app.modules.input_artifacts.upload.direct_ingestion import (
+    ingest_received_input_artifact,
+)
+from app.modules.organizations.models import Company
+from sqlalchemy.orm import Session
 
 
 def _create_company_and_scope(db: Session) -> Company:
@@ -42,7 +43,9 @@ def test_ingest_received_input_artifact_keeps_quarantine_file_after_persisting(
     stored_version = db_session.get(InputArtifactVersion, version.id)
     assert artifact is not None
     assert stored_version is not None
-    assert (settings.storage_dir / version.raw_object_key).read_bytes() == b"region,sales\neast,10\n"
+    assert (
+        settings.storage_dir / version.raw_object_key
+    ).read_bytes() == b"region,sales\neast,10\n"
 
 
 def test_ingest_removes_new_quarantine_file_when_database_persistence_fails(

@@ -1,10 +1,9 @@
 import pytest
-from pydantic import ValidationError
-
 from app.modules.input_artifacts.schemas import (
     InputArtifactUploadOut,
     InputArtifactVersionReceiptOut,
 )
+from pydantic import ValidationError
 
 
 def test_upload_response_exposes_only_the_public_receipt_fields() -> None:

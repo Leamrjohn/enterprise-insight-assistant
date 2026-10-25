@@ -1,11 +1,12 @@
 """One claimed parse-job execution, independent of the Celery transport."""
 
 import json
+from collections.abc import Callable
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from collections.abc import Callable
 
 from app.modules.input_artifacts.models import InputArtifactVersion
+from app.modules.input_artifacts.processing.image_ocr import ImageOcrResult
 from app.modules.input_artifacts.processing.parser import (
     ImageParseLimits,
     InputArtifactParseError,
@@ -24,6 +25,9 @@ from app.modules.input_artifacts.processing.processing_storage import (
 )
 from sqlalchemy.orm import Session
 
+_DEFAULT_IMAGE_PARSE_LIMITS = ImageParseLimits()
+_DEFAULT_PDF_PARSE_LIMITS = PdfParseLimits()
+
 
 def execute_parse_job(
     db: Session,
@@ -33,9 +37,9 @@ def execute_parse_job(
     processor_name: str,
     processor_version: str,
     storage_factory: Callable[[], ArtifactProcessingStorage],
-    image_limits: ImageParseLimits = ImageParseLimits(),
-    pdf_limits: PdfParseLimits = PdfParseLimits(),
-    image_ocr: Callable[[Path], object] | None = None,
+    image_limits: ImageParseLimits = _DEFAULT_IMAGE_PARSE_LIMITS,
+    pdf_limits: PdfParseLimits = _DEFAULT_PDF_PARSE_LIMITS,
+    image_ocr: Callable[[Path], ImageOcrResult] | None = None,
     pdf_page_renderer: Callable[[Path, int, Path], Path] | None = None,
 ) -> bool:
     """Claim, parse, persist immutable output, and complete one parse job."""
@@ -50,7 +54,7 @@ def execute_parse_job(
         return False
     try:
         storage = storage_factory()
-    except Exception:
+    except Exception:  # noqa: BLE001 - Finish the claimed attempt with a safe failure code.
         return _fail(db, claim, "processor_configuration_unavailable")
     version = db.get(InputArtifactVersion, claim.artifact_version_id)
     if version is None:

@@ -4,8 +4,6 @@ from dataclasses import dataclass
 from datetime import timedelta
 from typing import BinaryIO, Literal
 
-from sqlalchemy.orm import Session
-
 from app.core.exceptions import (
     EmptyInputArtifactError,
     InputArtifactTooLargeError,
@@ -15,15 +13,15 @@ from app.core.exceptions import (
 from app.core.settings import Settings
 from app.modules.conversations.service import get_conversation_service
 from app.modules.input_artifacts.models import InputArtifactUploadRequest
-from app.modules.input_artifacts.upload.request_fingerprint import (
-    build_input_artifact_request_fingerprint,
-)
 from app.modules.input_artifacts.storage import (
     InspectedInputArtifactFile,
     StoredInputArtifactFile,
     discard_stored_input_artifact_file,
     inspect_input_artifact_file,
     store_input_artifact_file,
+)
+from app.modules.input_artifacts.upload.request_fingerprint import (
+    build_input_artifact_request_fingerprint,
 )
 from app.modules.input_artifacts.upload.upload_requests import (
     UploadRequestFencedError,
@@ -34,7 +32,7 @@ from app.modules.input_artifacts.upload.upload_requests import (
 )
 from app.modules.input_artifacts.versions import create_received_input_artifact_version
 from app.modules.organizations.access import CurrentCompanyContext
-
+from sqlalchemy.orm import Session
 
 _ATTACHMENT_KIND = "attachment"
 
@@ -98,9 +96,7 @@ def process_conversation_attachment_upload(
         conversation_id=conversation.id,
         idempotency_key=command.idempotency_key,
         trace_request_id=command.trace_request_id,
-        lease_duration=timedelta(
-            seconds=settings.input_artifact_upload_lease_seconds
-        ),
+        lease_duration=timedelta(seconds=settings.input_artifact_upload_lease_seconds),
         request_fingerprint=fingerprint,
     )
     if reservation is None:
@@ -202,7 +198,7 @@ def _store_reserved_attachment(
         db.rollback()
         _discard_if_stored(stored_file, settings=settings)
         raise
-    except Exception:
+    except Exception:  # noqa: BLE001 - Roll back, discard stored bytes, and persist a failed receipt.
         db.rollback()
         _discard_if_stored(stored_file, settings=settings)
         return _failed_outcome(

@@ -1,8 +1,8 @@
 """Bounded Poppler adapter for rendering one PDF page for OCR."""
 
+from collections.abc import Callable
 from pathlib import Path
 from subprocess import CalledProcessError, CompletedProcess, TimeoutExpired, run
-from typing import Callable
 
 
 class PdfPageRenderError(RuntimeError):

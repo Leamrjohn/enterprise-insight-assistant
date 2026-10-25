@@ -1,14 +1,13 @@
 from datetime import datetime, timedelta, timezone
 
 import pytest
-from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
-
 from app.db.session import set_tenant_scope
 from app.modules.conversations.models import Conversation
 from app.modules.identity.models import User
 from app.modules.input_artifacts.models import InputArtifactUploadSession
 from app.modules.organizations.models import Company, CompanyMember
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
 
 
 def _create_conversation_scope(

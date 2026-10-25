@@ -1,13 +1,12 @@
 import pytest
-from sqlalchemy.orm import Session
-
 from app.db.session import set_tenant_scope
-from app.modules.organizations.models import Company
-from app.modules.input_artifacts.models import InputArtifact, InputArtifactVersion
 from app.modules.identity.models import User
+from app.modules.input_artifacts.models import InputArtifact, InputArtifactVersion
 from app.modules.input_artifacts.versions import (
     create_received_input_artifact_version,
 )
+from app.modules.organizations.models import Company
+from sqlalchemy.orm import Session
 
 
 def _create_company_and_scope(db: Session, user: User) -> Company:
@@ -72,6 +71,7 @@ def test_invalid_sha256_does_not_create_a_partial_artifact(
 
     assert db_session.query(InputArtifact).count() == 0
     assert db_session.query(InputArtifactVersion).count() == 0
+
 
 def test_create_received_input_artifact_version_can_defer_commit(
     db_session: Session,

@@ -77,10 +77,18 @@ class S3DirectUploadStorage:
                 "boto3 is required for direct object storage uploads"
             ) from exc
 
-        remaining_seconds = int((expires_at - datetime.now(expires_at.tzinfo)).total_seconds())
+        remaining_seconds = int(
+            (expires_at - datetime.now(expires_at.tzinfo)).total_seconds()
+        )
         if remaining_seconds <= 0:
             raise ValueError("direct upload form expiry must be in the future")
         checksum_base64 = base64.b64encode(bytes.fromhex(sha256_hex)).decode("ascii")
+        access_key = self._settings.input_artifact_object_storage_access_key_id
+        secret_key = self._settings.input_artifact_object_storage_secret_access_key
+        if access_key is None or secret_key is None:
+            raise DirectUploadStorageUnavailableError(
+                "direct object storage is not configured"
+            )
         client = boto3.client(
             "s3",
             endpoint_url=(
@@ -88,8 +96,8 @@ class S3DirectUploadStorage:
                 or self._settings.input_artifact_object_storage_endpoint_url
             ),
             region_name=self._settings.input_artifact_object_storage_region,
-            aws_access_key_id=self._settings.input_artifact_object_storage_access_key_id.get_secret_value(),
-            aws_secret_access_key=self._settings.input_artifact_object_storage_secret_access_key.get_secret_value(),
+            aws_access_key_id=access_key.get_secret_value(),
+            aws_secret_access_key=secret_key.get_secret_value(),
         )
         fields = {
             "key": object_key,
@@ -128,12 +136,18 @@ class S3DirectUploadStorage:
                 "boto3 is required for direct object storage uploads"
             ) from exc
 
+        access_key = self._settings.input_artifact_object_storage_access_key_id
+        secret_key = self._settings.input_artifact_object_storage_secret_access_key
+        if access_key is None or secret_key is None:
+            raise DirectUploadStorageUnavailableError(
+                "direct object storage is not configured"
+            )
         client = boto3.client(
             "s3",
             endpoint_url=self._settings.input_artifact_object_storage_endpoint_url,
             region_name=self._settings.input_artifact_object_storage_region,
-            aws_access_key_id=self._settings.input_artifact_object_storage_access_key_id.get_secret_value(),
-            aws_secret_access_key=self._settings.input_artifact_object_storage_secret_access_key.get_secret_value(),
+            aws_access_key_id=access_key.get_secret_value(),
+            aws_secret_access_key=secret_key.get_secret_value(),
         )
         try:
             response = client.head_object(
@@ -165,7 +179,11 @@ class S3DirectUploadStorage:
                 "object storage returned an invalid SHA-256 checksum"
             ) from exc
         byte_size = response.get("ContentLength")
-        if isinstance(byte_size, bool) or not isinstance(byte_size, int) or byte_size < 0:
+        if (
+            isinstance(byte_size, bool)
+            or not isinstance(byte_size, int)
+            or byte_size < 0
+        ):
             raise DirectUploadObjectIntegrityError(
                 "object storage returned an invalid object length"
             )

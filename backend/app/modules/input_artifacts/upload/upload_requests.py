@@ -4,17 +4,16 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from typing import Literal
 
-from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
-
-from app.modules.organizations.access import CurrentCompanyContext
+from app.modules.conversations.service import get_conversation_service
 from app.modules.input_artifacts.models import InputArtifactUploadRequest
 from app.modules.input_artifacts.repository import (
     add_receiving_input_artifact_upload_request,
     get_input_artifact_upload_request,
     get_input_artifact_version_for_company,
 )
-from app.modules.conversations.service import get_conversation_service
+from app.modules.organizations.access import CurrentCompanyContext
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
 
 
 @dataclass(frozen=True)
@@ -29,9 +28,6 @@ class UploadRequestFencedError(RuntimeError):
 
 class UploadRequestFingerprintConflictError(ValueError):
     """The idempotency key was reused with different request content."""
-
-
-
 
 
 def reserve_input_artifact_upload_request(

@@ -1,11 +1,10 @@
 """ClamAV daemon adapter. It returns a scan fact and never mutates database state."""
 
-from dataclasses import dataclass
-from pathlib import Path
 import socket
 import struct
+from dataclasses import dataclass
+from pathlib import Path
 from typing import Literal
-
 
 ScanDisposition = Literal["clean", "rejected", "failed"]
 _CHUNK_SIZE = 1024 * 1024
@@ -30,7 +29,11 @@ class ClamDScanner:
     def __init__(self, *, host: str, port: int, timeout_seconds: int) -> None:
         if not isinstance(host, str) or not host.strip():
             raise ValueError("clamd host is invalid")
-        if isinstance(port, bool) or not isinstance(port, int) or not 1 <= port <= 65535:
+        if (
+            isinstance(port, bool)
+            or not isinstance(port, int)
+            or not 1 <= port <= 65535
+        ):
             raise ValueError("clamd port is invalid")
         if (
             isinstance(timeout_seconds, bool)

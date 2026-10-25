@@ -1,5 +1,8 @@
+from dataclasses import FrozenInstanceError
+from inspect import signature
 from pathlib import Path
 
+import pytest
 from app.db.session import set_tenant_scope
 from app.modules.identity.models import User
 from app.modules.input_artifacts.models import (
@@ -7,10 +10,29 @@ from app.modules.input_artifacts.models import (
     ArtifactProcessingJob,
 )
 from app.modules.input_artifacts.processing.parse_worker import execute_parse_job
-from app.modules.input_artifacts.processing.processing_storage import StoredProcessingObject
+from app.modules.input_artifacts.processing.parser import (
+    ImageParseLimits,
+    PdfParseLimits,
+)
+from app.modules.input_artifacts.processing.processing_storage import (
+    StoredProcessingObject,
+)
 from app.modules.input_artifacts.versions import create_received_input_artifact_version
 from app.modules.organizations.models import Company, CompanyMember
 from sqlalchemy.orm import Session
+
+
+@pytest.mark.parametrize(
+    ("parameter", "limits_type"),
+    [("image_limits", ImageParseLimits), ("pdf_limits", PdfParseLimits)],
+)
+def test_worker_default_limits_preserve_values_and_reject_mutation(
+    parameter, limits_type
+):
+    default = signature(execute_parse_job).parameters[parameter].default
+    assert default == limits_type()
+    with pytest.raises(FrozenInstanceError):
+        default.minimum_ocr_confidence = 0
 
 
 class _Storage:
@@ -26,7 +48,9 @@ class _Storage:
             "d1328f05cc06e76e429c15ebc2e5bb9635e77bbeebba9e23523323f319e2b386",
         )
 
-    def write_parsed_object(self, *, object_key: str, content: bytes, content_type: str):
+    def write_parsed_object(
+        self, *, object_key: str, content: bytes, content_type: str
+    ):
         self.objects[object_key] = content
         return StoredProcessingObject(
             object_key,
@@ -34,7 +58,9 @@ class _Storage:
             __import__("hashlib").sha256(content).hexdigest(),
         )
 
-    def write_parsed_file(self, *, object_key: str, source_path: Path, content_type: str):
+    def write_parsed_file(
+        self, *, object_key: str, source_path: Path, content_type: str
+    ):
         content = source_path.read_bytes()
         return self.write_parsed_object(
             object_key=object_key,
@@ -99,6 +125,7 @@ def test_parse_worker_persists_immutable_csv_output_and_marks_version_ready(
     assert version.active_parse_result_id == result.id
     assert result.manifest_object_key in storage.objects
     assert result.extracted_text_object_key in storage.objects
-    assert b'"formula_execution":"not_performed"' in storage.objects[
-        result.manifest_object_key
-    ]
+    assert (
+        b'"formula_execution":"not_performed"'
+        in storage.objects[result.manifest_object_key]
+    )

@@ -2,18 +2,17 @@ from pathlib import Path
 from zipfile import ZIP_DEFLATED, ZipFile
 
 import pytest
-from openpyxl import Workbook
-from PIL import Image
-from pypdf import PdfWriter
-
 from app.modules.input_artifacts.processing.parser import (
-    InputArtifactParseError,
     ImageParseLimits,
+    InputArtifactParseError,
     PdfParseLimits,
     XlsxParseLimits,
     parse_input_artifact_file,
 )
 from app.modules.input_artifacts.processing.pdf_render import PdfPageRenderError
+from openpyxl import Workbook
+from PIL import Image
+from pypdf import PdfWriter
 
 
 def test_parser_normalizes_utf8_text_and_records_document_facts(tmp_path: Path) -> None:
@@ -27,9 +26,7 @@ def test_parser_normalizes_utf8_text_and_records_document_facts(tmp_path: Path) 
     )
 
     assert result.content_kind == "document"
-    assert result.extracted_text_path.read_bytes() == "# 标题\r\n内容\r\n".encode(
-        "utf-8"
-    )
+    assert result.extracted_text_path.read_bytes() == "# 标题\r\n内容\r\n".encode()
     assert result.extracted_text_char_count == len("# 标题\r\n内容\r\n")
     assert result.manifest["source_format"] == "md"
     assert result.manifest["content_trust_level"] == "untrusted"
@@ -199,7 +196,9 @@ def test_parser_records_a_pdf_without_text_as_empty_content(tmp_path: Path) -> N
     assert result.extracted_text_path.read_text(encoding="utf-8") == ""
 
 
-def test_parser_records_a_pdf_with_missing_pages_as_partial_content(tmp_path: Path) -> None:
+def test_parser_records_a_pdf_with_missing_pages_as_partial_content(
+    tmp_path: Path,
+) -> None:
     source = tmp_path / "partial.pdf"
     _write_text_pdf(source, "Quarterly revenue")
     writer = PdfWriter(source)
@@ -435,7 +434,11 @@ def _write_text_pdf(path: Path, text: str) -> None:
         b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
         b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>",
         b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
-        b"<< /Length " + str(len(stream)).encode("ascii") + b" >>\nstream\n" + stream + b"\nendstream",
+        b"<< /Length "
+        + str(len(stream)).encode("ascii")
+        + b" >>\nstream\n"
+        + stream
+        + b"\nendstream",
     ]
     document = bytearray(b"%PDF-1.4\n")
     offsets = [0]

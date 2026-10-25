@@ -1,6 +1,6 @@
+import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-import re
 from uuid import uuid4
 
 from app.modules.input_artifacts.models import (
@@ -12,7 +12,6 @@ from app.modules.input_artifacts.models import (
 )
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
-
 
 _SHA256_HEX_PATTERN = re.compile(r"^[0-9a-f]{64}$")
 
@@ -907,7 +906,8 @@ def fail_scan_job_processing(
         attempt = db.scalars(
             select(ArtifactProcessingAttempt)
             .where(
-                ArtifactProcessingAttempt.artifact_version_id == job.artifact_version_id,
+                ArtifactProcessingAttempt.artifact_version_id
+                == job.artifact_version_id,
                 ArtifactProcessingAttempt.stage == "scan",
                 ArtifactProcessingAttempt.attempt_number == job.attempt_generation,
                 ArtifactProcessingAttempt.status == "running",
@@ -976,5 +976,3 @@ def fail_scan_job_processing(
     except Exception:
         db.rollback()
         raise
-
-

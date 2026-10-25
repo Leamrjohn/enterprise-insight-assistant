@@ -1,8 +1,6 @@
 from io import BytesIO
 
 import pytest
-from sqlalchemy.orm import Session
-
 from app.core.exceptions import (
     EmptyInputArtifactError,
     InputArtifactTooLargeError,
@@ -13,18 +11,19 @@ from app.core.settings import get_settings
 from app.db.session import set_tenant_scope
 from app.modules.conversations.models import Conversation
 from app.modules.identity.models import User
-from app.modules.input_artifacts.upload import upload_service
 from app.modules.input_artifacts.models import (
     InputArtifact,
     InputArtifactUploadRequest,
     InputArtifactVersion,
 )
+from app.modules.input_artifacts.upload import upload_service
 from app.modules.input_artifacts.upload.upload_requests import (
     UploadRequestFencedError,
     UploadRequestFingerprintConflictError,
 )
 from app.modules.organizations.access import CurrentCompanyContext
 from app.modules.organizations.models import Company, CompanyMember
+from sqlalchemy.orm import Session
 
 
 def _create_context_and_conversation(
@@ -48,7 +47,9 @@ def _create_context_and_conversation(
     db.add_all((membership, conversation))
     db.flush()
     set_tenant_scope(db, company.id)
-    return CurrentCompanyContext(user=user, company=company, membership=membership), conversation
+    return CurrentCompanyContext(
+        user=user, company=company, membership=membership
+    ), conversation
 
 
 def _command(
@@ -111,7 +112,9 @@ def test_upload_service_does_not_read_an_inaccessible_conversation(
     def inspection_must_not_run(**kwargs):
         raise AssertionError("inaccessible conversations must not inspect files")
 
-    monkeypatch.setattr(upload_service, "inspect_input_artifact_file", inspection_must_not_run)
+    monkeypatch.setattr(
+        upload_service, "inspect_input_artifact_file", inspection_must_not_run
+    )
 
     outcome = upload_service.process_conversation_attachment_upload(
         db_session,

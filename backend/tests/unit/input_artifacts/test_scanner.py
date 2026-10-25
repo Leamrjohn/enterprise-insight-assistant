@@ -25,7 +25,9 @@ class _FakeSocket:
         return reply
 
 
-def test_clamd_scanner_streams_file_and_accepts_a_clean_reply(monkeypatch, tmp_path: Path) -> None:
+def test_clamd_scanner_streams_file_and_accepts_a_clean_reply(
+    monkeypatch, tmp_path: Path
+) -> None:
     source = tmp_path / "input.txt"
     source.write_bytes(b"safe content")
     connection = _FakeSocket(b"stream: OK\0")
@@ -42,7 +44,9 @@ def test_clamd_scanner_streams_file_and_accepts_a_clean_reply(monkeypatch, tmp_p
     assert connection.sent[-1] == b"\x00\x00\x00\x00"
 
 
-def test_clamd_scanner_maps_a_detection_to_rejected(monkeypatch, tmp_path: Path) -> None:
+def test_clamd_scanner_maps_a_detection_to_rejected(
+    monkeypatch, tmp_path: Path
+) -> None:
     source = tmp_path / "input.bin"
     source.write_bytes(b"eicar")
     connection = _FakeSocket(b"stream: Win.Test.EICAR_HDB-1 FOUND\0")
@@ -57,7 +61,9 @@ def test_clamd_scanner_maps_a_detection_to_rejected(monkeypatch, tmp_path: Path)
     assert result.reason_code == "malware_detected"
 
 
-def test_clamd_scanner_maps_connection_failure_to_retryable_failure(monkeypatch, tmp_path: Path) -> None:
+def test_clamd_scanner_maps_connection_failure_to_retryable_failure(
+    monkeypatch, tmp_path: Path
+) -> None:
     source = tmp_path / "input.bin"
     source.write_bytes(b"safe")
     monkeypatch.setattr(
@@ -71,7 +77,9 @@ def test_clamd_scanner_maps_connection_failure_to_retryable_failure(monkeypatch,
     assert result.reason_code == "scanner_unavailable"
 
 
-def test_clamd_scanner_maps_an_unterminated_reply_to_protocol_failure(monkeypatch, tmp_path: Path) -> None:
+def test_clamd_scanner_maps_an_unterminated_reply_to_protocol_failure(
+    monkeypatch, tmp_path: Path
+) -> None:
     source = tmp_path / "input.bin"
     source.write_bytes(b"safe")
     connection = _FakeSocket(b"stream: unknown")

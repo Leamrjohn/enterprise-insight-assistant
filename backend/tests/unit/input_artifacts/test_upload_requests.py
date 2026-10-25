@@ -1,23 +1,24 @@
 from datetime import datetime, timedelta, timezone
 
 import pytest
-from sqlalchemy.orm import Session
-
-from app.modules.organizations.access import CurrentCompanyContext
 from app.db.session import set_tenant_scope
-from app.modules.organizations.models import Company, CompanyMember
 from app.modules.conversations.models import Conversation
-from app.modules.input_artifacts.models import InputArtifactUploadRequest, InputArtifactVersion
 from app.modules.identity.models import User
+from app.modules.input_artifacts.models import (
+    InputArtifactUploadRequest,
+    InputArtifactVersion,
+)
 from app.modules.input_artifacts.upload.upload_requests import (
-    UploadRequestFingerprintConflictError,
     UploadRequestFencedError,
+    UploadRequestFingerprintConflictError,
     complete_input_artifact_upload_request,
     finish_upload_request_with_error,
     reserve_input_artifact_upload_request,
 )
 from app.modules.input_artifacts.versions import create_received_input_artifact_version
-
+from app.modules.organizations.access import CurrentCompanyContext
+from app.modules.organizations.models import Company, CompanyMember
+from sqlalchemy.orm import Session
 
 _REQUEST_FINGERPRINT = "a" * 64
 
@@ -43,7 +44,9 @@ def _create_context_and_conversation(
     db.add_all((membership, conversation))
     db.flush()
     set_tenant_scope(db, company.id)
-    return CurrentCompanyContext(user=user, company=company, membership=membership), conversation
+    return CurrentCompanyContext(
+        user=user, company=company, membership=membership
+    ), conversation
 
 
 def test_reserve_upload_request_creates_first_generation(

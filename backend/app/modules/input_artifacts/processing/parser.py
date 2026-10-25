@@ -1,11 +1,13 @@
 """Deterministic local parsers for already-scanned input artifacts."""
 
 import csv
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable, Literal
+from typing import Literal
 from zipfile import BadZipFile, ZipFile
 
+from app.modules.input_artifacts.processing.image_ocr import ImageOcrResult
 
 _TEXT_CHUNK_SIZE = 64 * 1024
 _PARSER_NAME = "builtin-text-csv"
@@ -77,7 +79,7 @@ def parse_input_artifact_file(
     pdf_limits: PdfParseLimits = _DEFAULT_PDF_PARSE_LIMITS,
     pdf_page_renderer: Callable[[Path, int, Path], Path] | None = None,
     image_limits: ImageParseLimits = _DEFAULT_IMAGE_PARSE_LIMITS,
-    image_ocr: Callable[[Path], object] | None = None,
+    image_ocr: Callable[[Path], ImageOcrResult] | None = None,
 ) -> ParsedInputArtifact:
     """Parse one supported local file without evaluating formulas or code."""
     if not source_path.is_file():
@@ -153,11 +155,13 @@ def parse_input_artifact_file(
 def _copy_utf8_text(source_path: Path, destination_path: Path) -> int:
     char_count = 0
     try:
-        with source_path.open("r", encoding="utf-8-sig", newline="") as source:
-            with destination_path.open("w", encoding="utf-8", newline="") as target:
-                while chunk := source.read(_TEXT_CHUNK_SIZE):
-                    char_count += len(chunk)
-                    target.write(chunk)
+        with (
+            source_path.open("r", encoding="utf-8-sig", newline="") as source,
+            destination_path.open("w", encoding="utf-8", newline="") as target,
+        ):
+            while chunk := source.read(_TEXT_CHUNK_SIZE):
+                char_count += len(chunk)
+                target.write(chunk)
     except UnicodeDecodeError as exc:
         destination_path.unlink(missing_ok=True)
         raise InputArtifactParseError("text_decode_failed") from exc
@@ -306,7 +310,10 @@ def _inspect_xlsx_archive(source_path: Path, limits: XlsxParseLimits) -> None:
         raise InputArtifactParseError("xlsx_uncompressed_budget_exceeded")
     if compressed_bytes == 0 and uncompressed_bytes > 0:
         raise InputArtifactParseError("xlsx_compression_ratio_exceeded")
-    if compressed_bytes and uncompressed_bytes > compressed_bytes * limits.max_compression_ratio:
+    if (
+        compressed_bytes
+        and uncompressed_bytes > compressed_bytes * limits.max_compression_ratio
+    ):
         raise InputArtifactParseError("xlsx_compression_ratio_exceeded")
 
 
@@ -341,7 +348,7 @@ def _parse_pdf(
     output_path: Path,
     limits: PdfParseLimits,
     page_renderer: Callable[[Path, int, Path], Path] | None,
-    image_ocr: Callable[[Path], object] | None,
+    image_ocr: Callable[[Path], ImageOcrResult] | None,
 ) -> ParsedInputArtifact:
     """Extract text layers and OCR only pages without one, under bounded budgets."""
     _validate_pdf_limits(limits)
@@ -350,9 +357,9 @@ def _parse_pdf(
     if magic != b"%PDF-":
         raise InputArtifactParseError("pdf_magic_invalid")
     try:
+        from app.modules.input_artifacts.processing.pdf_render import PdfPageRenderError
         from pypdf import PdfReader
         from pypdf.errors import PdfReadError
-        from app.modules.input_artifacts.processing.pdf_render import PdfPageRenderError
     except ImportError as exc:
         raise InputArtifactParseError("parser_dependency_unavailable") from exc
 
@@ -374,10 +381,17 @@ def _parse_pdf(
                     for page_number, page in enumerate(reader.pages, start=1):
                         text = page.extract_text() or ""
                         if not text.strip():
-                            if page_renderer is not None and ocr_page_count < limits.max_ocr_pages:
-                                rendered_path = output_path.parent / f"ocr-page-{page_number}.png"
+                            if (
+                                page_renderer is not None
+                                and ocr_page_count < limits.max_ocr_pages
+                            ):
+                                rendered_path = (
+                                    output_path.parent / f"ocr-page-{page_number}.png"
+                                )
                                 try:
-                                    page_renderer(source_path, page_number, rendered_path)
+                                    page_renderer(
+                                        source_path, page_number, rendered_path
+                                    )
                                     ocr_text, mean_confidence = _extract_ocr_text(
                                         rendered_path, image_ocr
                                     )
@@ -394,7 +408,9 @@ def _parse_pdf(
                                     )
                                     if ocr_text_quality == "low":
                                         low_confidence_ocr_page_count += 1
-                                    page_content = f"# page: {page_number}\n{ocr_text}\n"
+                                    page_content = (
+                                        f"# page: {page_number}\n{ocr_text}\n"
+                                    )
                                     counter.add(page_content)
                                     target.write(page_content)
                                     page_manifests.append(
@@ -515,7 +531,7 @@ def _parse_image(
     output_path: Path,
     declared_suffix: str,
     limits: ImageParseLimits,
-    image_ocr: Callable[[Path], object] | None,
+    image_ocr: Callable[[Path], ImageOcrResult] | None,
 ) -> ParsedInputArtifact:
     _validate_image_limits(limits)
     try:
@@ -598,18 +614,21 @@ def _parse_image(
 
 def _extract_ocr_text(
     image_path: Path,
-    image_ocr: Callable[[Path], object] | None,
+    image_ocr: Callable[[Path], ImageOcrResult] | None,
 ) -> tuple[str, float | None]:
     try:
-        from app.modules.input_artifacts.processing.image_ocr import ImageOcrError, TesseractImageOcr
+        from app.modules.input_artifacts.processing.image_ocr import (
+            ImageOcrError,
+            TesseractImageOcr,
+        )
 
         result = (
             image_ocr(image_path)
             if image_ocr is not None
             else TesseractImageOcr().extract(image_path)
         )
-        text = getattr(result, "text")
-        mean_confidence = getattr(result, "mean_confidence")
+        text = result.text
+        mean_confidence = result.mean_confidence
         if not isinstance(text, str):
             raise TypeError("OCR text must be a string")
         if mean_confidence is not None and not isinstance(mean_confidence, float):

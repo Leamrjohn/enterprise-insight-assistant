@@ -1,13 +1,11 @@
 import hashlib
 import json
+
 from app.modules.input_artifacts.storage import (
     normalize_input_artifact_filename,
 )
 
-
-_INPUT_ARTIFACT_KINDS = frozenset(
-    {"attachment", "dataset", "knowledge_document"}
-)
+_INPUT_ARTIFACT_KINDS = frozenset({"attachment", "dataset", "knowledge_document"})
 _LOWERCASE_HEXADECIMAL_CHARACTERS = frozenset("0123456789abcdef")
 
 

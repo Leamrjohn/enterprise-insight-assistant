@@ -3,9 +3,14 @@ from app.core.settings import get_settings
 from app.db.session import SessionLocal, set_tenant_scope
 from app.modules.input_artifacts.processing.image_ocr import TesseractImageOcr
 from app.modules.input_artifacts.processing.parse_worker import execute_parse_job
-from app.modules.input_artifacts.processing.parser import ImageParseLimits, PdfParseLimits
+from app.modules.input_artifacts.processing.parser import (
+    ImageParseLimits,
+    PdfParseLimits,
+)
 from app.modules.input_artifacts.processing.pdf_render import PopplerPdfPageRenderer
-from app.modules.input_artifacts.processing.processing_storage import get_artifact_processing_storage
+from app.modules.input_artifacts.processing.processing_storage import (
+    get_artifact_processing_storage,
+)
 from app.modules.input_artifacts.processing.scan_worker import execute_scan_job
 from app.modules.input_artifacts.processing.scanner import ClamDScanner
 

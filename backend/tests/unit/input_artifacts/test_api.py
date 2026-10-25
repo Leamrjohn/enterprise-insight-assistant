@@ -1,37 +1,117 @@
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
+from types import SimpleNamespace
 
 import pytest
-from sqlalchemy.orm import Session
-
 from app.core.settings import get_settings
 from app.db.session import set_tenant_scope
 from app.modules.conversations.models import Conversation
 from app.modules.identity.models import User
 from app.modules.input_artifacts import api as input_artifacts_api
 from app.modules.input_artifacts.api import _build_upload_response
-from app.modules.input_artifacts.upload.direct_upload_storage import (
-    DirectUploadForm,
-    DirectUploadObjectNotFoundError,
-    DirectUploadStorageUnavailableError,
-    StoredQuarantineObject,
-)
 from app.modules.input_artifacts.models import (
     ArtifactProcessingJob,
     InputArtifactUploadRequest,
     InputArtifactUploadSession,
     InputArtifactVersion,
 )
+from app.modules.input_artifacts.upload.direct_upload_storage import (
+    DirectUploadForm,
+    DirectUploadObjectNotFoundError,
+    DirectUploadStorageUnavailableError,
+    StoredQuarantineObject,
+)
 from app.modules.input_artifacts.upload.upload_requests import (
     complete_input_artifact_upload_request,
     reserve_input_artifact_upload_request,
 )
+from app.modules.input_artifacts.upload.upload_sessions import (
+    UploadSessionCompletionOutcome,
+    UploadSessionInitiationOutcome,
+)
 from app.modules.input_artifacts.versions import create_received_input_artifact_version
 from app.modules.organizations.access import CurrentCompanyContext
 from app.modules.organizations.models import Company, CompanyMember
-
+from pydantic import ValidationError
+from sqlalchemy.orm import Session
 
 _REQUEST_FINGERPRINT = "a" * 64
+
+
+@pytest.mark.parametrize("builder", ["request", "initiation", "completion"])
+@pytest.mark.parametrize("persisted_status", ["completed", "invalid-state"])
+def test_receipt_builders_validate_persisted_status(builder, persisted_status):
+    context = SimpleNamespace(company=SimpleNamespace(id=1))
+    session = InputArtifactUploadSession(
+        public_id="00000000-0000-0000-0000-000000000001",
+        status=persisted_status,
+    )
+
+    def build():
+        if builder == "request":
+            return _build_upload_response(
+                None,
+                context=context,
+                upload_request=InputArtifactUploadRequest(
+                    id=1, company_id=1, status=persisted_status, attempt_generation=1
+                ),
+            )
+        if builder == "initiation":
+            return input_artifacts_api._build_upload_session_response(
+                UploadSessionInitiationOutcome(session, "terminal", None)
+            )
+        return input_artifacts_api._build_upload_session_completion_response(
+            None,
+            context=context,
+            outcome=UploadSessionCompletionOutcome(session, "completed", None),
+        )
+
+    if persisted_status == "completed":
+        assert build().upload_status == "completed"
+    else:
+        with pytest.raises(ValidationError) as exc_info:
+            build()
+        assert exc_info.value.errors()[0]["loc"] == ("upload_status",)
+
+
+@pytest.mark.parametrize("builder", ["request", "completion"])
+def test_receipt_builders_reject_invalid_version_status(monkeypatch, builder):
+    context = SimpleNamespace(company=SimpleNamespace(id=1))
+
+    def get_version(db, *, version_id, company_id):
+        assert (version_id, company_id) == (2, 1)
+        return InputArtifactVersion(id=2, status="invalid-state")
+
+    monkeypatch.setattr(
+        input_artifacts_api, "get_input_artifact_version_for_company", get_version
+    )
+    with pytest.raises(ValidationError) as exc_info:
+        if builder == "request":
+            _build_upload_response(
+                None,
+                context=context,
+                upload_request=InputArtifactUploadRequest(
+                    id=1,
+                    company_id=1,
+                    status="completed",
+                    attempt_generation=1,
+                    artifact_version_id=2,
+                ),
+            )
+        else:
+            input_artifacts_api._build_upload_session_completion_response(
+                None,
+                context=context,
+                outcome=UploadSessionCompletionOutcome(
+                    InputArtifactUploadSession(
+                        public_id="00000000-0000-0000-0000-000000000001",
+                        status="completed",
+                    ),
+                    "completed",
+                    2,
+                ),
+            )
+    assert exc_info.value.errors()[0]["loc"] == ("status",)
 
 
 @dataclass
@@ -89,7 +169,9 @@ def _create_context_and_conversation(
     db.add_all((membership, conversation))
     db.flush()
     set_tenant_scope(db, company.id)
-    return CurrentCompanyContext(user=user, company=company, membership=membership), conversation
+    return CurrentCompanyContext(
+        user=user, company=company, membership=membership
+    ), conversation
 
 
 def _reserve_request(
@@ -211,13 +293,15 @@ def test_build_upload_response_rejects_a_missing_version(
     )
     reservation.request.artifact_version_id = 999_999
 
-    with db_session.no_autoflush:
-        with pytest.raises(RuntimeError, match="no readable artifact version"):
-            _build_upload_response(
-                db_session,
-                context=context,
-                upload_request=reservation.request,
-            )
+    with (
+        db_session.no_autoflush,
+        pytest.raises(RuntimeError, match="no readable artifact version"),
+    ):
+        _build_upload_response(
+            db_session,
+            context=context,
+            upload_request=reservation.request,
+        )
 
 
 def test_upload_attachment_creates_one_completed_version(
@@ -227,7 +311,7 @@ def test_upload_attachment_creates_one_completed_version(
     tmp_path,
     monkeypatch,
 ) -> None:
-    context, conversation = _create_context_and_conversation(db_session, test_user)
+    _context, conversation = _create_context_and_conversation(db_session, test_user)
     settings = get_settings().model_copy(update={"storage_dir": tmp_path})
     monkeypatch.setattr(input_artifacts_api, "get_settings", lambda: settings)
 

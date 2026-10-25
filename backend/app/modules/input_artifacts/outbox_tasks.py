@@ -4,13 +4,13 @@ from typing import Any, cast
 
 from app.core.celery_app import celery_app
 from app.db.session import SessionLocal, set_tenant_scope
-from app.modules.input_artifacts.processing.processing_outbox import (
-    pending_artifact_processing_event_ids,
-    publish_artifact_processing_event,
-)
 from app.modules.input_artifacts.models import (
     ArtifactProcessingJob,
     ArtifactProcessingOutboxEvent,
+)
+from app.modules.input_artifacts.processing.processing_outbox import (
+    pending_artifact_processing_event_ids,
+    publish_artifact_processing_event,
 )
 from app.modules.organizations.models import Company
 from sqlalchemy import select
@@ -24,7 +24,10 @@ def publish_pending_artifact_processing_events() -> int:
     try:
         company_ids = db.scalars(select(Company.id).order_by(Company.id)).all()
         published_count = 0
-        from app.modules.input_artifacts.tasks import process_parse_job, process_scan_job
+        from app.modules.input_artifacts.tasks import (
+            process_parse_job,
+            process_scan_job,
+        )
 
         for company_id in company_ids:
             set_tenant_scope(db, company_id)
@@ -50,12 +53,12 @@ def publish_pending_artifact_processing_events() -> int:
                 published_count += publish_artifact_processing_event(
                     db,
                     event_id=event_id,
-                    enqueue=lambda company_id, job_id, dispatch_generation: cast(
-                        Any, task
-                    ).delay(
-                        company_id=company_id,
-                        job_id=job_id,
-                        dispatch_generation=dispatch_generation,
+                    enqueue=lambda company_id, job_id, dispatch_generation, task=task: (
+                        cast(Any, task).delay(
+                            company_id=company_id,
+                            job_id=job_id,
+                            dispatch_generation=dispatch_generation,
+                        )
                     ),
                 )
         return published_count

@@ -1,14 +1,12 @@
 import re
 from pathlib import Path
 
-from sqlalchemy.orm import Session
-
 from app.modules.input_artifacts.models import InputArtifactVersion
 from app.modules.input_artifacts.repository import (
     add_input_artifact,
     add_input_artifact_version,
 )
-
+from sqlalchemy.orm import Session
 
 _KIND_VALUES = {"attachment", "knowledge_document", "dataset"}
 _SHA256_PATTERN = re.compile(r"^[0-9a-f]{64}$")
@@ -21,7 +19,7 @@ def _require_positive_id(value: int, field_name: str) -> None:
 
 def _normalize_filename(original_filename: str) -> tuple[str, str | None]:
     if not isinstance(original_filename, str):
-        raise ValueError("original_filename must be a string")
+        raise ValueError("original_filename must be a string")  # noqa: TRY004 - Preserve the metadata validation contract.
 
     safe_name = original_filename.replace("\\", "/").split("/")[-1].strip()
     if not safe_name or safe_name in {".", ".."}:
@@ -39,7 +37,7 @@ def _normalize_optional_mime_type(value: str | None) -> str | None:
     if value is None:
         return None
     if not isinstance(value, str):
-        raise ValueError("declared_mime_type must be a string or null")
+        raise ValueError("declared_mime_type must be a string or null")  # noqa: TRY004 - Preserve the metadata validation contract.
     normalized = value.strip() or None
     if normalized is not None and len(normalized) > 255:
         raise ValueError("declared_mime_type is too long")

@@ -1,9 +1,5 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, Header, HTTPException, Request, Response, UploadFile, status
-from fastapi.responses import JSONResponse
-from sqlalchemy.orm import Session
-
 from app.core.exceptions import (
     EmptyInputArtifactError,
     InputArtifactTooLargeError,
@@ -12,11 +8,10 @@ from app.core.exceptions import (
 )
 from app.core.settings import get_settings
 from app.db.session import get_db
-from app.modules.input_artifacts.upload.direct_upload_storage import (
-    DirectUploadStorageUnavailableError,
-    get_direct_upload_storage,
+from app.modules.input_artifacts.models import (
+    InputArtifactUploadRequest,
+    InputArtifactUploadSession,
 )
-from app.modules.input_artifacts.models import InputArtifactUploadRequest, InputArtifactUploadSession
 from app.modules.input_artifacts.repository import (
     get_input_artifact_version_for_company,
 )
@@ -26,6 +21,14 @@ from app.modules.input_artifacts.schemas import (
     DirectUploadFormOut,
     InputArtifactUploadOut,
     InputArtifactVersionReceiptOut,
+)
+from app.modules.input_artifacts.upload.direct_upload_storage import (
+    DirectUploadStorageUnavailableError,
+    get_direct_upload_storage,
+)
+from app.modules.input_artifacts.upload.upload_requests import (
+    UploadRequestFencedError,
+    UploadRequestFingerprintConflictError,
 )
 from app.modules.input_artifacts.upload.upload_service import (
     UploadAttachmentCommand,
@@ -40,15 +43,23 @@ from app.modules.input_artifacts.upload.upload_sessions import (
     complete_conversation_attachment_upload,
     initiate_conversation_attachment_upload,
 )
-from app.modules.input_artifacts.upload.upload_requests import (
-    UploadRequestFencedError,
-    UploadRequestFingerprintConflictError,
-)
 from app.modules.organizations.access import (
     CurrentCompanyContext,
     require_analysis_permission,
 )
-
+from fastapi import (
+    APIRouter,
+    Depends,
+    File,
+    Header,
+    HTTPException,
+    Request,
+    Response,
+    UploadFile,
+    status,
+)
+from fastapi.responses import JSONResponse
+from sqlalchemy.orm import Session
 
 router = APIRouter()
 
@@ -79,9 +90,7 @@ def _build_upload_response(
     upload_request: InputArtifactUploadRequest,
 ) -> InputArtifactUploadOut:
     if upload_request.company_id != context.company.id:
-        raise PermissionError(
-            "upload request is not available in the current company"
-        )
+        raise PermissionError("upload request is not available in the current company")
 
     artifact_version = None
     if upload_request.artifact_version_id is not None:
@@ -95,17 +104,18 @@ def _build_upload_response(
                 "completed upload request has no readable artifact version"
             )
 
-        artifact_version = InputArtifactVersionReceiptOut(
-            version_id=version.id,
-            status=version.status,
+        artifact_version = InputArtifactVersionReceiptOut.model_validate(
+            {"version_id": version.id, "status": version.status}
         )
 
-    return InputArtifactUploadOut(
-        upload_request_id=upload_request.id,
-        upload_status=upload_request.status,
-        attempt_generation=upload_request.attempt_generation,
-        artifact_version=artifact_version,
-        error_code=upload_request.error_code,
+    return InputArtifactUploadOut.model_validate(
+        {
+            "upload_request_id": upload_request.id,
+            "upload_status": upload_request.status,
+            "attempt_generation": upload_request.attempt_generation,
+            "artifact_version": artifact_version,
+            "error_code": upload_request.error_code,
+        }
     )
 
 
@@ -122,11 +132,13 @@ def _build_upload_session_response(
         if outcome.upload_form is not None
         else None
     )
-    return AttachmentUploadSessionOut(
-        upload_session_id=session.public_id,
-        upload_status=session.status,
-        upload=upload,
-        error_code=session.failure_code,
+    return AttachmentUploadSessionOut.model_validate(
+        {
+            "upload_session_id": session.public_id,
+            "upload_status": session.status,
+            "upload": upload,
+            "error_code": session.failure_code,
+        }
     )
 
 
@@ -144,16 +156,19 @@ def _build_upload_session_completion_response(
             company_id=context.company.id,
         )
         if version is None:
-            raise RuntimeError("completed upload session has no readable artifact version")
-        artifact_version = InputArtifactVersionReceiptOut(
-            version_id=version.id,
-            status=version.status,
+            raise RuntimeError(
+                "completed upload session has no readable artifact version"
+            )
+        artifact_version = InputArtifactVersionReceiptOut.model_validate(
+            {"version_id": version.id, "status": version.status}
         )
-    return AttachmentUploadSessionOut(
-        upload_session_id=outcome.session.public_id,
-        upload_status=outcome.session.status,
-        artifact_version=artifact_version,
-        error_code=outcome.session.failure_code,
+    return AttachmentUploadSessionOut.model_validate(
+        {
+            "upload_session_id": outcome.session.public_id,
+            "upload_status": outcome.session.status,
+            "artifact_version": artifact_version,
+            "error_code": outcome.session.failure_code,
+        }
     )
 
 

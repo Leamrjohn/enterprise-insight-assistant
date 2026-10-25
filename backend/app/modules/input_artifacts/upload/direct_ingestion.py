@@ -1,7 +1,5 @@
 from typing import BinaryIO
 
-from sqlalchemy.orm import Session
-
 from app.core.settings import Settings
 from app.modules.input_artifacts.models import InputArtifactVersion
 from app.modules.input_artifacts.storage import (
@@ -9,6 +7,7 @@ from app.modules.input_artifacts.storage import (
     store_input_artifact_file,
 )
 from app.modules.input_artifacts.versions import create_received_input_artifact_version
+from sqlalchemy.orm import Session
 
 
 def ingest_received_input_artifact(
@@ -47,4 +46,3 @@ def ingest_received_input_artifact(
     except Exception:
         discard_stored_input_artifact_file(stored_file, settings=settings)
         raise
-

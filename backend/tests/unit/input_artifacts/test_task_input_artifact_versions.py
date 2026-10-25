@@ -1,7 +1,4 @@
 import pytest
-from sqlalchemy import select
-from sqlalchemy.orm import Session
-
 from app.db.session import set_tenant_scope
 from app.modules.conversations.service import (
     ConversationInputArtifactScopeError,
@@ -16,6 +13,8 @@ from app.modules.workflow.repository import (
     create_task,
     get_task_input_artifact_version_ids,
 )
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 
 def _context(db: Session, user: User, *, name: str) -> CurrentCompanyContext:
@@ -82,11 +81,14 @@ def test_task_freezes_attachment_versions_in_request_order_and_rls_hides_them(
     db_session.expunge_all()
     set_tenant_scope(db_session, other.id)
 
-    assert db_session.scalar(
-        select(AnalysisTaskInputArtifactVersion).where(
-            AnalysisTaskInputArtifactVersion.task_id == task.id
+    assert (
+        db_session.scalar(
+            select(AnalysisTaskInputArtifactVersion).where(
+                AnalysisTaskInputArtifactVersion.task_id == task.id
+            )
         )
-    ) is None
+        is None
+    )
 
 
 def test_attachment_scope_requires_a_ready_version_owned_by_the_actor(

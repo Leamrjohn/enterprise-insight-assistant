@@ -1,10 +1,10 @@
 """Local, bounded Tesseract OCR adapter for already-inspected images."""
 
 import csv
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from subprocess import CalledProcessError, CompletedProcess, TimeoutExpired, run
-from typing import Callable
 
 
 @dataclass(frozen=True, slots=True)

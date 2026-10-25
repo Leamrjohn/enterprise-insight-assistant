@@ -1,10 +1,13 @@
 from pathlib import Path
 from types import SimpleNamespace
 
-from pydantic import SecretStr
-
+import pytest
 from app.core.settings import get_settings
-from app.modules.input_artifacts.processing.processing_storage import S3ArtifactProcessingStorage
+from app.modules.input_artifacts.processing.processing_storage import (
+    ArtifactProcessingStorageUnavailableError,
+    S3ArtifactProcessingStorage,
+)
+from pydantic import SecretStr
 
 
 class _FakeS3Client:
@@ -41,6 +44,27 @@ def _storage(monkeypatch) -> tuple[S3ArtifactProcessingStorage, _FakeS3Client]:
     return S3ArtifactProcessingStorage(settings=settings), client
 
 
+@pytest.mark.parametrize("credential", ["access_key_id", "secret_access_key"])
+def test_missing_credentials_prevent_processing_client_creation(
+    monkeypatch, credential
+):
+    storage, _ = _storage(monkeypatch)
+    monkeypatch.setattr(
+        storage._settings, f"input_artifact_object_storage_{credential}", None
+    )
+
+    def unexpected_client(*args, **kwargs):
+        pytest.fail("missing credentials must not create a client")
+
+    monkeypatch.setitem(
+        __import__("sys").modules, "boto3", SimpleNamespace(client=unexpected_client)
+    )
+    with pytest.raises(
+        ArtifactProcessingStorageUnavailableError, match="not configured"
+    ):
+        storage._client()
+
+
 def test_downloaded_quarantine_object_is_hashed_before_processing(
     monkeypatch,
     tmp_path: Path,
@@ -60,10 +84,15 @@ def test_downloaded_quarantine_object_is_hashed_before_processing(
     )
     assert result.object_key == "input-artifacts/quarantine/7/session/payload"
     assert result.byte_size == len(b"raw artifact")
-    assert result.sha256_hex == "d376512f3901b0a8347d0221155af8c527795b23b9b884d8d25484149ea0da47"
+    assert (
+        result.sha256_hex
+        == "d376512f3901b0a8347d0221155af8c527795b23b9b884d8d25484149ea0da47"
+    )
 
 
-def test_downloaded_parsed_object_uses_the_parsed_prefix(monkeypatch, tmp_path: Path) -> None:
+def test_downloaded_parsed_object_uses_the_parsed_prefix(
+    monkeypatch, tmp_path: Path
+) -> None:
     storage, client = _storage(monkeypatch)
     destination = tmp_path / "parsed" / "manifest.json"
 
@@ -93,10 +122,15 @@ def test_parsed_object_write_binds_its_checksum_and_prefix(monkeypatch) -> None:
     assert client.put_request["Key"] == result.object_key
     assert client.put_request["ChecksumAlgorithm"] == "SHA256"
     assert result.byte_size == len(b'{"kind":"manifest"}')
-    assert result.sha256_hex == "2d511d9adee14cb3f84921d93b664c157d08950fe7f3028e4beb7557f6a9c019"
+    assert (
+        result.sha256_hex
+        == "2d511d9adee14cb3f84921d93b664c157d08950fe7f3028e4beb7557f6a9c019"
+    )
 
 
-def test_parsed_file_write_streams_a_local_file_with_its_checksum(monkeypatch, tmp_path: Path) -> None:
+def test_parsed_file_write_streams_a_local_file_with_its_checksum(
+    monkeypatch, tmp_path: Path
+) -> None:
     storage, client = _storage(monkeypatch)
     source = tmp_path / "extracted.txt"
     source.write_bytes(b"parsed text")
@@ -110,4 +144,7 @@ def test_parsed_file_write_streams_a_local_file_with_its_checksum(monkeypatch, t
     assert client.put_request is not None
     assert client.put_body == b"parsed text"
     assert client.put_request["ContentLength"] == len(b"parsed text")
-    assert result.sha256_hex == "2ca0fd2a7fe934dcd54ba71b55f7c22bba75a11ced3f655bcc683e7c24743ad8"
+    assert (
+        result.sha256_hex
+        == "2ca0fd2a7fe934dcd54ba71b55f7c22bba75a11ced3f655bcc683e7c24743ad8"
+    )

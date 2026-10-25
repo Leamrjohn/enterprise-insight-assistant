@@ -1,13 +1,12 @@
 """Controlled object-storage access used only by artifact-processing Workers."""
 
 import base64
-from dataclasses import dataclass
 import hashlib
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol
 
 from app.core.settings import Settings
-
 
 _QUARANTINE_PREFIX = "input-artifacts/quarantine/"
 _PARSED_PREFIX = "input-artifacts/parsed/"
@@ -124,7 +123,9 @@ class S3ArtifactProcessingStorage:
             destination_path.unlink(missing_ok=True)
             if _is_not_found_error(exc):
                 raise ArtifactProcessingObjectNotFoundError(not_found_message) from exc
-            raise ArtifactProcessingStorageUnavailableError(unavailable_message) from exc
+            raise ArtifactProcessingStorageUnavailableError(
+                unavailable_message
+            ) from exc
         byte_size, sha256_hex = _file_size_and_sha256(destination_path)
         return StoredProcessingObject(object_key, byte_size, sha256_hex)
 
@@ -180,9 +181,9 @@ class S3ArtifactProcessingStorage:
                     ContentLength=byte_size,
                     ContentType=content_type.strip(),
                     ChecksumAlgorithm="SHA256",
-                    ChecksumSHA256=base64.b64encode(
-                        bytes.fromhex(sha256_hex)
-                    ).decode("ascii"),
+                    ChecksumSHA256=base64.b64encode(bytes.fromhex(sha256_hex)).decode(
+                        "ascii"
+                    ),
                 )
         except Exception as exc:
             raise ArtifactProcessingStorageUnavailableError(
@@ -197,16 +198,18 @@ class S3ArtifactProcessingStorage:
             raise ArtifactProcessingStorageUnavailableError(
                 "boto3 is required for artifact processing object storage"
             ) from exc
+        access_key = self._settings.input_artifact_object_storage_access_key_id
+        secret_key = self._settings.input_artifact_object_storage_secret_access_key
+        if access_key is None or secret_key is None:
+            raise ArtifactProcessingStorageUnavailableError(
+                "artifact processing object storage is not configured"
+            )
         return boto3.client(
             "s3",
             endpoint_url=self._settings.input_artifact_object_storage_endpoint_url,
             region_name=self._settings.input_artifact_object_storage_region,
-            aws_access_key_id=(
-                self._settings.input_artifact_object_storage_access_key_id.get_secret_value()
-            ),
-            aws_secret_access_key=(
-                self._settings.input_artifact_object_storage_secret_access_key.get_secret_value()
-            ),
+            aws_access_key_id=access_key.get_secret_value(),
+            aws_secret_access_key=secret_key.get_secret_value(),
         )
 
 

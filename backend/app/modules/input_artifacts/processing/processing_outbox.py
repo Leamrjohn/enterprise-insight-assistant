@@ -1,13 +1,12 @@
 import re
-from sqlalchemy.orm import Session
-from sqlalchemy import select, update, or_, and_
-from dataclasses import dataclass
-from datetime import datetime, timezone, timedelta
-from uuid import uuid4
 from collections.abc import Callable
+from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
+from uuid import uuid4
 
 from app.modules.input_artifacts.models import ArtifactProcessingOutboxEvent
-
+from sqlalchemy import and_, or_, select, update
+from sqlalchemy.orm import Session
 
 _FAILURE_CODE_PATTERN = re.compile(r"^[a-z][a-z0-9_]{0,63}$")
 
@@ -31,7 +30,7 @@ def claim_artifact_processing_event_for_publication(
 ) -> ClaimedArtifactProcessingPublication | None:
     company_id = db.info.get("tenant_company_id")
     if not isinstance(company_id, int) or isinstance(company_id, bool):
-        raise RuntimeError(
+        raise RuntimeError(  # noqa: TRY004 - Missing tenant session state, not a parameter type error.
             "artifact outbox publication requires a tenant-scoped session"
         )
     if (
@@ -59,8 +58,7 @@ def claim_artifact_processing_event_for_publication(
             )
             .values(
                 status="publishing",
-                publish_generation=ArtifactProcessingOutboxEvent.publish_generation
-                + 1,
+                publish_generation=ArtifactProcessingOutboxEvent.publish_generation + 1,
                 publish_execution_id=execution_id,
                 publish_lease_expires_at=lease_expires_at,
                 last_error=None,
@@ -108,7 +106,7 @@ def mark_artifact_processing_event_published(
 ) -> bool:
     company_id = db.info.get("tenant_company_id")
     if not isinstance(company_id, int) or isinstance(company_id, bool):
-        raise RuntimeError(
+        raise RuntimeError(  # noqa: TRY004 - Missing tenant session state, not a parameter type error.
             "artifact outbox publication requires a tenant-scoped session"
         )
     if not isinstance(broker_message_id, str) or not (broker_message_id.strip()):
@@ -164,7 +162,7 @@ def return_artifact_processing_event_to_pending(
 ) -> bool:
     company_id = db.info.get("tenant_company_id")
     if not isinstance(company_id, int) or isinstance(company_id, bool):
-        raise RuntimeError(
+        raise RuntimeError(  # noqa: TRY004 - Missing tenant session state, not a parameter type error.
             "artifact outbox publication requires a tenant-scoped session"
         )
     if not isinstance(failure_code, str) or not (failure_code.strip()):
@@ -250,7 +248,7 @@ def publish_artifact_processing_event(
             claim.job_id,
             claim.dispatch_generation,
         )
-    except Exception:
+    except Exception:  # noqa: BLE001 - Restore the claimed event after any broker failure.
         return_artifact_processing_event_to_pending(
             db,
             claim=claim,

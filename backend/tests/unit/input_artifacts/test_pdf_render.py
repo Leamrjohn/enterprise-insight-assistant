@@ -1,7 +1,6 @@
 from subprocess import CompletedProcess, TimeoutExpired
 
 import pytest
-
 from app.modules.input_artifacts.processing.pdf_render import (
     PdfPageRenderError,
     PopplerPdfPageRenderer,

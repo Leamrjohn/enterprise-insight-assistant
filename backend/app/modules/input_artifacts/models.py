@@ -216,8 +216,7 @@ class ArtifactParseResult(Base):
             name="ck_artifact_parse_result_extracted_text_object_key",
         ),
         CheckConstraint(
-            "extracted_text_sha256 IS NULL "
-            "OR extracted_text_sha256 ~ '^[0-9a-f]{64}$'",
+            "extracted_text_sha256 IS NULL OR extracted_text_sha256 ~ '^[0-9a-f]{64}$'",
             name="ck_artifact_parse_result_extracted_text_sha256",
         ),
         UniqueConstraint(
@@ -253,9 +252,7 @@ class ArtifactParseResult(Base):
     extracted_text_object_key: Mapped[str | None] = mapped_column(
         String(512), nullable=True
     )
-    extracted_text_sha256: Mapped[str | None] = mapped_column(
-        String(64), nullable=True
-    )
+    extracted_text_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
     extracted_text_char_count: Mapped[int] = mapped_column(
         BigInteger,
         nullable=False,

@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Opt-in proof for the local S3-compatible attachment runtime.
 
 Run only against the Compose-managed LocalStack service.  The test deliberately
@@ -19,15 +18,19 @@ from app.db.session import set_tenant_scope
 from app.modules.conversations.models import Conversation
 from app.modules.identity.models import User
 from app.modules.input_artifacts.attachment_context import build_task_attachment_context
-from app.modules.input_artifacts.upload.direct_upload_storage import S3DirectUploadStorage
 from app.modules.input_artifacts.models import (
     ArtifactProcessingJob,
     InputArtifactVersion,
 )
 from app.modules.input_artifacts.processing.parse_worker import execute_parse_job
-from app.modules.input_artifacts.processing.processing_storage import S3ArtifactProcessingStorage
+from app.modules.input_artifacts.processing.processing_storage import (
+    S3ArtifactProcessingStorage,
+)
 from app.modules.input_artifacts.processing.scan_worker import execute_scan_job
 from app.modules.input_artifacts.processing.scanner import ScanResult
+from app.modules.input_artifacts.upload.direct_upload_storage import (
+    S3DirectUploadStorage,
+)
 from app.modules.input_artifacts.upload.upload_sessions import (
     CompleteAttachmentUploadCommand,
     InitiateAttachmentUploadCommand,
@@ -40,10 +43,13 @@ from app.modules.workflow.repository import create_task
 from pydantic import SecretStr
 from sqlalchemy.orm import Session
 
-pytestmark = pytest.mark.skipif(
-    os.getenv("RUN_LOCAL_OBJECT_STORAGE_E2E") != "1",
-    reason="set RUN_LOCAL_OBJECT_STORAGE_E2E=1 for the Compose LocalStack proof",
-)
+pytestmark = [
+    pytest.mark.e2e,
+    pytest.mark.skipif(
+        os.getenv("RUN_LOCAL_OBJECT_STORAGE_E2E") != "1",
+        reason="set RUN_LOCAL_OBJECT_STORAGE_E2E=1 for the Compose LocalStack proof",
+    ),
+]
 
 
 class _DeterministicCleanScanner:

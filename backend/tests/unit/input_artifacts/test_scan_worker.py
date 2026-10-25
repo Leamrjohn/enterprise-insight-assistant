@@ -2,8 +2,10 @@ from pathlib import Path
 
 from app.db.session import set_tenant_scope
 from app.modules.identity.models import User
-from app.modules.input_artifacts.models import ArtifactProcessingJob, InputArtifactVersion
-from app.modules.input_artifacts.processing.processing_storage import StoredProcessingObject
+from app.modules.input_artifacts.models import ArtifactProcessingJob
+from app.modules.input_artifacts.processing.processing_storage import (
+    StoredProcessingObject,
+)
 from app.modules.input_artifacts.processing.scan_worker import execute_scan_job
 from app.modules.input_artifacts.processing.scanner import ScanResult
 from app.modules.input_artifacts.versions import create_received_input_artifact_version

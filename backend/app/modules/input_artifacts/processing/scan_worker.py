@@ -1,8 +1,8 @@
 """One claimed scan-job execution, independent of the Celery transport."""
 
+from collections.abc import Callable
 from pathlib import Path
 from tempfile import TemporaryDirectory
-from collections.abc import Callable
 
 from app.modules.input_artifacts.models import InputArtifactVersion
 from app.modules.input_artifacts.processing.processing_jobs import (
@@ -43,7 +43,7 @@ def execute_scan_job(
     try:
         scanner = scanner_factory()
         storage = storage_factory()
-    except Exception:
+    except Exception:  # noqa: BLE001 - Record a retryable failure for the already claimed job.
         return _fail_retryable(db, claim, "processor_configuration_unavailable")
     version = db.get(InputArtifactVersion, claim.artifact_version_id)
     if version is None:
@@ -56,7 +56,10 @@ def execute_scan_job(
                 object_key=version.raw_object_key,
                 destination_path=local_path,
             )
-            if downloaded.byte_size != version.byte_size or downloaded.sha256_hex != version.sha256:
+            if (
+                downloaded.byte_size != version.byte_size
+                or downloaded.sha256_hex != version.sha256
+            ):
                 return reject_scan_job_processing(
                     db,
                     job_id=claim.job_id,

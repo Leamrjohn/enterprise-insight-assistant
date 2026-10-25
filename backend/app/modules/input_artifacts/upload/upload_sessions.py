@@ -7,12 +7,6 @@ from uuid import UUID, uuid4
 
 from app.core.settings import Settings
 from app.modules.conversations.service import get_conversation_service
-from app.modules.input_artifacts.upload.direct_upload_storage import (
-    DirectUploadForm,
-    DirectUploadObjectIntegrityError,
-    DirectUploadObjectNotFoundError,
-    DirectUploadStorage,
-)
 from app.modules.input_artifacts.models import InputArtifactUploadSession
 from app.modules.input_artifacts.repository import (
     add_artifact_processing_job,
@@ -25,6 +19,12 @@ from app.modules.input_artifacts.repository import (
 from app.modules.input_artifacts.storage import (
     DeclaredInputArtifactUpload,
     validate_declared_input_artifact_upload,
+)
+from app.modules.input_artifacts.upload.direct_upload_storage import (
+    DirectUploadForm,
+    DirectUploadObjectIntegrityError,
+    DirectUploadObjectNotFoundError,
+    DirectUploadStorage,
 )
 from app.modules.input_artifacts.upload.upload_session_fingerprint import (
     build_direct_upload_session_fingerprint,

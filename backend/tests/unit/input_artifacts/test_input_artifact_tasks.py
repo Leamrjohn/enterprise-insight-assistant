@@ -2,7 +2,10 @@ from types import SimpleNamespace
 
 from app.modules.input_artifacts import outbox_tasks, tasks
 from app.modules.input_artifacts.processing.image_ocr import TesseractImageOcr
-from app.modules.input_artifacts.processing.parser import ImageParseLimits, PdfParseLimits
+from app.modules.input_artifacts.processing.parser import (
+    ImageParseLimits,
+    PdfParseLimits,
+)
 
 
 class _Session:
@@ -89,6 +92,53 @@ def test_outbox_publisher_routes_parse_jobs_to_the_parse_task(monkeypatch) -> No
     )
 
     assert outbox_tasks.publish_pending_artifact_processing_events.run() == 1
-    assert delivered == [
-        {"company_id": 7, "job_id": 8, "dispatch_generation": 9}
+    assert delivered == [{"company_id": 7, "job_id": 8, "dispatch_generation": 9}]
+
+
+def test_outbox_callbacks_keep_each_jobs_task_when_invoked_later(monkeypatch):
+    callbacks = []
+    scan_deliveries = []
+    parse_deliveries = []
+    records = {
+        1: SimpleNamespace(job_id=11),
+        2: SimpleNamespace(job_id=12),
+        11: SimpleNamespace(stage="scan"),
+        12: SimpleNamespace(stage="parse"),
+    }
+    db = SimpleNamespace(
+        scalars=lambda query: SimpleNamespace(all=lambda: [7]),
+        get=lambda model, record_id: records[record_id],
+        close=lambda: None,
+    )
+    monkeypatch.setattr(outbox_tasks, "SessionLocal", lambda: db)
+    monkeypatch.setattr(outbox_tasks, "set_tenant_scope", lambda db, company_id: None)
+    monkeypatch.setattr(
+        outbox_tasks, "pending_artifact_processing_event_ids", lambda db: [1, 2]
+    )
+    monkeypatch.setattr(
+        tasks,
+        "process_scan_job",
+        SimpleNamespace(delay=lambda **kwargs: scan_deliveries.append(kwargs)),
+    )
+    monkeypatch.setattr(
+        tasks,
+        "process_parse_job",
+        SimpleNamespace(delay=lambda **kwargs: parse_deliveries.append(kwargs)),
+    )
+
+    def publish_event(db, *, event_id, enqueue):
+        callbacks.append(enqueue)
+        return True
+
+    monkeypatch.setattr(
+        outbox_tasks, "publish_artifact_processing_event", publish_event
+    )
+    assert outbox_tasks.publish_pending_artifact_processing_events.run() == 2
+    callbacks[0](7, 11, 3)
+    callbacks[1](7, 12, 4)
+    assert scan_deliveries == [
+        {"company_id": 7, "job_id": 11, "dispatch_generation": 3}
+    ]
+    assert parse_deliveries == [
+        {"company_id": 7, "job_id": 12, "dispatch_generation": 4}
     ]

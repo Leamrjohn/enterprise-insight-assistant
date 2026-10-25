@@ -1,10 +1,8 @@
-from dataclasses import dataclass
 import hashlib
+from dataclasses import dataclass
 from pathlib import Path
 from typing import BinaryIO, Literal
 from uuid import uuid4
-
-from regex import S
 
 from app.core.exceptions import (
     EmptyInputArtifactError,
@@ -13,7 +11,6 @@ from app.core.exceptions import (
     UnsupportedInputArtifactTypeError,
 )
 from app.core.settings import Settings
-
 
 _ArtifactCategory = Literal["document", "table", "image"]
 _EXTENSION_CATEGORIES: dict[str, _ArtifactCategory] = {
@@ -148,7 +145,7 @@ def validate_declared_input_artifact_upload(
     """Validate metadata without reading file bytes in the API process."""
     safe_name, _, category = normalize_input_artifact_filename(original_filename)
     if isinstance(byte_size, bool) or not isinstance(byte_size, int):
-        raise ValueError("byte_size must be an integer")
+        raise ValueError("byte_size must be an integer")  # noqa: TRY004 - API maps invalid metadata to input rejection.
     if byte_size <= 0:
         raise EmptyInputArtifactError("input artifact is empty")
     if byte_size > _max_size_bytes(settings, category):
@@ -162,7 +159,9 @@ def validate_declared_input_artifact_upload(
     if (
         not isinstance(client_reported_sha256, str)
         or len(client_reported_sha256) != 64
-        or any(character not in "0123456789abcdef" for character in client_reported_sha256)
+        or any(
+            character not in "0123456789abcdef" for character in client_reported_sha256
+        )
     ):
         raise ValueError(
             "client_reported_sha256 must be a 64-character lowercase hexadecimal value"

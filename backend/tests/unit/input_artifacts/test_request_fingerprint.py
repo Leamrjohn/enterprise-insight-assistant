@@ -1,9 +1,7 @@
 import pytest
-
 from app.modules.input_artifacts.upload.request_fingerprint import (
     build_input_artifact_request_fingerprint,
 )
-
 
 _VALID_ARGUMENTS = {
     "company_id": 1,
@@ -16,9 +14,7 @@ _VALID_ARGUMENTS = {
 
 
 def _build_fingerprint(**overrides: object) -> str:
-    return build_input_artifact_request_fingerprint(
-        **(_VALID_ARGUMENTS | overrides)
-    )
+    return build_input_artifact_request_fingerprint(**(_VALID_ARGUMENTS | overrides))
 
 
 def test_fingerprint_is_stable_and_changes_with_business_input() -> None:

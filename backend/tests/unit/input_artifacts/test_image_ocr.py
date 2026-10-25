@@ -1,8 +1,10 @@
 from subprocess import CompletedProcess, TimeoutExpired
 
 import pytest
-
-from app.modules.input_artifacts.processing.image_ocr import ImageOcrError, TesseractImageOcr
+from app.modules.input_artifacts.processing.image_ocr import (
+    ImageOcrError,
+    TesseractImageOcr,
+)
 
 
 def test_tesseract_ocr_retains_text_and_mean_word_confidence(tmp_path) -> None:

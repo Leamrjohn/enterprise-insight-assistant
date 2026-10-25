@@ -2,22 +2,20 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
 import pytest
-from sqlalchemy.orm import Session
-
 from app.core.settings import get_settings
 from app.db.session import set_tenant_scope
 from app.modules.conversations.models import Conversation
 from app.modules.identity.models import User
-from app.modules.input_artifacts.upload.direct_upload_storage import DirectUploadForm
-from app.modules.input_artifacts.upload.direct_upload_storage import (
-    DirectUploadObjectNotFoundError,
-    StoredQuarantineObject,
-)
 from app.modules.input_artifacts.models import (
     ArtifactProcessingJob,
     ArtifactProcessingOutboxEvent,
     InputArtifactUploadSession,
     InputArtifactVersion,
+)
+from app.modules.input_artifacts.upload.direct_upload_storage import (
+    DirectUploadForm,
+    DirectUploadObjectNotFoundError,
+    StoredQuarantineObject,
 )
 from app.modules.input_artifacts.upload.upload_sessions import (
     CompleteAttachmentUploadCommand,
@@ -28,6 +26,7 @@ from app.modules.input_artifacts.upload.upload_sessions import (
 )
 from app.modules.organizations.access import CurrentCompanyContext
 from app.modules.organizations.models import Company, CompanyMember
+from sqlalchemy.orm import Session
 
 
 @dataclass
@@ -96,7 +95,9 @@ def _context_and_conversation(
     db.add_all((membership, conversation))
     db.flush()
     set_tenant_scope(db, company.id)
-    return CurrentCompanyContext(user=user, company=company, membership=membership), conversation
+    return CurrentCompanyContext(
+        user=user, company=company, membership=membership
+    ), conversation
 
 
 def _command(

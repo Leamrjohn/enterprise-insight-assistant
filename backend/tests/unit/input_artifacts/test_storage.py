@@ -1,7 +1,6 @@
 from io import BytesIO
 
 import pytest
-
 from app.core.exceptions import (
     EmptyInputArtifactError,
     InputArtifactTooLargeError,
@@ -67,7 +66,10 @@ def test_store_input_artifact_file_writes_to_quarantine(tmp_path) -> None:
     assert stored.raw_object_key.startswith("input-artifacts/quarantine/")
     assert stored.category == "table"
     assert stored.byte_size == len(b"region,sales\neast,10\n")
-    assert stored.sha256 == "1c4b64e728e314881fae92978e7ba65d5d2aec2a1714e326463c14db38bc7a98"
+    assert (
+        stored.sha256
+        == "1c4b64e728e314881fae92978e7ba65d5d2aec2a1714e326463c14db38bc7a98"
+    )
     assert stored.absolute_path.read_bytes() == b"region,sales\neast,10\n"
 
 
