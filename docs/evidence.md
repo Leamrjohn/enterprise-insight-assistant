@@ -3330,3 +3330,10 @@
 - **根因与复现**：docker-compose.yml 的服务 env_file 指向被忽略的 backend/.env；原本机 config 检查依赖本地文件，不能代替干净 checkout。临时目录仅复制 Compose 与 .env.example，config --quiet 同样退出 1；只补充示例副本为临时 backend/.env 后命令退出 0，未启动任何服务，未读取或覆盖真实 .env。
 - **修复**：仅在 Compose CI job 加入 `cp backend/.env.example backend/.env`，继续执行原 config 检查；不降低运行环境必需配置要求，也不向工作流注入真实凭据。临时复现目录 codex-compose-ci-4c16e82f7ad54d8da7a57b9a4d5345ad 保留在系统 TEMP 中，仅含上述示例配置。
 - **边界**：待新提交远端 CI 确认，其他 job 按实际结果记录；此修复不是全套 CI 已通过的声明。
+
+## 2026-10-24 — 阶段 1：草稿 PR 首次 CI 全绿
+
+- **对应版本**：PR #1，提交 7c6e4ce21234a43340d1452698ac0eaa1f80f9be，pull_request run https://github.com/LeamrJohn/enterprise-insight-assistant/actions/runs/40145893553 。watch 进程退出 0；API 确认 completed/success，七个 job 全部 success：Ruff、格式、Pyright、Backend unit、Backend integration、Frontend、Compose。
+- **直接日志**：Backend unit job 121027054532 为 **794 passed, 2 skipped, 2 deselected in 23.83s**；Backend integration job 121027054449 为 **90 passed, 7 deselected in 11.06s**。两者分别运行，总计 884 passed；CI 包含本地回归排除的两项 Gold 文件检查，不据此宣称独立密封留出评测。被跳过或排除的测试仍未证明。
+- **产物与边界**：API 确认 backend-unit-1、backend-integration-1 两个 JUnit artifact 存在且未过期。PR 仍为 OPEN/draft，head 与上述提交一致；未合并。mergeStateStatus=CLEAN 只表示当前平台合并状态，不证明已经配置必需检查。
+- **剩余验收**：主动制造测试失败并恢复、实际必需检查/审查机制及用户独立操作尚未完成；此前意外 Compose 失败与恢复不能代替“用户主动设计并完成故障演练”的学习证据。阶段 1 尚未完成，后续阶段不因此自动开始。
