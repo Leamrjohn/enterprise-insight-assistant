@@ -3011,3 +3011,315 @@
 - **验证**：全部 `app` 模块逐个导入 0 失败；旧模块路径扫描 0 残留；`tests/unit + tests/scripts` 730 passed / 2 skipped / 2 deselected（与调整前一致）；`tests/integration` 90 passed / 2 skipped / 5 deselected（隔离库 `agent_platform_test`，与 10-19 先前记录一致）；`docker compose config -q` 通过。
 - **镜像**：`docker compose build api worker` 使用新 `backend/docker/*.Dockerfile` 与 `requirements/` 构建成功（退出码 0）。
 - **未证明**：正在运行的容器尚未用新镜像重启，未做重启后的全链冒烟；evaluation 镜像未构建；E2E/slow 测试未运行；ruff 在调整前即有 343 项问题，本次未处理（属阶段 1 工程基础）；evidence 历史条目中的旧路径文本保留原样，作为历史记录。
+
+## 2026-10-19 — 阶段 1 工程基础：当前静态与前端构建基线（进行中）
+
+- **当前事实**：当前 HEAD 为 `f00ea13a`；计划起草时的 `a0d8578a` 与 147 个未提交文件已明确标记为历史快照。仓库没有 `.github/` 工作流或 pre-commit 配置；`backend/pyproject.toml` 声明 Python `>=3.10,<3.15`，而 Dockerfile 与 `pyrightconfig.json` 以 Python 3.12 为准。前端存在 `package-lock.json`。
+- **验证**：在 `backend/` 运行 `..\\.venv-py313\\Scripts\\python.exe -m ruff check app tests scripts --output-format concise` 退出 `1`，报告 `378` 项；其中 `204` 项可用安全 `--fix` 自动修复，剩余项包括 API 依赖注入规则、盲捕获异常和闭包循环变量等，需要逐类设计而非批量修改。`frontend/` 的 `npm run build` 退出 `0`。`npm ci --dry-run` 退出 `0`。
+- **边界**：这不是阶段 1 完成声明。尚未建立 CI、未将 Pyright 纳入可复现依赖安装、未决定 lint 债务的分批门禁策略，也未重新验证 E2E/slow 或容器重启后的完整链路。
+
+### 当前决策
+
+- **继续**：先由用户完成工程基础的 12 问设计练习，再共同确定 CI 的最小职责、Python 3.12 环境、静态检查策略和分批还债边界。不得用 `ruff --fix` 批量覆盖行为类规则，或以通过前端构建宣称后端工程门禁已达标。
+
+## 2026-10-19 — 阶段 1 工程基础：lint 分类与前端测试跟进（进行中）
+
+- **分类**：378 项 Ruff 结果中，`I001` 164 项、`B008` 116 项、`ISC004` 19 项、`FURB157` 13 项；机械可修复项不能替代对行为规则的逐项审查。前端 `npm test` 退出 `0`，2 个测试文件、7 个测试通过。
+- **B023 复核**：`backend/app/modules/input_artifacts/outbox_tasks.py:53` 的 lambda 捕获 `task` 被 Ruff 标记为 `B023`，但 `publish_artifact_processing_event` 在同一调用栈的第 248–252 行同步调用 `enqueue`，随后不保留该 callback。外层 `task` 不会在 lambda 执行前迭代到下一个值；现有 `test_input_artifact_tasks.py` 也以同步 callback 断言投递参数。该条是当前静态分析误报，不是已证实的错误投递缺陷。
+- **边界**：此结论不等于可以忽略所有 lint。`BLE001` 的 8 项盲捕获异常、其余未分类规则，以及 CI 的门禁范围仍需在工程基础设计中明确处理；未修改运行时代码。
+
+## 2026-10-22 — 阶段 1 工程基础：CI/pre-commit 骨架与独立服务验证（进行中）
+
+- **范围**：按 `docs/plans/improvement_and_learning_plan.md` 原计划实施；本轮不修改该计划，保留之前已有的计划与 evidence 工作区修改。新增 `docs/design/engineering_baseline.md`、`.github/workflows/ci.yml`、`.pre-commit-config.yaml`；补充开发工具与贡献说明。没有改业务逻辑、迁移或附件模块。
+- **CI**：PR/push/manual 触发，读取仓库的最小权限；Actions 固定到通过 `git ls-remote` 查询确认的提交 SHA。独立执行 Ruff、格式、Pyright、unit/scripts、integration、前端和 Compose 检查；后端以 Python 3.12 为目标，使用 PostgreSQL/pgvector 与 Redis 服务容器，复用初始化 SQL，迁移账号和应用账号分离。错误直接阻断，无 continue-on-error。
+- **开发工具**：Ruff `0.16.1`、Pyright `1.1.414`、pre-commit `4.7.0`。本地已安装 hook；首次生成的 Windows 中文解释器路径不是 UTF-8，设置 `PYTHONUTF8=1` 后重新生成，UTF-8 读取后与实际解释器路径完全匹配。贡献指南已补充该设置。
+- **配置验证**：actionlint 容器检查最终 workflow，退出 `0`；最初发现 ShellCheck SC2086，已改为 Bash 数组展开，复验通过。`pre_commit validate-config`、`docker compose config --quiet`、`git diff --check` 通过。开发工具声明的 TOML 读取校验通过。
+- **真实测试环境**：本轮新建专用 PostgreSQL/Redis 容器，使用动态 loopback 端口，不连接现有开发库；bootstrap 创建角色与 vector 扩展，空库 `alembic upgrade head` 通过。迁移使用 `agent_migrator`，应用测试使用 `agent_app`。
+- **后端结果**：本地 Python `3.13.14` 下，`pytest tests/unit tests/scripts -m 'not e2e and not slow' -q` 为 `730 passed, 2 skipped, 2 deselected`，退出 `0`；integration 为 `90 passed, 2 skipped, 5 deselected`，退出 `0`；显式配置独立 Redis 后的合并运行是 `820 passed, 4 skipped, 7 deselected in 47.29s`，退出 `0`。最初未显式接入独立 Redis 的合并运行出现失败后中止，不作为通过证据；未保留完整错误栈，不能断言该次失败的唯一根因。
+- **前端结果**：本地 Node `24.16.0` 下 7 项测试和构建通过；另在干净 `node:22-alpine` 容器中只复制前端源码与配置（不复制 .env/node_modules），运行 `npm ci`、`npm test`、`npm run build`，7 项测试及构建通过，最终退出 `0`。
+- **仍为红灯**：Ruff 全范围检查 `378` 项，退出 `1`；Pyright 分析 `200` 个文件、`90` 项错误，退出 `1`；格式检查 `108 files would be reformatted, 222 files already formatted`。pre-commit 实际全文件检查退出 `1`，确实阻断这些存量问题，没有自动改写源文件。
+- **证据边界**：尚未在 GitHub PR 上运行；本地后端 Python 3.13 结果不能替代 CI Python 3.12 验证；后端依赖尚未完整锁定；本轮没有迁移降级、Worker/外部模型/对象存储 E2E、两项 PR 故障演练、远端必需检查配置，也没有用户独立操作验收。阶段 1 未完成，后续阶段未开始。
+- **下一步**：按原计划分批处理静态检查，验证 pre-commit 和 CI 全绿，再推进 PR 审查/故障演练。对 FastAPI 默认参数等报告先判断规则与真实行为，不能为清零直接修改业务契约或整体忽略规则。
+- **清理**：确认 `codex.scope=phase1-ci-92d1` 归属后删除本轮两个测试容器及其匿名测试卷；数据可由 bootstrap/迁移/fixture 重建，现有开发容器与数据卷未操作。
+
+## 2026-10-22 — 阶段 1：格式基线与 FastAPI 默认声明规则
+
+- **格式切片**：Ruff 0.16.1 整理 `backend/app`、`backend/tests`、`backend/scripts` 中 108 个 Python 文件，222 个保持原样。没有执行 lint 的批量 `--fix`，没有修改业务契约或开放附件入口。
+- **语义核对**：整理前 330 文件的 AST 摘要为 `453bc2ed97ceeeea76d8fa805e2ed0be4da018bfb85c403602c08b79b1e6c6ba`。原始 AST 比较发现 3 个测试文件的 `TypeIgnore.lineno` 随排版移动；逐文件差异只涉及该位置字段。归一化该行号后，与 HEAD 中 330 个原文件的 AST 完全一致，检查退出 `0`。这证明本批未改变解析后的程序结构，不替代完整运行时验收。
+- **框架规则**：核对 B008 后，112 项为 FastAPI `Depends`，2 项为 `File`；按 Ruff 官方 `lint.flake8-bugbear.extend-immutable-calls` 精确登记 `fastapi.Depends` 和 `fastapi.File`，没有禁用 B008，也没有调整 API 参数契约。另两项项目自定义默认对象保留待审。依据：https://docs.astral.sh/ruff/settings/#lint_flake8-bugbear_extend-immutable-calls 。
+- **防回归**：新增 `tests/scripts/test_ruff_config.py`，四种输入验证框架声明放行、普通工厂默认值拒绝、同名但非 FastAPI 的 `Depends` 拒绝、可变列表默认值拒绝。实跑 `4 passed`，退出 `0`；新测试文件自身 Ruff 检查通过。
+- **当前门禁**：`ruff format --check app tests scripts` 为 `331 files already formatted`，退出 `0`；pre-commit 的 ruff-format 全文件检查通过。Ruff 从 378 项降到 251 项（排版消除 13 项，框架精确例外消除 114 项），全量 lint 仍退出 `1`，未宣称 CI 全绿。
+- **边界与后续**：本轮没有重跑完整业务测试、没有修复 Pyright、没有推送 PR；上轮 820 项通过是上轮运行证据。下一批审查 import 排序及其模块加载影响，再处理其余规则。原计划未改动，阶段 1 仍未完成。
+
+## 2026-10-22 — 阶段 1：导入排序与隔离回归
+
+- **切片**：仅运行 `ruff check backend/app backend/tests backend/scripts --select I001 --fix`，修复 151 项导入排序报告；没有运行 F401 或行为类规则的批量修复。随后格式检查为 331 个文件已格式化，工作区差异空白检查通过。原计划未修改，附件入口仍冻结。
+- **结构核对**：对 HEAD 中 330 个原 Python 文件与当前文件比较 AST，仅归一化连续导入块内的排序、导入语句分组及 `TypeIgnore.lineno`；全部一致，退出 `0`。这说明导入符号和非导入语句结构保留，不代表导入顺序一定没有运行时影响。
+- **真实依赖回归**：新建标记 `codex.scope=phase1-imports-a61c` 的 PostgreSQL/pgvector、Redis 与专用网络，loopback 端口分别为 60141、60142；复用 bootstrap SQL，应用账号为 `agent_app`，迁移账号为 `agent_migrator`。显式指定测试数据库和 Redis 后，本地 Python 3.13.14 运行 `pytest tests/unit tests/scripts tests/integration -m 'not e2e and not slow' -q -x --tb=short --durations=3`，结果为 **824 passed, 4 skipped, 7 deselected in 43.77s**，退出 `0`，包含新进程 ORM mapper 启动检查。
+- **门禁状态**：Ruff 从 251 项降至 100 项，全范围 lint 仍不通过；未处理 Pyright，未将历史 90 项错误当作本轮重测。没有推送或执行 GitHub PR 检查，没有 Python 3.12 后端运行证据，也未运行 E2E/slow。不得据此宣称阶段 1 完成或用户已经掌握实现。
+- **清理**：读取标签确认归属后，删除本轮两个测试容器、其匿名测试卷及专用网络。仅清理可由 bootstrap/迁移/fixture 重建的临时数据，未操作现有开发服务。
+- **决定**：保留本批机械整理，继续按规则类别处理剩余 lint 与类型错误；不以关闭检查或改变业务异常契约换取全绿。
+
+## 2026-10-22 — 阶段 1：未使用导入与过期抑制注释
+
+- **范围**：清理 10 项 F401（未使用的 `regex.S`、TaskSpec 模块的标准库/SQLAlchemy 名称、测试中的重复模型导入）及 workflow 模型文件的 8 项 RUF100。保留模型注册所需的实际导入和仍需要的 F401 注释；没有删除模型类、调整字段或开放附件入口。
+- **审查依据**：附件上下文的实际实现仍直接导入 `AnalysisTaskInputArtifactVersion`；扫描测试仍导入同一模型模块中的 `ArtifactProcessingJob`；workflow 文件尾部继续注册全部关系目标。源代码搜索未发现外部使用所删除的导入名称。单独选择 F401/RUF100 会将未启用的 BLE001 抑制误报为无用，故没有据此删除其他文件的有效注释，以完整项目规则为准。
+- **验证**：全范围 Ruff 剩余 **82 项**，退出 `1`；331 文件格式检查退出 `0`；差异空白检查通过。独立进程导入 TaskSpec，断言表名 `taskspecs` 与唯一列 `id`，退出 `0`。新建独立 PG/Redis，复用 bootstrap 与测试迁移，在 Python 3.13.14 下运行 `pytest tests/unit tests/scripts tests/integration -m 'not e2e and not slow' -q -x --tb=short --durations=3`，**824 passed, 4 skipped, 7 deselected in 39.83s**，退出 `0`，包括新进程 ORM mapper 检查。
+- **清理**：确认标签 `codex.scope=phase1-unused-b72d` 后删除本轮测试容器及匿名卷；测试数据可重建，现有开发服务未操作。
+- **边界**：未处理剩余 lint/Pyright，未运行 Python 3.12 后端、GitHub PR 或完整 E2E；原计划不变，阶段 1 继续进行，不将机械清理与测试通过等同于用户能力验收。
+
+## 2026-10-22 — 阶段 1：显式字符串拼接分组
+
+- **范围**：`analysis/planner/planning.py` 与 `tests/unit/analysis/test_planning.py` 的 19 项 ISC004。逐项核对后，这些都是有意拼接的完整提示词句子或 JSON 测试响应，而不是遗漏列表逗号。先检查 Ruff 的 diff，再仅对这两个文件启用 ISC004 的修复，添加括号并格式化；未改变提示词内容、列表元素或评测数据。
+- **等价性证据**：在同一 Python 进程中保存修改前两个文件的完整 AST，修复后重新解析比较，忽略源码位置属性，两个 AST 完全一致，退出 `0`。这包含全部字符串常量和集合元素，而不只是字符串长度比较。
+- **测试**：本地 Python 3.13.14 运行 `pytest tests/unit/analysis/test_planning.py -q --tb=short`，**21 passed in 1.56s**，退出 `0`；显式设置无服务的数据库/Redis 端口，该组测试不需连接数据库或真实模型。全范围 Ruff 剩余 **63 项**，退出 `1`；331 文件格式检查及差异空白检查通过。
+- **边界**：本轮只有局部测试与 AST 等价性证据，没有重跑全量回归、真实模型或 E2E；未修复 Pyright，未验证远端 CI。未读取或运行 Gold 留出集。原计划与业务契约不变，阶段 1 未完成。
+
+## 2026-10-22 — 阶段 1：Decimal 整数常量整理
+
+- **范围**：审查修复预览后，仅处理 `reporting/numeric_validation.py` 和 `scripts/data/generate_business_data.py` 的 13 项 FURB157，将整数形式的字符串参数改为整数参数。非整数小数仍保留字符串构造，避免引入二进制浮点误差；不更改金额量化、舍入或数字校验规则。
+- **等价性检查**：针对全部 7 种被替换常量，在 Decimal precision 为 1、2、28 时比较 `as_tuple()`，符号、数位、指数一致；修改前后 AST 只将常量 Decimal 调用归一为其精确 tuple，其余完整结构比较一致，退出 `0`。
+- **测试与门禁**：Python 3.13.14 下运行 `pytest tests/unit/reporting/test_reviewer_validators.py -q --tb=short`，**17 passed in 0.99s**，退出 `0`。全范围 Ruff 剩余 **50 项**，退出 `1`；331 文件格式检查及差异空白检查通过。
+- **边界**：没有执行数据生成脚本、改写经营库、生成评测 fixture 或接触 Gold 内容；没有重跑全量测试、真实模型、Python 3.12 或远端 CI。Pyright 与其余 lint 仍待处理，阶段 1 未完成。
+
+## 2026-10-22 — 阶段 1：引用校验异常传播与清理
+
+- **实现**：删除 `citation_validation.py` 中只原样重抛的 `except Exception: raise`，保留 `finally: db.close()`，不改变权限过滤、查询或失败返回。其余 8 项 BLE001 尚未修改，不能为清零盲目缩窄故障边界。
+- **测试**：新增 `test_citation_failure_cleanup.py`，分别注入成员查询、租户范围设置和引用查询异常，断言原异常对象向上传播、会话恰好关闭一次，并确认前置失败不会继续后续查询。与现有 reviewer validator 测试一起执行，首次 20 passed in 1.01s；最终标准命令复验 **20 passed in 0.99s**，退出 `0`。使用 Mock，不是 PostgreSQL 故障演练或完整权限证据。
+- **辅助验证未完成**：另尝试在独立进程内移除清理逻辑并调用 `pytest.main`，两次均未返回测试结果后主动中止；没有获取根因栈，不将其视为测试通过、预期失败或已知环境故障。内存变异未写入源码，随后标准 pytest 命令复验通过。
+- **门禁**：全范围 Ruff 剩余 **49 项**，退出 `1`；332 文件格式检查通过。Pyright、全量回归、Python 3.12、远端 CI 尚未在本轮验证，阶段 1 未完成。
+
+## 2026-10-22 — 阶段 1：类型导入与声明整理
+
+- **修改**：3 处 Callable 改用 `collections.abc`；已启用 postponed annotations 的 SnapshotCatalog 移除多余返回类型引号；UTF-8 测试断言使用默认 encode；currency 类型声明去除 float 已覆盖的 int。只处理预览确认的 6 项 UP035/UP012/UP037/PYI041，并重新整理受影响导入顺序。不改变附件入口或解析流程。
+- **保留待处理**：OCR 回调仍声明返回 object，两个 B009 不直接修复，避免把运行时属性访问替换后留下新的静态类型错误；后续需与真实 OCR 返回契约一起审查。
+- **验证**：Python 3.13.14 下运行 image_ocr、pdf_render、parser、snapshot_catalog_validator 四个单元测试文件，**25 passed in 0.99s**，退出 `0`。单独从 AST 加载 currency 函数，验证 None、零、整数、浮点数、Decimal 五种输入输出，全部通过；没有运行数据生成脚本或操作数据库。
+- **门禁与边界**：全范围 Ruff 剩余 **43 项**，退出 `1`；332 文件格式检查和差异空白检查通过。没有重跑完整回归、真实 OCR 服务、Python 3.12 后端、Pyright 或远端 CI；阶段 1 未完成。
+
+## 2026-10-23 — 阶段 1：测试状态隔离与冻结默认对象
+
+- **测试隔离**：模型预算测试的 Task 替身原先将三个可变字典放在类属性上。新增两个实例不共享字典（包含嵌套 calls_by_node）的断言，旧实现明确失败；改成构造函数内逐实例初始化后，预算测试 11 项通过。这证明替身的共享状态风险已修复，不代表生产任务曾经发生串扰。
+- **默认对象**：parse_worker 的两项 B008 对应仅含数值字段的 frozen dataclass，沿用 parser 的模块常量模式，保留原默认值和共享不可变对象语义。新增两项测试核对默认值并验证修改属性触发 FrozenInstanceError；未改附件入口或解析业务流程。
+- **验证**：最终显式选择预算测试、parser 测试以及 worker 默认对象测试，**30 passed in 1.42s**，退出 `0`。首次用不匹配的排除表达式选择测试，误包含需数据库的 worker 测试，在无服务端口上未完成后中止；这次运行不算通过证据，随后使用精确测试节点重新验证。
+- **门禁与边界**：全范围 Ruff 从 43 项降到 **38 项**，退出 `1`；未重跑真实数据库 worker 测试、完整回归、Pyright、Python 3.12 或远端 CI。原计划不变，阶段 1 未完成。
+
+## 2026-10-23 — 阶段 1：上下文管理与条件简化回归
+
+- **范围**：合并 schema discovery、文本文件复制与测试中的 5 处嵌套 with，保持进入顺序及逆序退出；合并格式校验的两处嵌套条件，保持短路顺序；将未使用的测试局部变量命名为 `_context`。没有调整循环编号、SQL 字符串或异常契约。
+- **等价性**：从 HEAD 和当前文件分别加载 `validate_schema`，对 8 类文本、4 类证据数量和两种引用要求组成的 64 个输入组合逐个比较，结果完全一致，退出 `0`。
+- **真实服务回归**：使用本轮独立 PostgreSQL/pgvector 与 Redis（loopback 60141/60142），bootstrap 初始化角色与空库，应用测试使用 agent_app，迁移使用 agent_migrator。Python 3.13.14 执行 `pytest tests/unit tests/scripts tests/integration -m 'not e2e and not slow' -q -x --tb=short --durations=3`，**830 passed, 4 skipped, 7 deselected in 41.47s**，退出 `0`，覆盖前几轮新增测试及解析 Worker 数据库测试。
+- **门禁**：全范围 Ruff 剩余 **30 项**，退出 `1`；332 文件格式检查及差异空白检查通过。尚未运行 Python 3.12 后端、Pyright 新结果、真实外部模型/完整 E2E 或 GitHub PR；阶段 1 未完成。
+- **清理**：核对 `codex.scope=phase1-contexts-c83e` 后删除本轮两个测试容器及匿名卷；仅清理可重建临时测试数据，没有操作现有开发服务。
+
+## 2026-10-23 — 阶段 1：OCR 返回类型与 Pyright 复核
+
+- **契约**：复用现有 ImageOcrResult，补齐 parse_worker → parser → 图片/PDF OCR 提取链的 Callable 返回类型，并将两个常量 getattr 改为直接属性访问。实际 Tesseract 适配器与测试替身均返回该类型；没有新增抽象、移除字段校验或改变异常处理，附件入口保持冻结。
+- **测试**：image_ocr、parser、input_artifact_tasks 与 worker 默认值测试共 **23 passed in 0.70s**，退出 `0`。这是适配器/解析单元证据，不是实际 Tesseract 服务或 Worker 数据库 E2E。
+- **类型检查**：第一次在 backend 目录引用不存在的 pyrightconfig.json，提示配置不可读并错误扩大分析范围，其 495 项结果不作为项目基线。按仓库根目录真实配置重跑，修改前后均为 **200 文件、90 项错误**，Pyright 退出 `1`；修改后的 parser、parse_worker、image_ocr 无诊断。CI 的 Pyright 步骤本来就在仓库根目录，未作无必要修改。
+- **门禁与边界**：Ruff 剩余 **28 项**，退出 `1`；332 文件格式检查及差异空白检查通过。没有重跑全量回归、Python 3.12 后端或远端 CI；类型错误总量尚未下降，阶段 1 未完成。
+
+## 2026-10-23 — 阶段 1：SQL 生成参数类型契约
+
+- **根因与修改**：DataAgent 临时 kwargs 字典先从 repair_reason/previous_sql 推断为字符串或 None，之后插入 required_concepts 列表和 evaluation_scope 字典，引发 4 项类型错误。删除该临时字典，直接向 SQLGenerationService.generate 的既有关键字参数传值；空业务能力列表仍按原语义使用 None。没有加 Any、cast 或忽略注释，没有修改 SQL 执行、权限或重试策略。
+- **验证**：生产生成器与测试替身的四个可选参数均以 None 为默认值。运行 `test_agents.py` 与 `test_sql_generation.py`，**55 passed in 1.18s**，退出 `0`，覆盖修复重试、能力要求与 planner 范围传递。修改文件 Ruff 通过，全范围 332 文件格式检查和差异空白检查通过。
+- **类型门禁**：按根目录配置执行 Pyright 1.1.414，分析 200 个文件，错误从 90 降至 **86 项**，退出 `1`；data_agent.py 无剩余诊断。全量 Ruff 上轮仍有 28 项，本轮未宣称全绿。
+- **边界**：本轮仅单元/契约与静态验证，没有真实模型、数据库 SQL 全链、Python 3.12 运行或远端 CI 证据。原计划不变，阶段 1 未完成。
+
+## 2026-10-23 — 阶段 1：模型成本的 Decimal 注解
+
+- **依据与修改**：ModelCallRecord 的 cost/reserved_cost 均显式映射 Numeric(12, 6)，迁移也声明相同类型；预算预留与结算代码使用 Decimal，但 ORM 注解误写成 float。将两列注解更正为 Decimal | None，不改列类型、可空性、数据库内容或计算逻辑，不通过 float 转换消除类型错误。
+- **验证**：现有付费调用测试新增 Decimal 实例与精确预留金额断言。`test_model_governance.py` **11 passed in 0.59s**，退出 `0`；修改文件 Ruff、全范围 332 文件格式检查及差异空白检查通过。按根目录配置运行 Pyright，200 文件，错误从 86 降至 **85 项**，退出 `1`，model_governance.py/model_call.py 无诊断。
+- **边界**：本轮 FakeDb 测试证明预留和结算对象的类型及金额，不证明数据库往返精度或供应商计费正确；未运行真实 PostgreSQL 往返、Python 3.12 或远端 CI。阶段 1 未完成。
+
+## 2026-10-23 — 阶段 1：确定性评测三态类型契约
+
+- **修改**：为既有状态字典和列表明确 CheckStatus 类型；RequiredTerms 参数使用其真实列表类型；将结果构造中的混合字典展开替换为具名字段。拒绝/澄清分支中原本确定为布尔值的 outcome/budget/route 字段从规范化状态转换回布尔值，硬门禁、violations 与 unknown_checks 算法不变。SQL 行数上限使用已有 Pydantic 验证器保证的非空约束；费用汇总显式识别缺失金额并沿用 unknown 分支，不把缺失值补零。
+- **测试范围更正**：最初计划运行不读取 fixture 的测试，但 `-k 'not fixture'` 按名称筛选仍包含读取命名开发集的测试；后续 AST 检查确认这些为开发集测试，Gold 两项测试被排除，未读取 Gold 文件内容或运行其评测。不得将这次结果称为纯内存测试或独立留出集证据。
+- **验证**：新增缺失金额却标记 passed 的回归测试，确认 settled_cost 为 None、cost_status 为 unknown。最终 `pytest tests/unit/evaluation/test_business_evaluation.py -k 'not fixture' -q --tb=short` 为 **56 passed, 6 deselected in 0.17s**，退出 `0`；修改文件 Ruff、全范围 332 文件格式检查与差异空白检查通过。
+- **类型结果**：根目录 Pyright 配置分析 200 文件，错误从 **85 降至 32 项**，退出 `1`；business.py 无剩余诊断。没有添加 Any、cast 或类型忽略，也没有降低业务硬门禁或调整评测阈值。
+- **边界**：本轮依 evaluation 技能保持确定性门禁与开发/留出隔离；不构成真实 Agent 质量提升或阶段 2 评测基线完成。未跑全量回归、Python 3.12 或远端 CI，阶段 1 仍未完成。
+
+## 2026-10-23 — 阶段 1：工作流阶段回调签名
+
+- **调用链**：Worker 传入接受 stage/node_name 的回调；run_analysis 将其放入 WorkflowState；节点 `_set_stage` 实际调用 `callback(stage, node_name)`。WorkflowState 已声明两参数，只有 run_analysis 的注解错误写成一参数。修正为 Callable[[str, str], None]，不改变运行逻辑、Worker 兼容参数或阶段更新行为。
+- **验证**：扩展现有编译图终态测试，使用必须接受两个参数的回调，断言实际收到 `(planning, planner_node)`。`test_workflow.py` **32 passed in 2.54s**，退出 `0`；修改文件 Ruff、332 文件格式检查及差异空白检查通过。根目录 Pyright 分析 200 文件，错误从 32 降至 **31 项**，退出 `1`，graph.py 无诊断。
+- **边界**：本轮使用编译后的真实图和 FakePlanner，未调用外部模型或验证数据库阶段持久化；未跑完整回归、Python 3.12 或远端 CI，阶段 1 未完成。
+
+## 2026-10-23 — 阶段 1：SQL 查询与结果结构类型约束
+
+- **实现**：行数限制函数复用现有 `_parse_single_select`，明确得到 Select AST，而不是从任意 Expression 强行调用 limit；正常执行入口仍先调用完整 validate_sql。结果校验在已有非空和行结构验证后，明确首行的 list/tuple 类型再检查空聚合。不添加 Any/cast，不放宽允许表或结果形状。
+- **验证**：新增非 SELECT/多语句的行数限制拒绝测试，以及 6 种畸形结果行的拒绝测试。查询结果、SQL executor、SQL validator 与 DataAgent 测试合计 **75 passed, 2 skipped in 1.55s**，退出 `0`；两项需要经营数据库的既有测试仍跳过。修改文件 Ruff、332 文件格式检查与差异空白检查通过。
+- **类型门禁**：Pyright 200 文件，错误从 31 降至 **29 项**，退出 `1`；query_validation.py/sql_executor.py 无诊断。
+- **边界**：本轮未连接经营数据库、未验证真实 SQL 端到端、Python 3.12 或远端 CI；阶段 1 未完成。
+
+## 2026-10-23 — 阶段 1：对象存储健康检查的配置类型收窄
+
+- **实现**：健康检查将 all(tuple) 改为等价的逐项缺失判断，使类型检查能确认访问凭据前配置存在。保留缺项返回 not_configured、服务错误返回 unavailable、超时与重试配置；没有输出密钥、修改 Settings 或改变实际连接参数。对象存储上传/处理适配器的剩余类型问题尚未修改。
+- **验证**：新增 endpoint、bucket、access key、secret key 四类缺项测试，断言不创建 S3 客户端。`test_health_repository.py` **6 passed in 0.20s**，退出 `0`；修改文件 Ruff、332 文件格式检查及差异空白检查通过。Pyright 分析 200 文件，错误从 29 降至 **27 项**，退出 `1`。
+- **边界**：这些为 Mock 客户端测试，未验证真实对象存储、服务故障或远端 CI；未跑完整回归和 Python 3.12。阶段 1 未完成。
+
+## 2026-10-23 — 阶段 1：持久化观察记录的类型与未知状态
+
+- **修改**：SQLAlchemy Row 通过显式二元解包构造文档/块映射；终态字典使用 Outcome，澄清槽位沿用 ClarificationSlot。数据状态先检查字符串类型，避免列表/字典进入集合查找时报错；确定性校验仅显式 passed/failed 转为对应状态，其余保持 unknown。未填造缺失文档路径或更改租户过滤。
+- **验证**：新增 6 种非法状态和 4 种合法状态测试；在独立 PostgreSQL/pgvector 上初始化角色、迁移测试库，运行 `test_observation.py`，**30 passed in 1.88s**，退出 `0`。使用 agent_app 与 agent_migrator 分离账号；不是 Mock 数据库。修改文件 Ruff、332 文件格式检查及差异空白检查通过。
+- **类型结果**：Pyright 分析 200 文件，错误从 27 降至 **16 项**，退出 `1`，observation.py 无诊断。
+- **清理与边界**：核对 `codex.scope=phase1-observation-d94f` 后删除专用测试容器及匿名卷，临时数据可重建，现有开发服务未操作。未运行 Gold、真实模型、全量回归、Python 3.12 或远端 CI，阶段 1 未完成。
+
+## 2026-10-23 — 阶段 1：MCP 已验证上下文的类型收窄
+
+- **实现**：既有 `_is_valid_runtime_context` 已检查字典、固定字段、角色与范围指纹。将输入注解收紧为 object，返回注解改为 TypeGuard[dict[str, Any]]，让调用方识别通过验证后的字典类型；函数体、授权检查和指纹逻辑均未改动，没有用 cast 绕过验证。
+- **验证**：`test_mcp_adapter.py` **11 passed in 2.93s**，退出 `0`，覆盖缺失上下文拒绝、回执不匹配、目录/返回契约及断开 stdio 等现有场景。修改文件 Ruff、332 文件格式检查与差异空白检查通过。Pyright 200 文件，错误从 16 降至 **14 项**，退出 `1`。
+- **边界**：使用现有测试 reader 与本地传输，不证明真实 RAG 检索权限端到端；未跑全量回归、Python 3.12 或远端 CI，阶段 1 未完成。
+
+## 2026-10-23 — 阶段 1：报告引用文本类型收窄
+
+- **实现**：限定条件逐字核对所用的 chunk→content 映射复用 isinstance 检查过的局部值，声明为 dict[int, str]，不重复读取可能被推断为 None 的 get 返回值。保留原有授权 chunk 子集检查、逐字匹配与不匹配丢弃规则。
+- **验证**：新增 None、数字、字典、列表及不匹配文本的拒绝测试。`test_reviewer_validators.py` **22 passed in 1.24s**，退出 `0`；修改文件 Ruff、格式整理后的 332 文件格式检查通过。Pyright 200 文件，错误从 14 降至 **13 项**，退出 `1`。
+- **边界**：本轮没有真实文档检索或模型语义审核，没有全量回归、Python 3.12 或远端 CI 证据；阶段 1 未完成。
+
+## 2026-10-23 — 阶段 1：对象存储适配器凭据收窄
+
+- **实现**：处理存储客户端、直传签名和对象检查在创建 S3 客户端前，检查局部凭据是否为 None；缺项沿用存储不可用异常，阻止回退到默认凭据链。保留构造时完整配置校验及公网/内网 endpoint 路由，未开放冻结的上传入口。
+- **验证**：新增 6 个凭据在初始化后缺失的场景，断言不创建客户端。两个存储测试文件共 **12 passed in 0.14s**，退出 0。Pyright 分析 200 文件，错误由 13 降至 **7 项**，退出 1；本次修改文件 Ruff 通过。整理新测试格式后，按 CI 范围 app/tests/scripts 检查格式通过。
+- **范围说明**：额外尝试对整个 backend 检查格式发现迁移文件等范围外格式债务，不等同于当前 CI 范围失败；未修改这些文件。本轮为 Mock 测试，未验证真实对象存储、全量回归、Python 3.12 或远端 CI，阶段 1 未完成。
+
+## 2026-10-23 — 阶段 1：上传回执的状态契约校验
+
+- **实现**：三个回执构造函数使用现有 Pydantic model_validate 校验显式字段字典，解决数据库 str 与响应 Literal 状态类型不匹配的五项诊断；未使用 cast、忽略诊断或放宽状态集合。原有公司校验、租户限定版本查询及缺失版本异常保持不变，未开放上传入口。
+- **验证**：新增三个构造路径的合法/非法状态及两条路径的非法版本状态测试，共 8 个场景。先运行无数据库契约子集，13 passed、10 deselected；再启动独立 PostgreSQL/pgvector，初始化角色并迁移测试库，完整运行 test_api.py 与 test_schemas.py，**23 passed in 2.57s**，退出 0。修改文件 Ruff、CI 范围 332 文件格式检查及差异空白检查通过。
+- **静态状态**：Pyright 分析 200 文件，错误由 7 降至 **2 项**，退出 1；剩余为评测阈值与 Worker 公司范围的可空类型，尚未修改。
+- **清理与边界**：确认 scope 标签后删除 codex-phase1-api-7a21 测试容器及匿名卷，临时数据可重建；未操作现有开发服务。数据库为真实独立 PG，对象存储仍为测试替身；未验证全量回归、Python 3.12 或远端 CI，阶段 1 未完成。
+
+## 2026-10-23 — 阶段 1：成本比较倍率缺失时拒绝
+
+- **实现**：相对成本比较在乘法之前明确检查倍率为 None，与已有耗时倍率检查保持一致。正常构造仍由 Pydantic 要求基线 hash 与两种倍率齐备；若对象被未校验的 model_copy 修改，不再以 TypeError 中断，而返回 cost_per_trusted_success_multiplier 违规项，不可判定通过。
+- **验证**：先添加成功数非零、倍率缺失的回归断言，运行得到 1 failed、7 passed，失败原因为 Decimal 乘 None；修复后同一测试文件 **8 passed in 0.08s**，退出 0。修改文件 Ruff 与 CI 范围 332 文件格式检查通过。仅使用现有开发数据，未读取 Gold 留出集。
+- **未证明**：未跑全量回归、Python 3.12 或远端 CI。本轮未修改 Worker；其 company_id 可空是历史任务的显式兼容行为，需要在附件范围边界处理，不能直接强制转换为 int。阶段 1 未完成。
+
+## 2026-10-23 — 阶段 1：历史任务与附件公司范围契约
+
+- **实现**：build_task_attachment_context 显式接受 int | None。无冻结附件时维持空上下文；有冻结附件但 company_id 缺失时，在内容查询前抛出 attachment_company_scope_missing。未给历史任务补造公司，也未放宽租户过滤。原实现已通过无法匹配附件拒绝这一情况，本轮不是修复已证实的数据泄露，而是明确输入与失败契约。
+- **验证**：新增无公司且无附件、已有附件但传入空公司范围两个场景。修复前 3 passed、1 failed，失败为预期专用错误码与原笼统错误码不符；修复后独立 PostgreSQL/pgvector 上运行附件上下文和 Worker 终态测试，**15 passed in 2.27s**，退出 0。存储替身被禁止读取，证明缺少范围时未调用对象下载。
+- **静态结果**：Pyright 使用本地 Python 3.13 环境分析 200 文件，**0 errors / 0 warnings**，退出 0；修改文件 Ruff、332 文件格式检查通过。全 CI 范围 Ruff 仍 **28 项**，退出 1，不能宣称静态门禁全部通过。
+- **清理与边界**：核对 scope 后删除 codex-phase1-scope-18bf 专用容器和匿名卷，临时测试数据可重建。未跑全量回归、Python 3.12 或远端 CI，未证明用户独立实现能力，阶段 1 未完成。
+
+## 2026-10-23 — 阶段 1：Outbox 回调绑定与测试类型注解
+
+- **实现**：附件 Outbox 每次迭代创建的 enqueue 回调通过默认参数绑定当次 Celery task，避免延迟调用读取循环最后一个 task；原有公司、job、dispatch_generation 传参保持不变。Schema discovery 的两个测试上下文管理器返回注解改为 Self，运行逻辑不变。
+- **验证**：新增混合 scan/parse 事件、循环结束后分别调用回调的测试；修复前 1 failed、2 passed，scan 被错投到 parse；修复后加上 schema discovery 测试 **4 passed in 0.09s**，退出 0。当前生产发布函数同步执行回调，所以测试证明的是闭包绑定问题，不是已发生的生产错投。
+- **门禁**：Ruff 从 28 降至 **25 项**，退出 1；修改文件 Ruff 与 332 文件格式检查通过。本轮未跑真实 Broker、全量回归、Python 3.12 或远端 CI，阶段 1 未完成。
+
+## 2026-10-23 — 阶段 1：合成数据编号循环整理
+
+- **实现**：采购/运营生成函数复用 enumerate 的 ticket_id，月度文档使用从 1 开始的 enumerate；移除两个冗余自增计数器。没有改随机种子、随机调用顺序、编号起点或数据内容，SQL 校验脚本本轮未改。
+- **验证**：修改前后用 Mock cursor 执行 seed_dimensions 与 seed_transactions（后者调用采购/运营生成），捕获完整 22 批数据库调用。两次 repr(mock_calls) 的 SHA-256 均为 `06a74c243b0e83e84eeca48753908985bd8b91280d66b5b1f66b4588f18f5e1c`。第一次修改后执行发现遗漏 index 引用导致 NameError，补齐后重跑成功，退出 0。没有执行 main、recreate_schema、真实数据库写入或语料文件生成。
+- **门禁与边界**：修改文件 Ruff 通过，CI 范围 332 文件格式通过；全范围 Ruff 剩 **23 项**，退出 1。该验证只证明固定种子下生成调用内容一致，不证明真实数据库导入或业务正确；未跑全量回归、Python 3.12、远端 CI，阶段 1 未完成。
+
+## 2026-10-23 — 阶段 1：SQL 与快照值校验的规则例外
+
+- **判断依据**：SQL 非 SELECT 检查处理的是 SQL 字符串内容，不是调用参数类型；SQLTool 捕获 ValueError 返回 sql_validation_error 可修复回执。快照检查处理持久化 JSON 内容不合法，沿用统一 ValueError 契约。机械替换为 TypeError 会改变既有失败语义。
+- **实现**：保留运行代码，仅在上述 5 个抛出点添加有原因说明的 TRY004 行级例外，没有全局关闭规则。新增 6 类非法快照内容的契约测试。
+- **验证**：test_snapshot_catalog_validator.py、test_sql_validator.py、test_tools.py **37 passed in 0.19s**，退出 0。全范围 Ruff 剩 **18 项**，退出 1；332 文件格式检查通过。未新增真实数据库或模型验证，未跑全量回归、Python 3.12 或远端 CI；阶段 1 未完成。
+
+## 2026-10-23 — 阶段 1：Outbox 失败记录不持久化异常正文
+
+- **发现与实现**：分析任务发布失败原先把异常类型及完整异常正文写入 last_error，可能保存连接凭据。改为固定 broker_publish_failed；保留日志中事件 ID、任务 ID、异常类型，不记录正文。保留失败恢复 pending 的通用异常边界，为该处 BLE001 添加行级理由。未清理或读取既有业务失败记录。
+- **验证**：使用虚构含凭据 URL 的 ConnectionError，修复前实际持久化了测试异常正文；修复后断言固定错误码、日志记录存在且包含定位字段、不含测试密码，并继续验证成功重投、Worker 认领与其他租约/取消场景。迁移配置禁用 logger 导致第一次日志断言未捕获记录，测试显式恢复目标 logger 后重跑。独立 PostgreSQL 上 **4 passed in 0.41s**，退出 0。
+- **门禁与边界**：全范围 Ruff 剩 **17 项**，退出 1；332 文件格式通过。核对 scope 后删除 codex-outbox-redact-91ac 测试容器和匿名卷，临时数据可重建；未验证真实 Broker、全量回归、Python 3.12 或远端 CI，历史失败记录是否含敏感信息未检查。阶段 1 未完成。
+
+## 2026-10-23 — 阶段 1：工具失败回执边界
+
+- **判断与实现**：SQLTool、TemplateQueryTool、ToolRuntime 的通用异常捕获用于转换未知依赖错误为明确失败，并隔离异常正文。保留行为，为三处 BLE001 添加局部原因说明，没有扩大捕获范围或记录原始异常。
+- **验证**：查询工具测试 **19 passed in 0.16s**；加强 Runtime 测试，检查加载的事件/工具记录字段及 dataclass 回执不含虚构私密异常正文或请求正文，而不是仅检查 ORM 默认 repr。首次测试误把 ToolOutput 当成 Pydantic 模型调用 model_dump_json，核对其 dataclass 定义后修正；独立 PostgreSQL 上完整 Runtime 测试 **18 passed in 1.52s**，退出 0。
+- **门禁与边界**：Ruff 剩 **14 项**，退出 1；332 文件格式通过。核对 scope 后删除 codex-tool-boundary-3a8c 专用容器和匿名卷，测试数据可重建。工具依赖为替身，未证明真实业务库/模型端到端、全量回归、Python 3.12 或远端 CI，阶段 1 未完成。
+
+## 2026-10-23 — 阶段 1：附件异常契约与剩余机械整理
+
+- **实现**：为已核对的租户 Session 状态错误、元数据拒绝、未知处理失败的恢复/清理边界添加逐行 TRY004/BLE001 例外说明，未更换异常类型或修改恢复逻辑；API 仍按 ValueError 拒绝非法输入。长规划提示词保留逐行 join 的可审阅结构并说明 FLY002 例外；RAG 充分性布尔返回简化为等价的 not-less-than，未改变阈值或非有限值行为。
+- **验证**：独立 PostgreSQL/pgvector 上附件单元目录及分析 Outbox 共 **182 passed in 7.67s**；RAG 与重排测试 **8 passed in 0.04s**，均退出 0。第一次 RAG 命令末尾误附不存在命令使 shell 退出 1，去掉后重新运行确认退出 0，未据第一次 shell 状态宣称通过。
+- **静态结果**：异常契约整理后 Pyright 200 文件 **0 errors / 0 warnings**，退出 0。最终 Ruff 剩 **1 项**，为数据校验脚本 SQL 字符串插值；332 文件格式通过。没有关闭全局规则。
+- **清理与边界**：核对 scope 后删除 codex-artifact-regression-4f9b 专用容器与匿名卷，可重建测试数据；未开放冻结入口。未验证全量回归、Python 3.12、远端 CI 或真实对象存储，阶段 1 未完成。
+
+## 2026-10-23 — 阶段 1：本地静态门禁通过与广泛回归
+
+- **实现**：数据校验脚本 scalar 接收可选参数元组，月度日期通过 psycopg 参数传递而不拼接 SQL；现有无参数调用传 None。新增脚本级测试覆盖有参数与无参数路径，不调用脚本 main 或真实业务库。
+- **静态验证**：`ruff check backend/app backend/tests backend/scripts` 退出 **0**；对应格式检查 **333 files already formatted**，退出 **0**；Pyright 使用本地 Python 3.13 分析 **200 文件、0 errors / 0 warnings**，退出 **0**。脚本参数与 Ruff 配置测试 **6 passed in 0.61s**。
+- **广泛回归**：独立 PostgreSQL/pgvector 与 Redis 初始化后执行 `pytest tests/unit tests/scripts tests/integration -m 'not e2e and not slow' -k 'not business_gold' -q --tb=short`，**881 passed, 4 skipped, 9 deselected in 45.45s**。这是明确排除范围的本地回归，不是所有测试或完整业务端到端；没有用 Gold 结果调参或宣称独立留出晋升。
+- **清理与未证明**：核对 full-6c12 标签后移除 codex-full-pg-6c12、codex-full-redis-6c12 及匿名卷，临时测试数据可重建。未验证 Python 3.12 干净安装、GitHub CI/PR 拦截与回退演练、真实模型/对象存储或用户独立能力；阶段 1 仍未完成。
+
+## 2026-10-23 — 阶段 1：Python 3.12 干净容器验证
+
+- **环境**：python:3.12-slim，实际 Python 3.12.15；选择性复制代码、测试、配置，不复制 .env 或已有虚拟环境。按 CI 命令安装 base.txt 与 backend[dev] 成功，pip check 无依赖冲突。依赖仍为范围解析，尚非完整锁定。
+- **发现与修复**：首次测试收集失败，缺少 PIL；将已在 ml.txt 使用的 Pillow==12.3.0 加入 dev 依赖，重新执行安装成功。Windows docker cp 为普通源码附带执行权限导致 EXE002；将临时副本恢复为普通文件权限后，另发现 3 个 Git 模式 100644 文件含 shebang，移除这些非可执行 Python 文件的不适用头部。没有禁用 Linux 权限规则。
+- **验证**：独立 Docker 网络的 PostgreSQL/pgvector 与 Redis 上，`pytest tests/unit tests/integration -m 'not e2e and not slow' -k 'not business_gold'` 得到 **852 passed, 4 skipped, 9 deselected in 26.41s**，退出 0。修正权限及头部后容器 Ruff 检查通过，333 文件格式通过，pip check 通过。此结果不含 tests/scripts，也未验证容器 Pyright，不能等同完整 CI 通过。
+- **续作资源**：保留专用容器 codex-clean312-8e2a、codex-clean312-pg-8e2a、codex-clean312-redis-8e2a 与网络 codex-clean312-net-8e2a，均标记 scope=clean312-8e2a，供后续脚本与类型验证，尚未清理。没有改动开发服务。远端 CI/PR 故障演练与学习验收未完成，阶段 1 未完成。
+
+## 2026-10-24 — 阶段 1：Python 3.12 脚本与类型验证补齐
+
+- **环境诊断**：初跑 tests/scripts 为 5 failed、24 passed，缺 pwsh 与仓库根目录 scripts 副本。补齐根 scripts，按微软 Debian 官方文档安装 PowerShell 7.6.8 后，**29 passed in 2.98s**，退出 0；不通过 skip 隐藏缺项。官方安装依据：https://learn.microsoft.com/en-us/powershell/scripting/install/install-debian 。
+- **类型诊断**：首次 Pyright 的 Node 自动安装遇到下载不完整及 libatomic.so.1 缺失，退出 1，未执行类型分析；确认该进程终止后使用系统 Node 20.19.2 重跑。Python 3.12 当前解析出的 SQLAlchemy 2.1.6 将 COALESCE 结果仍推断可空，产生一项成本类型诊断。查询保证非空，因此补充 assert 明确不变量，没有 cast 或 Python 端填造成本。
+- **验证**：真实独立 PG 上指标汇总空公司与有费用公司测试 **2 passed in 0.13s**，退出 0；随后容器 Pyright **0 errors / 0 warnings**、退出 0（配置提示缺少 .venv，但已显式指定系统解释器）；Ruff 通过，333 文件格式通过。此前 852 项单元/集成结果与本轮脚本结果为分别运行，不声称同一轮全套测试。
+- **清理与边界**：确认 scope 后移除 clean312-8e2a 的三个专用容器、匿名卷及专用网络，临时环境可重建；主机开发依赖和业务服务未修改。仍未完成依赖精确锁定、远端 CI、PR 故障/回退演练及学习验收，阶段 1 未完成。
+
+## 2026-10-24 — 阶段 1：CI 依赖锁生成中（未采用）
+
+- **范围**：首先为 Linux/Python 3.12 CI 生成锁，输入为 pyproject.toml 的 dev 及运行依赖、requirements/base.txt 和构建依赖；不将 Windows 环境或 ML Worker 混入此锁，不宣称全项目依赖已经锁定。
+- **环境与命令**：专用 python:3.12-slim 容器 codex-lock312-b41e，scope=lock312-b41e；已安装 pip==26.2.2、pip-tools==7.6.2。工具拒绝在多输入时使用 --all-build-deps，故先用 `python -m piptools compile --all-build-deps --only-build-deps --allow-unsafe --strip-extras --no-emit-index-url --no-emit-trusted-host --quiet --output-file /tmp/ci-build.txt pyproject.toml` 提取构建依赖，已退出 0。
+- **进行中**：工作目录 /workspace/backend，随后运行 `python -m piptools compile --extra dev --generate-hashes --allow-unsafe --strip-extras --no-emit-index-url --no-emit-trusted-host --quiet --output-file requirements/ci-linux-py312.lock pyproject.toml requirements/base.txt /tmp/ci-build.txt`；最后检查进程仍活跃，尚无退出码或最终锁文件。此条是待续检查点，不是完成证据；后续须确认该进程实际终态，不能仅按记录重启。
+- **未采用**：宿主仓库尚未添加锁文件，也未修改 CI 安装入口；须验证生成结果、哈希安装与测试后再采用。容器暂留，阶段 1 未完成。
+
+### 同日续查：依赖锁生成等待与安装文档对齐
+
+- 已复查原 pip-compile 进程仍活跃，缓存从约 295 MB 增长至 330 MB，最终锁文件尚未出现；没有启动第二个生成进程，也没有把等待视为失败或通过。
+- CONTRIBUTING 的本地安装补上 requirements/base.txt，与 CI 的双输入安装一致；静态检查命令补上 scripts。记录已验证可启动的两步锁生成命令、独立环境要求及未采用边界。文档差异空白检查通过，实际哈希安装与锁采用仍待生成完成。
+
+## 2026-10-24 — 阶段 1：CI 依赖锁本地验证与接入
+
+- **生成终态**：原 pip-compile 进程退出 0，生成 117 个精确版本包及 SHA-256 哈希；已添加 `backend/requirements/ci-linux-py312.lock`。生成期间一次 PyPI 读取超时自动重试后成功，没有重启生成任务或手填锁内容。
+- **隔离安装**：在专用 Linux x86_64/Python 3.12.15 容器新建 `/opt/ci-verify` 虚拟环境；`pip install --require-hashes -r requirements/ci-linux-py312.lock` 退出 0。随后 `pip install --no-index --no-build-isolation -r requirements/base.txt -e '.[dev]'` 与 `pip check` 均退出 0；验证项目及原依赖声明可在锁定实装集合上离线满足，不继承生成器环境。
+- **回归**：专用网络内 PostgreSQL/pgvector 与 Redis，应用账号执行 `pytest tests/unit tests/scripts tests/integration -m 'not e2e and not slow' -k 'not business_gold' -q --tb=short`，**882 passed, 4 skipped, 9 deselected in 32.97s**，退出 0。未读取或使用冻结 Gold 调参；跳过、排除不算通过。
+- **静态检查**：锁定环境 Ruff 检查通过、333 文件格式通过；Pyright 显式指定该虚拟环境，**0 errors / 0 warnings / 0 informations**，退出 0。系统 Node 20.19.2 和 PowerShell 7.6.8 仅用于验证所需工具，不属于 Python 锁内容。
+- **接入**：CI 的 static/backend 两处安装均切换为哈希安装、离线项目安装、pip check；更新 CONTRIBUTING 与工程基础设计，不修改原计划。修改后 actionlint 退出 0，git diff --check 退出 0（有现有 LF/CRLF 提示）。远端工作流仍未执行，不能将本地结果称为 GitHub CI 全绿。
+- **清理与边界**：确认 scope=lock312-b41e 后删除三个专用容器、匿名卷与专用网络；生成器缓存与临时测试数据已清理，可重新生成，仓库锁文件保留。本锁不涵盖 ML Worker、Windows 或系统镜像；迁移回滚、PR 故障演练、分支保护及用户独立操作仍未验收，阶段 1 未完成。
+
+## 2026-10-24 — 阶段 1：最新迁移往返与不兼容数据故障演练
+
+- **隔离环境**：新建 `codex-migration-pg-7c2a`（scope=migration-7c2a），pgvector 0.8.0 / PG16，仅映射随机本机端口 61133。复用 bootstrap SQL，显式指定 agent_platform_test 与迁移角色 agent_migrator；本机 Python 3.13 执行 Alembic，不连接开发数据库。未改迁移实现。
+- **空库路径**：`alembic upgrade head` 从空库升级至 x1a2b3c4d5e6，退出 0；`alembic downgrade -1` 回到 w0a1b2c3d4e5、再 upgrade head，分别退出 0。
+- **故障注入**：以迁移角色加入独立合成用户/会话/消息（ID 900001），消息状态 awaiting_review。随后 downgrade -1 退出 **1**，明确报 ck_conversation_messages_status_values CheckViolation。SQL 复核版本仍为 x1a2b3c4d5e6、原检查约束仍允许 awaiting_review、该消息正文及状态完整；证明本场景事务回滚，没有半迁移或丢失该测试记录。
+- **兼容数据路径**：仅将专用库里的合成消息置为 completed，作为另一个测试前提，不是业务修复建议。downgrade -1 与 upgrade head 再次均退出 0；复核版本与合成消息 ID、正文、completed 状态保持。CONTRIBUTING 补充停止写入、备份、检查不兼容状态与禁止伪造完成状态的操作边界。
+- **未证明范围**：仅验证最新一跳；没有证明全链 downgrade、真实业务数据回退、备份恢复、Python 3.12 下该演练或远端 CI。已有待审核消息时不能直接回退，不能报告“迁移可无条件回滚”。阶段 1 仍未验收。
+- **清理**：复核 scope 后移除该专用容器及匿名卷，合成数据已删除，可按上述步骤重建；开发服务未改动。文档 `git diff --check` 退出 0。
+
+## 2026-10-24 — 阶段 1：真实 Git 提交钩子拦截演练
+
+- **隔离**：在系统临时目录新建独立 Git 仓库，复制当前 `.pre-commit-config.yaml` 与 `backend/pyproject.toml`；以本地 Python 3.13 / pre-commit 4.7.0、PYTHONUTF8=1 安装钩子。仅临时仓库设置合成 Git 身份；主项目索引、HEAD 和远端未修改。
+- **故障一**：`backend/app/hook_probe.py` 含未使用的 `import os`，实际 `git commit` 退出 1，ruff-check 报 F401，format 通过。之后核对尚无 HEAD，文件仍含原导入，钩子未自动修复。
+- **故障二**：将样例改为 `RESULT=1`，实际 commit 退出 1，ruff-check 通过，ruff-format 退出 1；`git diff --exit-code` 为 0（工作区与暂存内容一致），`git rev-parse --verify HEAD` 退出 1，仍没有生成提交，也未自动改写文件。
+- **恢复**：样例改为 `RESULT = 1` 并重新暂存；commit 退出 0，两项 hook 通过，临时仓库生成唯一提交 62845d0，工作区干净。没有使用跳过 hook 的参数或环境变量。
+- **项目复验**：当前主项目 `python -m pre_commit run --all-files` 两项通过，退出 0；此命令按 Git 已跟踪文件枚举，不能据此宣称未跟踪的新文件已全部覆盖。未跟踪 Python 文件仍需显式 Ruff 目录检查或加入索引后的 hook 验证。
+- **边界**：这是本地 Git hook 的红/绿演练，不是 GitHub PR 测试失败、必需检查或分支保护证据，也不证明用户已经独立掌握操作。阶段 1 仍未验收。
+- **补充检查与清理状态**：显式 Ruff 检查 app/tests/scripts 退出 0，格式检查 333 文件通过，覆盖目录内的新 Python 文件；git diff --check 退出 0。临时仓库删除请求被执行策略拒绝，未绕过，目录保留于 `C:\Users\qyf21\AppData\Local\Temp\codex-hook-drill-4a577025003149c1a82f5ce9a5a0a44a`，仅含复制配置、合成样例和演练 Git 历史。
+
+## 2026-10-24 — 阶段 1：测试分层与标记校验
+
+- **发现与调整**：LocalStack 测试模块已有显式环境开关，但缺少 e2e 标记；补充模块标记并保留原开关，未改变附件功能或开放入口。pytest 配置启用 --strict-markers，e2e 描述扩展为 Worker 或对象存储外部依赖。
+- **选测验证**：Python 3.13 执行 `pytest tests/unit tests/scripts tests/integration --collect-only -q -m 'not e2e and not slow' -k 'not business_gold'`，**884/895 collected、11 deselected**，退出 0。这是收集结果，不是 884 项测试通过；较先前额外排除的是两项 LocalStack 测试，未减少普通集成断言。
+- **边界验证**：即使设置 RUN_LOCAL_OBJECT_STORAGE_E2E=1，该模块在 `-m 'not e2e' --collect-only` 下仍为 2 deselected、退出 5（没有选中测试）；`-m e2e --collect-only` 恰好收集两项，退出 0，没有运行真实对象存储测试。
+- **错误标记演练**：临时文件使用拼错的 pytest.mark.e2ee，指定项目配置收集时明确报未注册 marker，退出 1；临时探针随后删除。修改的测试模块 Ruff/格式检查通过。CONTRIBUTING 说明各层命令、环境开关、跳过边界及本地 Gold 排除与 CI 的差异。
+- **未证明**：本轮未重跑行为测试、Python 3.12 或远端 CI；未读取 Gold JSON 内容，不将结构检查视为密封留出证据。阶段 1 未验收。
+
+## 2026-10-24 — 阶段 1：远端发布前只读核对
+
+- **GitHub 当前状态**：gh repo view 返回仓库 LeamrJohn/enterprise-insight-assistant 为公开仓库，默认分支 feature/api-contracts，当前账户 ADMIN。分支 API 返回远端 SHA a0d8578a94fc0d0c7759b018c23a5d530f83a391、protected=false；rulesets 数量为 0；开放 PR 列表为空。
+- **运行证据**：最近运行列表仅返回 Dependency Graph 成功记录（run 30270658091，SHA c46071d7b85cb2ca4e5ff0bcdac317921cd4c935），不是本次 CI 配置的验证证据。
+- **本地差异**：当前分支同为 feature/api-contracts，HEAD f00ea13a，暂存区为空。远端 SHA 是本地 HEAD 的祖先；本地已有 140007c1、5014131c、f00ea13a 三个尚未进入该远端分支的提交，另有本轮未提交改动。因此发布当前分支并非仅上传新增 CI 文件。
+- **发布边界**：未提交、推送、创建 PR 或修改分支保护。须先由用户确认是否允许将既有三个提交及本轮经审查的工程基础改动发布到公开仓库的新分支；原有计划/evidence 修改须单独核对，不能夹带发布。实际 PR CI、故障演练、审查与学习验收仍待完成，不进入下一阶段冒充阶段 1 已完成。
+
+## 2026-10-24 — 阶段 1：授权发布前复验与分批提交
+
+- **授权与范围**：用户明确允许推送到公开仓库的新分支并创建草稿 PR，不合并。新建 codex/engineering-foundation-ci，保留此前三个重构相关提交；本轮按核心配置、分析/Runtime、Workflow、API/权限/观测、证据模块、冻结附件契约、脚本、CI/文档共八组提交。原有计划差异仅修正历史快照表述，未更改计划范围，随文档组纳入。
+- **敏感内容检查**：Gitleaks v8.30.0 对 a0d8578a..HEAD 的三个历史提交扫描约 2.16 MB，退出 0；对当前工作区差异与全部未跟踪文件内容扫描约 664 KB，退出 0，均未命中。检查输出使用 redact；未将真实 .env、数据库转储或私钥纳入发布。模式扫描不能证明绝对无敏感信息。
+- **最新回归**：独立 PG/pgvector 与 Redis（scope=pr-62c1），Python 3.13 执行 `pytest tests/unit tests/scripts tests/integration -m 'not e2e and not slow' -k 'not business_gold' -q --tb=short`，**882 passed, 2 skipped, 11 deselected in 45.25s**，退出 0。与先前差异为两项 LocalStack 场景从 skip 改为 e2e 排除，不是删除断言。
+- **静态与提交**：Ruff 通过、333 文件格式通过、Pyright 0 errors/0 warnings、actionlint 退出 0；各代码组真实提交 hook 通过。完整回归针对分组前的组合工作树，不声称每个中间提交都独立跑过全套测试或远端 CI。
+- **仍待验收**：草稿 PR 上的 CI、故意失败与恢复、必需检查、审查及用户独立操作。本记录不宣称阶段 1 完成，不授权合并或修改分支保护。

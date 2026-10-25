@@ -1,0 +1,159 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  static:
+    name: Static (${{ matrix.check }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        check: [ruff, ruff-format, pyright]
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+      - name: Install backend and development dependencies
+        run: |
+          python -m pip install --require-hashes -r backend/requirements/ci-linux-py312.lock
+          python -m pip install --no-index --no-build-isolation -r backend/requirements/base.txt -e './backend[dev]'
+          python -m pip check
+      - name: Record installed versions
+        run: python -m pip list --format=freeze
+      - name: Ruff
+        if: matrix.check == 'ruff'
+        working-directory: backend
+        run: python -m ruff check app tests scripts
+      - name: Pyright
+        if: matrix.check == 'pyright'
+        run: python -m pyright --pythonpath "$(command -v python)" --project pyrightconfig.json
+      - name: Ruff formatting
+        if: matrix.check == 'ruff-format'
+        working-directory: backend
+        run: python -m ruff format --check app tests scripts
+
+  backend:
+    name: Backend (${{ matrix.suite }})
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - suite: unit
+            paths: tests/unit tests/scripts
+          - suite: integration
+            paths: tests/integration
+    env:
+      APP_ENV: test
+      DATABASE_HOST: 127.0.0.1
+      DATABASE_PORT: '5432'
+      DATABASE_NAME: agent_platform_test
+      DATABASE_USER: agent_app
+      DATABASE_PASSWORD: changeme_in_production
+      MIGRATION_DATABASE_USER: agent_migrator
+      BUSINESS_DATABASE_PASSWORD: ci-unused-business-password
+      REDIS_URL: redis://127.0.0.1:6379/0
+      PYTHONUTF8: '1'
+    services:
+      postgres:
+        image: pgvector/pgvector:0.8.0-pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: changeme_in_production
+          POSTGRES_DB: agent_platform
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d agent_platform"
+          --health-interval 5s --health-timeout 3s --health-retries 12
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 3s --health-retries 12
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+      - name: Install backend and development dependencies
+        run: |
+          python -m pip install --require-hashes -r backend/requirements/ci-linux-py312.lock
+          python -m pip install --no-index --no-build-isolation -r backend/requirements/base.txt -e './backend[dev]'
+          python -m pip check
+      - name: Record installed versions
+        run: python -m pip list --format=freeze
+      - name: Bootstrap isolated PostgreSQL roles and databases
+        env:
+          POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
+        run: docker exec -i "$POSTGRES_CONTAINER" psql -U postgres -d agent_platform -v ON_ERROR_STOP=1 < backend/scripts/db/bootstrap_postgres.sql
+      - name: Apply migrations as migration role
+        working-directory: backend
+        run: python -m alembic upgrade head
+      - name: Run ${{ matrix.suite }} tests as application role
+        id: tests
+        working-directory: backend
+        env:
+          TEST_PATHS: ${{ matrix.paths }}
+        run: |
+          read -r -a test_paths <<< "$TEST_PATHS"
+          python -m pytest "${test_paths[@]}" -m 'not e2e and not slow' -q --junitxml=test-results/results.xml
+      - name: Preserve test results
+        if: ${{ !cancelled() && steps.tests.outcome != 'skipped' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: backend-${{ matrix.suite }}-${{ github.run_attempt }}
+          path: backend/test-results/results.xml
+          if-no-files-found: error
+          retention-days: 14
+
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '22'
+      - name: Install locked frontend dependencies
+        run: npm ci
+      - name: Test
+        run: npm test
+      - name: Type-check and build
+        run: npm run build
+
+  compose:
+    name: Compose configuration
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - run: docker compose config --quiet
