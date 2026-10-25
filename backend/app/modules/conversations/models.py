@@ -4,10 +4,9 @@ from __future__ import annotations
 
 from datetime import datetime
 
+from app.db.base import Base
 from sqlalchemy import CheckConstraint, DateTime, ForeignKey, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
-
-from app.db.base import Base
 
 
 class Conversation(Base):

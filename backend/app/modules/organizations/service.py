@@ -3,38 +3,37 @@
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
-from sqlalchemy import select
-from sqlalchemy.orm import Session
-
 from app.core.security import (
     generate_api_key,
     hash_api_key,
     hash_password,
     verify_password,
 )
+from app.modules.analysis.catalog.schema_discovery import discover_postgres_schema
+from app.modules.identity.models import User
 from app.modules.organizations.models import (
     BusinessDataSource,
     Company,
-    CompanyMember,
     CompanyInvitation,
+    CompanyMember,
     MembershipApplication,
     SchemaSnapshot,
 )
-from app.modules.identity.models import User
 from app.modules.organizations.repository import (
     get_application_for_company,
     get_application_for_user,
+    get_applications_for_company,
     get_data_source,
     get_invitation_by_hash,
     get_invitation_for_company,
     get_invitations_for_company,
-    get_applications_for_company,
     get_latest_snapshot,
     get_members_for_company,
     get_membership,
     get_snapshot,
 )
-from app.modules.analysis.catalog.schema_discovery import discover_postgres_schema
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 
 @dataclass(frozen=True)

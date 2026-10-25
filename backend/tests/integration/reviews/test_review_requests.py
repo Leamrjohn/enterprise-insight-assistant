@@ -1,5 +1,5 @@
-from app.modules.workflow.models import AnalysisTask
 from app.modules.reviews.models import ReviewRequest
+from app.modules.workflow.models import AnalysisTask
 
 
 def _reviewable_report() -> dict:

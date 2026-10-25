@@ -1,22 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
-
+from app.core.security import hash_password, verify_password
+from app.db.session import get_db
 from app.modules.identity.authentication import (
     create_access_token,
     get_authenticated_account,
     get_current_user,
 )
-from app.modules.organizations.access import CurrentCompanyContext, get_current_company_context
-from app.core.security import hash_password, verify_password
-from app.db.session import get_db
 from app.modules.identity.models import User
-from app.modules.organizations.schemas import (
-    MembershipApplicationOut,
-    MembershipApplicationReapply,
-    MembershipApplicationRegister,
-    MembershipApplicationRegistered,
-)
 from app.modules.identity.schemas import (
     AccessTokenOut,
     CurrentUserOut,
@@ -26,11 +15,24 @@ from app.modules.identity.schemas import (
     OwnerBootstrapRequest,
     PasswordChangeRequest,
 )
+from app.modules.organizations.access import (
+    CurrentCompanyContext,
+    get_current_company_context,
+)
+from app.modules.organizations.schemas import (
+    MembershipApplicationOut,
+    MembershipApplicationReapply,
+    MembershipApplicationRegister,
+    MembershipApplicationRegistered,
+)
 from app.modules.organizations.service import (
     bootstrap_first_company_owner,
-    register_membership_application,
     reapply_to_same_company,
+    register_membership_application,
 )
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 

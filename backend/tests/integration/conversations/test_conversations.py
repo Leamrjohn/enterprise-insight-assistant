@@ -22,10 +22,10 @@ from app.modules.organizations.models import (
     CompanyMember,
     SchemaSnapshot,
 )
-from app.modules.workflow.models import AnalysisTask
 from app.modules.workflow.delivery.outbox_models import AnalysisTaskOutboxEvent
-from app.modules.workflow.repository import create_task
 from app.modules.workflow.lifecycle import capacity
+from app.modules.workflow.models import AnalysisTask
+from app.modules.workflow.repository import create_task
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 

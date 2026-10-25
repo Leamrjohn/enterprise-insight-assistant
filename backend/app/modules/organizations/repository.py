@@ -1,14 +1,13 @@
-from sqlalchemy import select
-from sqlalchemy.orm import Session
-
 from app.modules.organizations.models import (
-    Company,
     BusinessDataSource,
-    CompanyMember,
+    Company,
     CompanyInvitation,
+    CompanyMember,
     MembershipApplication,
     SchemaSnapshot,
 )
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 
 def get_company(db: Session, *, company_id: int) -> Company | None:

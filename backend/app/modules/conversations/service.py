@@ -23,8 +23,8 @@ from app.modules.organizations.repository import (
     get_data_source,
     get_snapshot,
 )
-from app.modules.workflow.models import AnalysisTask
 from app.modules.workflow.delivery.outbox import create_analysis_task_event
+from app.modules.workflow.models import AnalysisTask
 from app.modules.workflow.repository import (
     cancel_task,
     create_task,
@@ -332,7 +332,9 @@ def retry_conversation_task_service(
     artifact_version_ids = _resolve_ready_owned_artifact_version_ids(
         db,
         context=context,
-        artifact_version_ids=get_task_input_artifact_version_ids(db, task_id=original.id),
+        artifact_version_ids=get_task_input_artifact_version_ids(
+            db, task_id=original.id
+        ),
     )
     try:
         task = create_task(
@@ -503,9 +505,11 @@ def build_conversation_context(
         remaining_chars = max_chars - used_chars
         remaining_tokens = max_tokens - used_tokens
 
-        if len(content) <= remaining_chars and (
-            content_tokens := estimate_conversation_tokens(content)
-        ) <= remaining_tokens:
+        if (
+            len(content) <= remaining_chars
+            and (content_tokens := estimate_conversation_tokens(content))
+            <= remaining_tokens
+        ):
             selected_messages.append(
                 {
                     "id": message.id,
@@ -521,7 +525,9 @@ def build_conversation_context(
                     "selected_chars": len(content),
                     "selected_tokens": content_tokens,
                     "decision": "truncated" if truncated else "selected",
-                    "reason": "per_message_char_limit" if truncated else "within_budget",
+                    "reason": "per_message_char_limit"
+                    if truncated
+                    else "within_budget",
                 }
             )
             used_chars += len(content)

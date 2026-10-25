@@ -1,12 +1,11 @@
 """Company onboarding and current-company management integration tests."""
 
-from fastapi.testclient import TestClient
-
-from app.modules.identity.authentication import get_current_user
 from app.core.security import hash_password
 from app.main import app
-from app.modules.organizations.models import BusinessDataSource, CompanyMember
+from app.modules.identity.authentication import get_current_user
 from app.modules.identity.models import User
+from app.modules.organizations.models import BusinessDataSource, CompanyMember
+from fastapi.testclient import TestClient
 
 
 def _bootstrap_company(client: TestClient, name: str) -> int:

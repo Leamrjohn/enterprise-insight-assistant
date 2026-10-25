@@ -4,6 +4,19 @@ from app.modules.workflow.audit.model_call import ModelCallRecord
 from app.modules.workflow.models import AnalysisTask
 
 
+def test_company_task_metrics_coalesces_an_empty_scope(db_session) -> None:
+    company = Company(name="empty-metrics-company")
+    db_session.add(company)
+    db_session.flush()
+
+    metrics = get_company_task_metrics(db_session, company_id=company.id)
+
+    assert metrics.total_tasks == 0
+    assert metrics.model_calls == 0
+    assert metrics.model_tokens == 0
+    assert metrics.model_cost == "0"
+
+
 def test_company_task_metrics_are_scoped_and_aggregate_persisted_values(
     db_session, test_user
 ) -> None:

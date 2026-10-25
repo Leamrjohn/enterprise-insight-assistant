@@ -1,13 +1,11 @@
 """Company-admin operational telemetry API."""
 
-from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
-
-from app.modules.organizations.access import CurrentCompanyContext, require_admin
 from app.db.session import get_db
 from app.modules.observability.schemas import TaskMetricsOut
 from app.modules.observability.service import get_company_task_metrics
-
+from app.modules.organizations.access import CurrentCompanyContext, require_admin
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
 
 router = APIRouter()
 

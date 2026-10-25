@@ -1,6 +1,30 @@
-from app.core.settings import Settings
+import pytest
 from app.core.exceptions import TaskCapacitySignalUnavailableError
+from app.core.settings import Settings
 from app.modules.observability import repository
+
+
+@pytest.mark.parametrize(
+    "missing_field",
+    ["endpoint_url", "bucket", "access_key_id", "secret_access_key"],
+)
+def test_object_storage_health_does_not_connect_with_incomplete_config(
+    monkeypatch, missing_field
+) -> None:
+    settings = Settings(
+        input_artifact_object_storage_endpoint_url="https://storage.invalid",
+        input_artifact_object_storage_bucket="health-test",
+        input_artifact_object_storage_access_key_id="test-key",
+        input_artifact_object_storage_secret_access_key="test-secret",
+    ).model_copy(update={f"input_artifact_object_storage_{missing_field}": None})
+
+    def unexpected_client(*args, **kwargs):
+        pytest.fail("Incomplete configuration must not create a storage client")
+
+    monkeypatch.setattr(repository, "get_settings", lambda: settings)
+    monkeypatch.setattr("boto3.client", unexpected_client)
+
+    assert repository.check_object_storage() == "not_configured"
 
 
 def test_object_storage_health_uses_bounded_configured_timeout(monkeypatch) -> None:

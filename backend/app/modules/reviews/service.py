@@ -7,9 +7,9 @@ from app.modules.conversations.repository import get_assistant_message_by_task_i
 from app.modules.identity.models import User
 from app.modules.reporting.schemas import FinalAnalysisReport
 from app.modules.reviews.models import ReviewRequest
-from app.modules.workflow.models import AnalysisTask
 from app.modules.workflow.delivery.outbox import create_analysis_task_event
 from app.modules.workflow.lifecycle.task_state import require_task_transition
+from app.modules.workflow.models import AnalysisTask
 from sqlalchemy.orm import Session
 
 HIGH_RISK_REASON = "causal_hypothesis_requires_human_review"

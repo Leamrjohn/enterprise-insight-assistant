@@ -1,13 +1,12 @@
 from datetime import datetime, timezone
 
 import pytest
-from pydantic import ValidationError
-
 from app.modules.conversations.schemas import (
     ConversationCreate,
     ConversationMessageCreate,
     ConversationMessageOut,
 )
+from pydantic import ValidationError
 
 
 def test_conversation_title_cannot_be_blank_when_provided() -> None:

@@ -1,9 +1,8 @@
 """Database operations for conversations and their display messages."""
 
+from app.modules.conversations.models import Conversation, ConversationMessage
 from sqlalchemy import func
 from sqlalchemy.orm import Session
-
-from app.modules.conversations.models import Conversation, ConversationMessage
 
 
 def create_conversation(

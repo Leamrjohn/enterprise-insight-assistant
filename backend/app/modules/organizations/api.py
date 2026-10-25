@@ -1,9 +1,8 @@
 """Current-company management API.  Clients never select a company id."""
 
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
-
+from app.db.session import get_db
 from app.modules.identity.authentication import get_current_user
+from app.modules.identity.models import User
 from app.modules.organizations.access import (
     CurrentCompanyContext,
     get_current_company_context,
@@ -11,14 +10,12 @@ from app.modules.organizations.access import (
     require_analysis_permission,
     require_owner,
 )
-from app.db.session import get_db
 from app.modules.organizations.models import BusinessDataSource, CompanyMember
-from app.modules.identity.models import User
 from app.modules.organizations.repository import get_data_source, get_snapshots
 from app.modules.organizations.schemas import (
+    AssistantDataSourceOut,
     BusinessDataSourceCreate,
     BusinessDataSourceOut,
-    AssistantDataSourceOut,
     CompanyCreate,
     CompanyInvitationCreate,
     CompanyInvitationCreated,
@@ -40,12 +37,14 @@ from app.modules.organizations.service import (
     discover_data_source_schema,
     get_current_schema_snapshot,
     list_company_invitations,
-    list_membership_applications,
     list_company_members,
+    list_membership_applications,
     reject_membership_application,
     reset_company_member_password,
     revoke_company_invitation,
 )
+from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy.orm import Session
 
 router = APIRouter()
 

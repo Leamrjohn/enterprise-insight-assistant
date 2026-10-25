@@ -3,12 +3,11 @@
 from decimal import Decimal
 from math import ceil
 
+from app.modules.observability.schemas import TaskMetricsOut
+from app.modules.workflow.audit.model_call import ModelCallRecord
+from app.modules.workflow.models import AnalysisTask
 from sqlalchemy import func
 from sqlalchemy.orm import Session
-
-from app.modules.workflow.models import AnalysisTask
-from app.modules.workflow.audit.model_call import ModelCallRecord
-from app.modules.observability.schemas import TaskMetricsOut
 
 
 def _percentile(values: list[int], percentile: float) -> int | None:
@@ -68,6 +67,7 @@ def get_company_task_metrics(db: Session, *, company_id: int) -> TaskMetricsOut:
         .filter(AnalysisTask.company_id == company_id)
         .one()
     )
+    assert cost is not None  # SQL COALESCE guarantees a value even for an empty scope.
     knowledge_statuses = [
         _nested_status(task.result_data, "knowledge_result") for task in tasks
     ]

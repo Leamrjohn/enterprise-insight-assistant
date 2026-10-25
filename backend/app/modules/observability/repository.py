@@ -29,15 +29,12 @@ def check_redis() -> bool:
 
 def check_object_storage() -> str:
     settings = get_settings()
-    configured = all(
-        (
-            settings.input_artifact_object_storage_endpoint_url,
-            settings.input_artifact_object_storage_bucket,
-            settings.input_artifact_object_storage_access_key_id,
-            settings.input_artifact_object_storage_secret_access_key,
-        )
-    )
-    if not configured:
+    if (
+        not settings.input_artifact_object_storage_endpoint_url
+        or not settings.input_artifact_object_storage_bucket
+        or not settings.input_artifact_object_storage_access_key_id
+        or not settings.input_artifact_object_storage_secret_access_key
+    ):
         return "not_configured"
     try:
         import boto3

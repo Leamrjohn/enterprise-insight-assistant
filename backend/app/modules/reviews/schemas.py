@@ -3,10 +3,8 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
-
 from app.modules.reporting.schemas import FinalAnalysisReport
-
+from pydantic import BaseModel, Field
 
 ReviewStatus = Literal["pending", "approved", "rejected"]
 TaskStatus = Literal[

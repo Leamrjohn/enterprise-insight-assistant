@@ -1,8 +1,8 @@
 from uuid import uuid4
-from sqlalchemy.orm import Session
 
 from app.core.security import hash_api_key
 from app.modules.identity.models import User
+from sqlalchemy.orm import Session
 
 
 def test_create_user(db_session: Session) -> None:

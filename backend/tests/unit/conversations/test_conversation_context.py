@@ -40,9 +40,7 @@ def test_context_snapshot_records_selected_message_sources_and_budget() -> None:
         101,
         102,
     ]
-    assert {fragment["decision"] for fragment in manifest["fragments"]} == {
-        "selected"
-    }
+    assert {fragment["decision"] for fragment in manifest["fragments"]} == {"selected"}
 
 
 def test_context_snapshot_marks_omitted_history_in_its_manifest() -> None:

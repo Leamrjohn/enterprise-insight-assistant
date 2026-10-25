@@ -1,13 +1,12 @@
 from datetime import datetime, timedelta, timezone
 
 import jwt
-from fastapi import HTTPException, Depends, Header
-from sqlalchemy.orm import Session
-
+from app.core.security import hash_api_key
 from app.core.settings import get_settings
 from app.db.session import get_db
 from app.modules.identity.models import User
-from app.core.security import hash_api_key
+from fastapi import Depends, Header, HTTPException
+from sqlalchemy.orm import Session
 
 
 def create_access_token(*, user: User) -> tuple[str, int]:

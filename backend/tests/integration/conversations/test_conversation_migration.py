@@ -1,6 +1,5 @@
-from sqlalchemy import inspect
-
 from app.db.session import engine
+from sqlalchemy import inspect
 
 
 def test_conversation_migration_shape(migrated_test_database: None) -> None:
