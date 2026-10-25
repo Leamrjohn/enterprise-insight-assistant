@@ -115,6 +115,9 @@ jobs:
         working-directory: backend
         env:
           TEST_PATHS: ${{ matrix.paths }}
+          # Temporary fault drill: only pytest uses the wrong database port.
+          DATABASE_PORT: '1'
+          PGCONNECT_TIMEOUT: '3'
         run: |
           read -r -a test_paths <<< "$TEST_PATHS"
           python -m pytest "${test_paths[@]}" -m 'not e2e and not slow' -q --junitxml=test-results/results.xml
