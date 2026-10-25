@@ -1,6 +1,7 @@
 """Privacy-safe audit metadata for one governed model invocation."""
 
 from datetime import datetime
+from decimal import Decimal
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
@@ -48,10 +49,10 @@ class ModelCallRecord(Base):
     reserved_completion_tokens: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0
     )
-    reserved_cost: Mapped[float | None] = mapped_column(Numeric(12, 6))
+    reserved_cost: Mapped[Decimal | None] = mapped_column(Numeric(12, 6))
     prompt_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     completion_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
-    cost: Mapped[float | None] = mapped_column(Numeric(12, 6))
+    cost: Mapped[Decimal | None] = mapped_column(Numeric(12, 6))
     duration_ms: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     resource_usage: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     result_category: Mapped[str] = mapped_column(String(32), nullable=False)

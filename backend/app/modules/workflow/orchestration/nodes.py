@@ -9,22 +9,25 @@ from app.core.exceptions import (
 )
 from app.core.settings import get_settings
 from app.modules.analysis.agent_protocol import AgentInput
+from app.modules.analysis.catalog.snapshot_catalog import SnapshotCatalog
 from app.modules.analysis.data.data_agent import DataAgent
-from app.modules.analysis.metrics.facts import build_confirmed_facts, build_data_evidence
+from app.modules.analysis.data.sql_tool import SQLTool
+from app.modules.analysis.metrics.facts import (
+    build_confirmed_facts,
+    build_data_evidence,
+)
 from app.modules.analysis.planner.planner_agent import PlannerAgent
 from app.modules.analysis.planner.planner_decision import (
     enforce_explicit_document_evidence_contract,
 )
-from app.modules.analysis.catalog.snapshot_catalog import SnapshotCatalog
-from app.modules.analysis.data.sql_tool import SQLTool
 from app.modules.knowledge.agent import KnowledgeAgent
 from app.modules.knowledge.tool import RAGTool
 from app.modules.reporting.citation_validation import validate_citations
 from app.modules.reporting.reviewer_agent import ReviewerAgent
 from app.modules.reporting.semantic_review_service import SemanticReviewService
 from app.modules.runtime.model_governance import model_node_scope
-from app.modules.workflow.orchestration.node_outcome import NodeOutcome
 from app.modules.workflow.lifecycle.recovery import recovery_decision_for_node
+from app.modules.workflow.orchestration.node_outcome import NodeOutcome
 from app.modules.workflow.orchestration.router import (
     MAX_EXTERNAL_RETRIES,
     build_feedback,

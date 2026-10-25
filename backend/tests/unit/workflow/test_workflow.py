@@ -122,6 +122,11 @@ def test_planner_terminal_renders_structured_clarification_instead_of_free_text(
 
 def test_run_analysis_uses_planner_node_for_terminal_plan(monkeypatch) -> None:
     """验证编译后的全局图不是绕过 Planner 的测试替身。"""
+    stages: list[tuple[str, str]] = []
+
+    def record_stage(stage: str, node_name: str) -> None:
+        stages.append((stage, node_name))
+
     context = {
         "version": "1.0",
         "messages": [{"id": 101, "role": "user", "content": "分析华东区销售额"}],
@@ -152,8 +157,10 @@ def test_run_analysis_uses_planner_node_for_terminal_plan(monkeypatch) -> None:
         user_id=7,
         conversation_context=context,
         semantic_review_enabled=False,
+        stage_callback=record_stage,
     )
 
+    assert stages == [("planning", "planner_node")]
     assert result["plan"]["action"] == "scope_exit"
     assert result["planner_result"] == {
         "status": "ready",

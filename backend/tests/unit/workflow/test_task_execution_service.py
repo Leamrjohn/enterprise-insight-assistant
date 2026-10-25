@@ -2,8 +2,9 @@ from datetime import datetime, timedelta, timezone
 
 import app.modules.workflow.lifecycle.execution as execution_module
 from app.db.clock import database_now
-from app.modules.workflow.lifecycle.checkpoint import WorkflowCheckpoint
 from app.modules.workflow.audit.events_models import WorkflowEvent
+from app.modules.workflow.audit.model_call import ModelCallRecord
+from app.modules.workflow.lifecycle.checkpoint import WorkflowCheckpoint
 from app.modules.workflow.lifecycle.execution import (
     checkpoint_workflow_state,
     claim_execution,
@@ -14,7 +15,6 @@ from app.modules.workflow.lifecycle.execution import (
     transition_execution,
 )
 from app.modules.workflow.lifecycle.execution_attempt import TaskExecutionAttempt
-from app.modules.workflow.audit.model_call import ModelCallRecord
 from app.modules.workflow.models import AnalysisTask
 from app.modules.workflow.repository import cancel_task
 from sqlalchemy import func, select
@@ -57,7 +57,9 @@ def test_duplicate_claim_creates_one_attempt(db_session, test_user) -> None:
     assert rejection.details == {"operation": "claim_execution"}
 
 
-def test_claim_uses_database_time_for_the_lease(db_session, test_user, monkeypatch) -> None:
+def test_claim_uses_database_time_for_the_lease(
+    db_session, test_user, monkeypatch
+) -> None:
     database_time = datetime(2040, 1, 1, tzinfo=timezone.utc)
     monkeypatch.setattr(execution_module, "database_now", lambda _db: database_time)
     task = _task(db_session, test_user.id)
@@ -242,9 +244,7 @@ def test_resume_rejects_checkpoint_when_frozen_task_contract_changes(
     assert event.details == {"reason": "checkpoint_input_contract_changed"}
 
 
-def test_resume_rejects_unsupported_checkpoint_schema(
-    db_session, test_user
-) -> None:
+def test_resume_rejects_unsupported_checkpoint_schema(db_session, test_user) -> None:
     task = _task(db_session, test_user.id)
     old = claim_execution(
         db_session, task_id=task.id, celery_task_id="old", worker_id="w1"
@@ -321,7 +321,9 @@ def test_cancellation_revokes_active_execution_and_stops_expiry_recovery(
         db_session, task_id=task.id, celery_task_id="one", worker_id="w1"
     )
     assert execution is not None
-    execution.attempt.lease_expires_at = datetime.now(timezone.utc) - timedelta(seconds=1)
+    execution.attempt.lease_expires_at = datetime.now(timezone.utc) - timedelta(
+        seconds=1
+    )
     cancel_task(db_session, task)
     db_session.commit()
 
@@ -543,7 +545,10 @@ def test_retryable_sql_failure_restarts_data_and_keeps_planner_state(
         next_node="knowledge_node",
         workflow_state={
             "plan": plan,
-            "data_result": {"status": "failed", "error_code": "business_db_execution_failed"},
+            "data_result": {
+                "status": "failed",
+                "error_code": "business_db_execution_failed",
+            },
             "data_outcome": {"status": "retryable_error"},
         },
     )
@@ -594,7 +599,10 @@ def test_retryable_rag_failure_restarts_knowledge_and_keeps_data_state(
         stage="querying_data",
         completed_node="data_node",
         next_node="knowledge_node",
-        workflow_state={"plan": {"action": "analyze", "route": "hybrid"}, "data_result": data_result},
+        workflow_state={
+            "plan": {"action": "analyze", "route": "hybrid"},
+            "data_result": data_result,
+        },
     )
     assert checkpoint_workflow_state(
         db_session,
@@ -602,7 +610,12 @@ def test_retryable_rag_failure_restarts_knowledge_and_keeps_data_state(
         stage="retrieving_knowledge",
         completed_node="knowledge_node",
         next_node="reviewer_node",
-        workflow_state={"knowledge_result": {"status": "failed", "error_code": "knowledge_retrieval_failed"}},
+        workflow_state={
+            "knowledge_result": {
+                "status": "failed",
+                "error_code": "knowledge_retrieval_failed",
+            }
+        },
     )
     assert transition_execution(
         db_session,
@@ -626,7 +639,10 @@ def test_retryable_rag_failure_restarts_knowledge_and_keeps_data_state(
     assert replacement.resume_next_node == "knowledge_node"
     assert replacement.resume_state["data_result"] == data_result
     assert replacement.resume_state["retry_context"]["failed_node"] == "knowledge_node"
-    assert replacement.resume_state["retry_context"]["error_code"] == "knowledge_retrieval_failed"
+    assert (
+        replacement.resume_state["retry_context"]["error_code"]
+        == "knowledge_retrieval_failed"
+    )
 
 
 def test_retryable_reviewer_failure_restarts_reviewer_and_keeps_evidence(
@@ -656,7 +672,10 @@ def test_retryable_reviewer_failure_restarts_reviewer_and_keeps_evidence(
         stage="composing_report",
         completed_node="reviewer_node",
         next_node="smart_router_node",
-        workflow_state={"reviewer_outcome": {"status": "retryable_error"}, "error": "rate limit"},
+        workflow_state={
+            "reviewer_outcome": {"status": "retryable_error"},
+            "error": "rate limit",
+        },
     )
     assert transition_execution(
         db_session,
@@ -679,7 +698,10 @@ def test_retryable_reviewer_failure_restarts_reviewer_and_keeps_evidence(
     assert replacement is not None
     assert replacement.resume_next_node == "reviewer_node"
     assert replacement.resume_state["data_result"] == evidence_state["data_result"]
-    assert replacement.resume_state["knowledge_result"] == evidence_state["knowledge_result"]
+    assert (
+        replacement.resume_state["knowledge_result"]
+        == evidence_state["knowledge_result"]
+    )
     assert replacement.resume_state["retry_context"]["failed_node"] == "reviewer_node"
 
 

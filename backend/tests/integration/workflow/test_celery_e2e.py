@@ -3,21 +3,19 @@ import time
 from uuid import uuid4
 
 import pytest
-from fastapi.testclient import TestClient
-
-from app.main import app
-from app.modules.workflow.tasks import process_analysis_task
 from app.db.session import SessionLocal
-from app.modules.workflow.models import AnalysisTask
+from app.main import app
+from app.modules.conversations.models import Conversation
+from app.modules.identity.models import User
 from app.modules.organizations.models import (
     BusinessDataSource,
     Company,
     CompanyMember,
     SchemaSnapshot,
 )
-from app.modules.conversations.models import Conversation
-from app.modules.identity.models import User
-
+from app.modules.workflow.models import AnalysisTask
+from app.modules.workflow.tasks import process_analysis_task
+from fastapi.testclient import TestClient
 
 pytestmark = [
     pytest.mark.e2e,

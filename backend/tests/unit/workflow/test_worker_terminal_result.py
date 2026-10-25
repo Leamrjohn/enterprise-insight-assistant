@@ -375,7 +375,9 @@ def test_worker_promotes_validated_report_to_task_response(monkeypatch) -> None:
 
 
 def test_deterministic_validation_keeps_missing_or_failed_checks_visible() -> None:
-    assert analysis_tasks._deterministic_validation_result({}, None)["status"] == "unknown"
+    assert (
+        analysis_tasks._deterministic_validation_result({}, None)["status"] == "unknown"
+    )
     assert (
         analysis_tasks._deterministic_validation_result(
             {"answer_validation": {"numbers_valid": False}}, True

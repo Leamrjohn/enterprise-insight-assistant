@@ -3,15 +3,14 @@
 from datetime import datetime
 from typing import TYPE_CHECKING, Any
 
+from app.db.base import Base
 from sqlalchemy import DateTime, ForeignKey, Integer, String, UniqueConstraint, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.db.base import Base
-
 if TYPE_CHECKING:
-    from app.modules.workflow.models import AnalysisTask
     from app.modules.workflow.lifecycle.execution_attempt import TaskExecutionAttempt
+    from app.modules.workflow.models import AnalysisTask
 
 
 class WorkflowEvent(Base):

@@ -3,16 +3,15 @@
 from datetime import datetime
 from typing import TYPE_CHECKING
 
+from app.db.base import Base
 from sqlalchemy import CheckConstraint, DateTime, ForeignKey, Integer, String, func
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.db.base import Base
-
 if TYPE_CHECKING:
-    from app.modules.workflow.models import AnalysisTask
-    from app.modules.workflow.lifecycle.checkpoint import WorkflowCheckpoint
     from app.modules.workflow.audit.events_models import WorkflowEvent
     from app.modules.workflow.audit.tool_call import ToolCallRecord
+    from app.modules.workflow.lifecycle.checkpoint import WorkflowCheckpoint
+    from app.modules.workflow.models import AnalysisTask
 
 
 class TaskExecutionAttempt(Base):

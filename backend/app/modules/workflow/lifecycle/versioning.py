@@ -5,7 +5,6 @@ from app.modules.workflow.lifecycle.execution_attempt import TaskExecutionAttemp
 from app.modules.workflow.models import AnalysisTask
 from sqlalchemy.orm import Session
 
-
 STABLE_WORKFLOW_VERSION = "v1"
 CANDIDATE_WORKFLOW_VERSION = "v2-candidate"
 SUPPORTED_WORKFLOW_VERSIONS = frozenset(

@@ -25,7 +25,10 @@ class ToolCallRecord(Base):
     )
     tool_name: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
     tool_contract_version: Mapped[str] = mapped_column(
-        String(64), nullable=False, default="tool-contract/v1", server_default="tool-contract/v1"
+        String(64),
+        nullable=False,
+        default="tool-contract/v1",
+        server_default="tool-contract/v1",
     )
     status: Mapped[str] = mapped_column(String(32), nullable=False)
     error_code: Mapped[str | None] = mapped_column(String(128))

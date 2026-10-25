@@ -2,11 +2,10 @@
 
 from typing import Any
 
+from app.modules.workflow.audit.events_models import WorkflowEvent
+from app.modules.workflow.lifecycle.execution_attempt import TaskExecutionAttempt
 from sqlalchemy import func
 from sqlalchemy.orm import Session
-
-from app.modules.workflow.lifecycle.execution_attempt import TaskExecutionAttempt
-from app.modules.workflow.audit.events_models import WorkflowEvent
 
 
 def append_workflow_event(

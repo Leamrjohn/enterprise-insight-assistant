@@ -236,17 +236,41 @@ def test_reviewer_retryable_outcome_retries_same_evidence() -> None:
 def test_smart_router_creates_bounded_retry_context_for_each_agent() -> None:
     cases = (
         (
-            {"data_outcome": {"status": "retryable_error", "output": {}, "retry_hint": "retry", "error_code": "business_db_execution_failed", "checkpoint_patch": {}}},
+            {
+                "data_outcome": {
+                    "status": "retryable_error",
+                    "output": {},
+                    "retry_hint": "retry",
+                    "error_code": "business_db_execution_failed",
+                    "checkpoint_patch": {},
+                }
+            },
             "data_node",
             "business_db_execution_failed",
         ),
         (
-            {"knowledge_outcome": {"status": "retryable_error", "output": {}, "retry_hint": "retry", "error_code": "knowledge_retrieval_failed", "checkpoint_patch": {}}},
+            {
+                "knowledge_outcome": {
+                    "status": "retryable_error",
+                    "output": {},
+                    "retry_hint": "retry",
+                    "error_code": "knowledge_retrieval_failed",
+                    "checkpoint_patch": {},
+                }
+            },
             "knowledge_node",
             "knowledge_retrieval_failed",
         ),
         (
-            {"reviewer_outcome": {"status": "retryable_error", "output": {}, "retry_hint": "retry", "error_code": "reviewer_rate_limited", "checkpoint_patch": {}}},
+            {
+                "reviewer_outcome": {
+                    "status": "retryable_error",
+                    "output": {},
+                    "retry_hint": "retry",
+                    "error_code": "reviewer_rate_limited",
+                    "checkpoint_patch": {},
+                }
+            },
             "reviewer_node",
             "reviewer_rate_limited",
         ),

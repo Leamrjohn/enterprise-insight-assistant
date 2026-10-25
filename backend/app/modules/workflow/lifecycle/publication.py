@@ -49,11 +49,17 @@ def decide_completion(
             "none",
             "needs_clarification",
         )
-    if terminal_outcome == "failed" or not isinstance(final_answer, str) or not final_answer:
+    if (
+        terminal_outcome == "failed"
+        or not isinstance(final_answer, str)
+        or not final_answer
+    ):
         return CompletionDecision(
             "failed", "failed", "not_published", "none", "workflow_failed"
         )
-    if review_status == "partial" or (report is not None and report.status == "partial"):
+    if review_status == "partial" or (
+        report is not None and report.status == "partial"
+    ):
         return CompletionDecision(
             "partial",
             "partial",

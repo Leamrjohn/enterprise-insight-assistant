@@ -2,8 +2,6 @@ from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 
 import app.modules.workflow.delivery.outbox as outbox_module
-from app.modules.workflow.lifecycle.execution import claim_execution
-from app.modules.workflow.models import AnalysisTask
 from app.modules.workflow.delivery.outbox import (
     cancel_unclaimed_analysis_task_event,
     create_analysis_task_event,
@@ -11,9 +9,15 @@ from app.modules.workflow.delivery.outbox import (
     publish_analysis_task_event,
     reconcile_unclaimed_broker_accepted_events,
 )
+from app.modules.workflow.lifecycle.execution import claim_execution
+from app.modules.workflow.models import AnalysisTask
 
 
-def test_outbox_keeps_failed_publish_pending_and_republishes(db_session, test_user):
+def test_outbox_keeps_failed_publish_pending_and_republishes(
+    db_session, test_user, caplog, monkeypatch
+):
+    monkeypatch.setattr(outbox_module.logger, "disabled", False)
+    caplog.set_level("WARNING", logger=outbox_module.__name__)
     task = AnalysisTask(
         user_id=test_user.id,
         question="华东区销售额为什么下降？",
@@ -26,7 +30,9 @@ def test_outbox_keeps_failed_publish_pending_and_republishes(db_session, test_us
     db_session.commit()
 
     def fail_enqueue(task_id: int):
-        raise ConnectionError(f"redis unavailable for task {task_id}")
+        raise ConnectionError(
+            f"redis://user:secret-test-password@broker/0 task={task_id}"
+        )
 
     assert (
         publish_analysis_task_event(db_session, event_id=event.id, enqueue=fail_enqueue)
@@ -35,7 +41,15 @@ def test_outbox_keeps_failed_publish_pending_and_republishes(db_session, test_us
     db_session.refresh(event)
     assert event.status == "pending"
     assert event.publish_attempt_count == 1
-    assert "ConnectionError" in (event.last_error or "")
+    assert event.last_error == "broker_publish_failed"
+    assert "secret-test-password" not in caplog.text
+    records = [
+        record for record in caplog.records if record.name == outbox_module.__name__
+    ]
+    assert records[-1].error_type == "ConnectionError"
+    assert records[-1].task_id == task.id
+    assert records[-1].outbox_event_id == event.id
+    assert "secret-test-password" not in str(records[-1].__dict__)
     assert pending_event_ids(db_session) == [event.id]
 
     published_task_ids: list[int] = []
@@ -86,7 +100,9 @@ def test_outbox_delivery_lease_uses_database_time(db_session, test_user, monkeyp
     db_session.commit()
 
     assert publish_analysis_task_event(
-        db_session, event_id=event.id, enqueue=lambda _task_id: SimpleNamespace(id="clock")
+        db_session,
+        event_id=event.id,
+        enqueue=lambda _task_id: SimpleNamespace(id="clock"),
     )
 
     db_session.refresh(event)
@@ -128,9 +144,7 @@ def test_broker_accepted_event_is_republished_only_after_delivery_lease_expires(
     assert event.publish_attempt_count == 2
 
 
-def test_cancelled_unclaimed_event_is_not_republished(
-    db_session, test_user
-) -> None:
+def test_cancelled_unclaimed_event_is_not_republished(db_session, test_user) -> None:
     task = AnalysisTask(
         user_id=test_user.id,
         question="cancel before worker claim",

@@ -28,7 +28,9 @@ def test_task_freezes_configured_output_token_limit(
     assert task.model_policy_snapshot["max_output_tokens"] == 37
 
 
-def test_task_freezes_server_owned_model_budget(db_session, test_user, monkeypatch) -> None:
+def test_task_freezes_server_owned_model_budget(
+    db_session, test_user, monkeypatch
+) -> None:
     settings = get_settings().model_copy(
         update={
             "analysis_task_model_max_calls": 3,
@@ -78,7 +80,9 @@ def test_direct_orm_task_default_is_also_server_owned(
     }
 
 
-def test_capacity_rejection_leaves_no_task_row(db_session, test_user, monkeypatch) -> None:
+def test_capacity_rejection_leaves_no_task_row(
+    db_session, test_user, monkeypatch
+) -> None:
     company = Company(name=f"capacity-company-{uuid4().hex}")
     db_session.add(company)
     db_session.flush()
@@ -100,7 +104,9 @@ def test_capacity_rejection_leaves_no_task_row(db_session, test_user, monkeypatc
         )
 
     assert (
-        db_session.query(AnalysisTask).filter(AnalysisTask.company_id == company.id).count()
+        db_session.query(AnalysisTask)
+        .filter(AnalysisTask.company_id == company.id)
+        .count()
         == 0
     )
 

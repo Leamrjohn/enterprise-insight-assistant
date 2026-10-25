@@ -1,18 +1,16 @@
-from sqlalchemy.orm import Session
-
-from app.modules.workflow.repository import (
-    create_task,
-    get_task_by_id,
-    get_tasks,
-    cancel_task,
-)
-from app.modules.workflow.models import AnalysisTask
 from app.core.exceptions import TaskCannotBeCancelledError
 from app.modules.conversations.repository import (
     get_assistant_message_by_task_id,
     touch_conversation,
 )
-
+from app.modules.workflow.models import AnalysisTask
+from app.modules.workflow.repository import (
+    cancel_task,
+    create_task,
+    get_task_by_id,
+    get_tasks,
+)
+from sqlalchemy.orm import Session
 
 CANCELLED_MESSAGE = "本次分析已取消。"
 

@@ -102,9 +102,7 @@ def recovery_decision_for_node(node_name: str) -> RecoveryDecision | None:
     return _DECISIONS.get(node_name)
 
 
-def apply_recovery_decision(
-    state: dict, decision: RecoveryDecision
-) -> dict:
+def apply_recovery_decision(state: dict, decision: RecoveryDecision) -> dict:
     """Remove all invalid outputs before a graph resumes from the selected node."""
     resumed = dict(state)
     for key in decision.invalidated_state_keys:

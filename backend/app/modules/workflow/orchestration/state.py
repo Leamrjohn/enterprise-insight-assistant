@@ -41,7 +41,9 @@ class WorkflowState(TypedDict):
     max_external_retries: int
     routing_action: str | None
     routing_feedback: dict | None
-    retry_context: dict | None  # Bounded prior-attempt failure metadata, never business fact.
+    retry_context: (
+        dict | None
+    )  # Bounded prior-attempt failure metadata, never business fact.
     recovery_decision: dict | None
     loop_stop_reason: str | None
     loop_history: list[dict]

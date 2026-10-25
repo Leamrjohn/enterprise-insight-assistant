@@ -8,24 +8,24 @@ from uuid import uuid4
 
 from app.core.settings import EXECUTION_LEASE_SECONDS
 from app.db.clock import database_now
+from app.modules.workflow.audit.events import append_workflow_event
+from app.modules.workflow.audit.model_call import ModelCallRecord
 from app.modules.workflow.lifecycle.checkpoint import (
     CHECKPOINT_SCHEMA_VERSION,
     WorkflowCheckpoint,
 )
-from app.modules.workflow.audit.events import append_workflow_event
 from app.modules.workflow.lifecycle.execution_attempt import TaskExecutionAttempt
-from app.modules.workflow.audit.model_call import ModelCallRecord
-from app.modules.workflow.models import (
-    AnalysisTask,
-    AnalysisTaskDocument,
-    AnalysisTaskInputArtifactVersion,
-)
 from app.modules.workflow.lifecycle.recovery import (
     apply_recovery_decision,
     recovery_decision_for_node,
 )
 from app.modules.workflow.lifecycle.task_state import require_task_transition
 from app.modules.workflow.lifecycle.versioning import effective_workflow_version
+from app.modules.workflow.models import (
+    AnalysisTask,
+    AnalysisTaskDocument,
+    AnalysisTaskInputArtifactVersion,
+)
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -108,7 +108,9 @@ def _task_input_fingerprint(db: Session, *, task_id: int) -> str:
         "document_ids": document_ids,
         "input_artifact_version_ids": artifact_version_ids,
     }
-    encoded = json.dumps(contract, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    encoded = json.dumps(
+        contract, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    )
     return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
 
 
@@ -159,7 +161,9 @@ def _resume_checkpoint_rejection_reason(
         return None
     if checkpoint.schema_version != CHECKPOINT_SCHEMA_VERSION:
         return "checkpoint_schema_version_incompatible"
-    if checkpoint.task_input_fingerprint != _task_input_fingerprint(db, task_id=task_id):
+    if checkpoint.task_input_fingerprint != _task_input_fingerprint(
+        db, task_id=task_id
+    ):
         return "checkpoint_input_contract_changed"
     return None
 
@@ -339,7 +343,9 @@ def claim_execution(
     )
     # Broker acceptance is not delivery.  Only this successful atomic task claim
     # records that the outbox event reached one effective Worker execution.
-    from app.modules.workflow.delivery.outbox import mark_analysis_task_event_worker_claimed
+    from app.modules.workflow.delivery.outbox import (
+        mark_analysis_task_event_worker_claimed,
+    )
 
     mark_analysis_task_event_worker_claimed(
         db, task_id=task.id, execution_id=execution_id
@@ -367,10 +373,10 @@ def claim_execution(
         failed_node = previous_checkpoint.next_node
         patch = previous_checkpoint.state_patch
         error_code = (
-            patch.get("retry_error_code")
-            if isinstance(patch, dict)
-            else None
-        ) or previous_checkpoint.error_code or "retryable_execution_error"
+            (patch.get("retry_error_code") if isinstance(patch, dict) else None)
+            or previous_checkpoint.error_code
+            or "retryable_execution_error"
+        )
         if isinstance(failed_node, str):
             resume_state = _retry_resume_state(
                 db,
@@ -433,9 +439,7 @@ def owns_execution(db: Session, *, task_id: int, execution_id: str) -> bool:
     )
 
 
-def renew_execution_lease(
-    db: Session, *, task_id: int, execution_id: str
-) -> bool:
+def renew_execution_lease(db: Session, *, task_id: int, execution_id: str) -> bool:
     """Extend a still-live execution lease from a dedicated Worker Session."""
     attempt = (
         db.query(TaskExecutionAttempt)
@@ -510,9 +514,7 @@ def checkpoint_stage(
         AnalysisTask.active_execution_id == attempt.execution_id,
         AnalysisTask.status == "running",
     ).update({AnalysisTask.stage: stage}, synchronize_session=False)
-    attempt.lease_expires_at = now + timedelta(
-        seconds=LEASE_SECONDS
-    )
+    attempt.lease_expires_at = now + timedelta(seconds=LEASE_SECONDS)
     db.commit()
     return True
 
@@ -556,9 +558,7 @@ def checkpoint_workflow_state(
         recovery_instruction="resume_from_next_node",
         timestamp=now,
     )
-    attempt.lease_expires_at = now + timedelta(
-        seconds=LEASE_SECONDS
-    )
+    attempt.lease_expires_at = now + timedelta(seconds=LEASE_SECONDS)
     db.commit()
     return True
 

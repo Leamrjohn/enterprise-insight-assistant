@@ -57,7 +57,7 @@ def publish_analysis_task_event(
 
     task_id = event.payload.get("task_id")
     if not isinstance(task_id, int):
-        raise ValueError("analysis task outbox event is missing task_id")
+        raise ValueError("analysis task outbox event is missing task_id")  # noqa: TRY004 - Invalid persisted event payload.
 
     enqueue_task = enqueue
     if enqueue_task is None:
@@ -79,11 +79,11 @@ def publish_analysis_task_event(
         return mark_analysis_task_event_broker_accepted(
             db, claim=claim, broker_message_id=celery_task_id
         )
-    except Exception as exc:
+    except Exception as exc:  # noqa: BLE001 - Any publish failure must remain retryable.
         return_analysis_task_event_to_pending(
             db,
             claim=claim,
-            failure_code=f"{type(exc).__name__}: {exc}"[:2000],
+            failure_code="broker_publish_failed",
         )
         logger.warning(
             "Analysis task outbox publication failed; event remains pending",
@@ -107,13 +107,11 @@ def pending_event_ids(db: Session, *, limit: int = 100) -> list[int]:
                     AnalysisTaskOutboxEvent.status == "pending",
                     and_(
                         AnalysisTaskOutboxEvent.status == "publishing",
-                        AnalysisTaskOutboxEvent.publish_lease_expires_at
-                        <= now,
+                        AnalysisTaskOutboxEvent.publish_lease_expires_at <= now,
                     ),
                     and_(
                         AnalysisTaskOutboxEvent.status == "broker_accepted",
-                        AnalysisTaskOutboxEvent.publish_lease_expires_at
-                        <= now,
+                        AnalysisTaskOutboxEvent.publish_lease_expires_at <= now,
                     ),
                 )
             )
@@ -278,7 +276,9 @@ def cancel_unclaimed_analysis_task_event(db: Session, *, task_id: int) -> bool:
     return updated is not None
 
 
-def reconcile_unclaimed_broker_accepted_events(db: Session, *, limit: int = 100) -> list[int]:
+def reconcile_unclaimed_broker_accepted_events(
+    db: Session, *, limit: int = 100
+) -> list[int]:
     now = database_now(db)
     return [
         event_id

@@ -1,21 +1,19 @@
 from typing import Any, cast
 
-from fastapi import APIRouter, Depends, HTTPException
-
-from sqlalchemy.orm import Session
-
+from app.core.exceptions import TaskCannotBeCancelledError
 from app.db.session import get_db
+from app.modules.identity.authentication import get_current_user
+from app.modules.identity.models import User
 from app.modules.workflow.schemas import TaskCreate, TaskOut
 from app.modules.workflow.service import (
+    cancel_task_service,
     create_task_service,
     get_task_service,
     get_tasks_service,
-    cancel_task_service,
 )
-from app.modules.identity.authentication import get_current_user
-from app.modules.identity.models import User
 from app.modules.workflow.tasks import process_analysis_task
-from app.core.exceptions import TaskCannotBeCancelledError
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
 
 router = APIRouter()
 

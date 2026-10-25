@@ -1,9 +1,9 @@
 """Fail-closed capacity admission from an authenticated local volume signal."""
 
-import json
 import hmac
-from hashlib import sha256
+import json
 from datetime import UTC, datetime
+from hashlib import sha256
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 

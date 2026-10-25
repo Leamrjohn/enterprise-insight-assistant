@@ -54,13 +54,13 @@ from app.modules.workflow.lifecycle.execution import (
     retry_resume_node,
     transition_execution,
 )
-from app.modules.workflow.orchestration.graph import run_analysis
+from app.modules.workflow.lifecycle.publication import decide_completion
 from app.modules.workflow.models import (
     AnalysisTask,
     AnalysisTaskDocument,
     AnalysisTaskInputArtifactVersion,
 )
-from app.modules.workflow.lifecycle.publication import decide_completion
+from app.modules.workflow.orchestration.graph import run_analysis
 from fastapi.encoders import jsonable_encoder
 
 logger = logging.getLogger(__name__)
@@ -104,8 +104,10 @@ def _deterministic_validation_result(
     }
     checks["report_validated"] = report_validated
     values = list(checks.values())
-    status = "failed" if any(value is False for value in values) else (
-        "passed" if all(value is True for value in values) else "unknown"
+    status = (
+        "failed"
+        if any(value is False for value in values)
+        else ("passed" if all(value is True for value in values) else "unknown")
     )
     return {"status": status, "checks": checks}
 
@@ -121,7 +123,9 @@ def _evaluation_facts(workflow_result: dict[str, Any]) -> dict[str, object]:
         if isinstance(scope, dict)
         and isinstance(scope.get("entities"), list)
         and scope["entities"]
-        and all(isinstance(entity, str) and entity.strip() for entity in scope["entities"])
+        and all(
+            isinstance(entity, str) and entity.strip() for entity in scope["entities"]
+        )
         else None
     )
     period = (
@@ -147,9 +151,7 @@ def _evaluation_facts(workflow_result: dict[str, Any]) -> dict[str, object]:
             and re.fullmatch(r"[a-z0-9_]{1,80}", data_error_code)
             else None
         ),
-        "result_fingerprint": result_fingerprint_from_data_result(
-            data_result
-        ),
+        "result_fingerprint": result_fingerprint_from_data_result(data_result),
         "semantic_result_fingerprint": revenue_month_comparison_fingerprint_from_data_result(
             data_result, period=period
         ),
@@ -336,7 +338,9 @@ def _maintain_execution_lease(execution: ClaimedExecution):
             finally:
                 heartbeat_db.close()
 
-    thread = Thread(target=heartbeat, name=f"execution-heartbeat-{task_id}", daemon=True)
+    thread = Thread(
+        target=heartbeat, name=f"execution-heartbeat-{task_id}", daemon=True
+    )
     thread.start()
     try:
         yield
@@ -371,7 +375,8 @@ def _save_workflow_result(
     )
     deterministic_validation = (
         _deterministic_validation_result(review_result, report is not None)
-        if report is not None or isinstance(review_result.get("answer_validation"), dict)
+        if report is not None
+        or isinstance(review_result.get("answer_validation"), dict)
         else None
     )
 
@@ -622,12 +627,15 @@ def process_analysis_task(self, task_id: int):
                 raise RuntimeError("Analysis task has an invalid company data context")
             workflow_kwargs["business_data_source"] = source
             workflow_kwargs["schema_catalog"] = snapshot.catalog
-        with model_call_scope(
-            db,
-            task=record,
-            attempt=execution.attempt,
-            node_name="workflow",
-        ), _maintain_execution_lease(execution):
+        with (
+            model_call_scope(
+                db,
+                task=record,
+                attempt=execution.attempt,
+                node_name="workflow",
+            ),
+            _maintain_execution_lease(execution),
+        ):
             workflow_record = record
             workflow_result = run_analysis(
                 workflow_record.question,

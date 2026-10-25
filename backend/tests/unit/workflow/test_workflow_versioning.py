@@ -1,15 +1,17 @@
 import pytest
-
-from app.modules.workflow.lifecycle.execution import claim_execution, transition_execution
+from app.modules.workflow.audit.events_models import WorkflowEvent
 from app.modules.workflow.audit.model_call import ModelCallRecord
-from app.modules.workflow.models import AnalysisTask
+from app.modules.workflow.lifecycle.execution import (
+    claim_execution,
+    transition_execution,
+)
 from app.modules.workflow.lifecycle.versioning import (
     STABLE_WORKFLOW_VERSION,
     WorkflowRollbackError,
     rollback_task_workflow_version,
     workflow_policy_snapshot,
 )
-from app.modules.workflow.audit.events_models import WorkflowEvent
+from app.modules.workflow.models import AnalysisTask
 
 
 def _candidate_task(db, user_id: int) -> AnalysisTask:

@@ -1,7 +1,7 @@
-from app.modules.workflow.models import AnalysisTask
+from app.modules.evaluation.workflow import evaluate_company_workflows
 from app.modules.organizations.models import Company
 from app.modules.workflow.audit.tool_call import ToolCallRecord
-from app.modules.evaluation.workflow import evaluate_company_workflows
+from app.modules.workflow.models import AnalysisTask
 
 
 def test_workflow_evaluation_uses_persisted_terminal_runs_and_tool_audit(

@@ -4,11 +4,16 @@ from typing import Any, cast
 
 from app.core.celery_app import celery_app
 from app.db.session import SessionLocal
-from app.modules.workflow.delivery.outbox import pending_event_ids, publish_analysis_task_event
+from app.modules.workflow.delivery.outbox import (
+    pending_event_ids,
+    publish_analysis_task_event,
+)
 from app.modules.workflow.lifecycle.execution import recover_expired_executions
 
 
-@celery_app.task(name="app.modules.workflow.outbox_tasks.publish_pending_analysis_task_events")
+@celery_app.task(
+    name="app.modules.workflow.outbox_tasks.publish_pending_analysis_task_events"
+)
 def publish_pending_analysis_task_events() -> int:
     db = SessionLocal()
     try:
@@ -20,7 +25,9 @@ def publish_pending_analysis_task_events() -> int:
         db.close()
 
 
-@celery_app.task(name="app.modules.workflow.outbox_tasks.recover_expired_analysis_executions")
+@celery_app.task(
+    name="app.modules.workflow.outbox_tasks.recover_expired_analysis_executions"
+)
 def recover_expired_analysis_executions() -> int:
     """Return expired work to the queue; the next Worker owns a fresh attempt."""
     db = SessionLocal()

@@ -182,7 +182,7 @@ def run_analysis(
     business_data_source: BusinessDataSource | None = None,
     schema_catalog: dict | None = None,
     semantic_review_enabled: bool = True,
-    stage_callback: Callable[[str], None] | None = None,
+    stage_callback: Callable[[str, str], None] | None = None,
     checkpoint_callback: Callable[[str, str | None, dict], None] | None = None,
     resume_next_node: str | None = None,
     resume_state: dict | None = None,

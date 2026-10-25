@@ -23,15 +23,15 @@ from app.modules.runtime.model_governance import (
     record_model_call,
     reserve_model_call,
 )
-from app.modules.workflow.lifecycle.checkpoint import WorkflowCheckpoint
 from app.modules.workflow.audit.events_models import WorkflowEvent
+from app.modules.workflow.audit.model_call import ModelCallRecord
+from app.modules.workflow.lifecycle.checkpoint import WorkflowCheckpoint
 from app.modules.workflow.lifecycle.execution import (
     checkpoint_workflow_state,
     claim_execution,
     recover_expired_executions,
 )
 from app.modules.workflow.lifecycle.execution_attempt import TaskExecutionAttempt
-from app.modules.workflow.audit.model_call import ModelCallRecord
 from app.modules.workflow.models import AnalysisTask, AnalysisTaskInputArtifactVersion
 from app.modules.workflow.tasks import process_analysis_task
 from fastapi.testclient import TestClient
@@ -68,9 +68,7 @@ def test_worker_cancellation_and_duration_use_database_time(
     database_timestamp = datetime(2040, 1, 2, tzinfo=timezone.utc)
     task.started_at = database_timestamp - timedelta(seconds=1)
     db_session.flush()
-    monkeypatch.setattr(
-        analysis_tasks, "database_now", lambda db: database_timestamp
-    )
+    monkeypatch.setattr(analysis_tasks, "database_now", lambda db: database_timestamp)
 
     assert analysis_tasks._stop_if_cancelled(db_session, task) is True
     assert task.completed_at == database_timestamp
@@ -84,7 +82,9 @@ def test_worker_preserves_an_explicitly_empty_document_scope(monkeypatch) -> Non
     company_id: int | None = None
     try:
         suffix = uuid4().hex
-        user = User(name=f"empty-scope-user-{suffix}", api_key=f"empty-scope-key-{suffix}")
+        user = User(
+            name=f"empty-scope-user-{suffix}", api_key=f"empty-scope-key-{suffix}"
+        )
         company = Company(name=f"empty-scope-company-{suffix}")
         db.add_all([user, company])
         db.flush()
@@ -1222,9 +1222,7 @@ def test_worker_heartbeats_during_a_blocking_workflow(monkeypatch) -> None:
     worker: threading.Thread | None = None
     try:
         suffix = uuid4().hex
-        user = User(
-            name=f"heartbeat-user-{suffix}", api_key=f"heartbeat-key-{suffix}"
-        )
+        user = User(name=f"heartbeat-user-{suffix}", api_key=f"heartbeat-key-{suffix}")
         db.add(user)
         db.flush()
         db.commit()
@@ -1407,9 +1405,7 @@ def test_worker_timeout_keeps_governed_call_unknown_then_retries(monkeypatch) ->
     user_id: int | None = None
     try:
         suffix = uuid4().hex
-        user = User(
-            name=f"timeout-user-{suffix}", api_key=f"timeout-key-{suffix}"
-        )
+        user = User(name=f"timeout-user-{suffix}", api_key=f"timeout-key-{suffix}")
         db.add(user)
         db.flush()
         db.commit()

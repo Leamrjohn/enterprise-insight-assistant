@@ -1,10 +1,8 @@
 from datetime import datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel
-
 from app.modules.reporting.schemas import FinalAnalysisReport
-
+from pydantic import BaseModel
 
 TaskStatus = Literal[
     "queued",

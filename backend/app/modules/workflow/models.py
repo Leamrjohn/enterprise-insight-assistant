@@ -1,3 +1,9 @@
+from datetime import datetime
+from typing import TYPE_CHECKING, Any, Optional
+
+from app.core.settings import get_settings
+from app.db.base import Base
+from app.modules.workflow.lifecycle.model_budget import configured_model_budget
 from sqlalchemy import (
     CheckConstraint,
     DateTime,
@@ -8,20 +14,15 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
-from sqlalchemy.orm import Mapped, mapped_column, relationship
-from app.db.base import Base
-from datetime import datetime
-from typing import TYPE_CHECKING, Any, Optional
 from sqlalchemy.dialects.postgresql import JSONB
-from app.core.settings import get_settings
-from app.modules.workflow.lifecycle.model_budget import configured_model_budget
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 if TYPE_CHECKING:
-    from app.modules.workflow.lifecycle.execution_attempt import TaskExecutionAttempt
-    from app.modules.workflow.audit.model_call import ModelCallRecord
     from app.modules.reviews.models import ReviewRequest
     from app.modules.workflow.audit.events_models import WorkflowEvent
+    from app.modules.workflow.audit.model_call import ModelCallRecord
     from app.modules.workflow.audit.tool_call import ToolCallRecord
+    from app.modules.workflow.lifecycle.execution_attempt import TaskExecutionAttempt
 
 
 class AnalysisTask(Base):
@@ -252,11 +253,15 @@ class AnalysisTaskInputArtifactVersion(Base):
 
 # Relationship targets must be registered even in processes that only import
 # AnalysisTask (for example, the isolated workflow test process).
-from app.modules.workflow.lifecycle.execution_attempt import TaskExecutionAttempt  # noqa: E402, F401
-from app.modules.workflow.lifecycle.checkpoint import WorkflowCheckpoint  # noqa: E402, F401
-from app.modules.workflow.audit.model_call import ModelCallRecord  # noqa: E402, F401
-from app.modules.reviews.models import ReviewRequest  # noqa: E402, F401
-from app.modules.workflow.audit.events_models import WorkflowEvent  # noqa: E402, F401
-from app.modules.workflow.audit.tool_call import ToolCallRecord  # noqa: E402, F401
-from app.modules.memory.sources import MemorySource  # noqa: E402, F401
-from app.modules.memory.models import AnalysisMemory  # noqa: E402, F401
+from app.modules.memory.models import AnalysisMemory  # noqa: F401
+from app.modules.memory.sources import MemorySource  # noqa: F401
+from app.modules.reviews.models import ReviewRequest
+from app.modules.workflow.audit.events_models import WorkflowEvent
+from app.modules.workflow.audit.model_call import ModelCallRecord
+from app.modules.workflow.audit.tool_call import ToolCallRecord
+from app.modules.workflow.lifecycle.checkpoint import (
+    WorkflowCheckpoint,  # noqa: F401
+)
+from app.modules.workflow.lifecycle.execution_attempt import (
+    TaskExecutionAttempt,
+)
