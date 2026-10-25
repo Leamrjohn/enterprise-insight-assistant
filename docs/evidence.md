@@ -3370,3 +3370,10 @@
 - **故障**：b24a47c8 仅向 pytest 步骤增加错误端口 1、连接超时 3 秒及注释。PR run https://github.com/LeamrJohn/enterprise-insight-assistant/actions/runs/40168274746 最终 failure；两个 Backend 失败，另外五个 job 成功。集成日志明确 127.0.0.1:1 Connection refused。所有检查结束后读取 PR：isDraft=false、mergeable=MERGEABLE（无代码合并冲突）、mergeStateStatus=BLOCKED、mergedAt=null。失败检查被 gh pr checks --required 列为必需检查，不以运行中 pending 状态代替最终失败证据。
 - **恢复**：git revert 产生 9442b997 并推送；`git diff --exit-code 34bc1c5c HEAD -- .github/workflows/ci.yml` 退出 0。恢复 PR run https://github.com/LeamrJohn/enterprise-insight-assistant/actions/runs/40168465098 completed/success，七项检查全部通过；在仍非草稿时读回 mergeStateStatus=CLEAN、mergedAt=null。
 - **收尾与范围**：对照期间目标分支 SHA 均为 a0d8578a94fc0d0c7759b018c23a5d530f83a391。最后恢复 PR 为 draft，API 确认 draft=true、merged=false。未修改分支规则、未调用合并接口、未提交工作区其他改动。此证据支持必需检查导致平台合并资格从 CLEAN→BLOCKED→CLEAN；没有冒险执行合并写入来测试拒绝响应，也不等于已完成独立人工审查或用户独立操作验收。
+
+## 2026-10-24 — 阶段 1：初始化失败停止与恢复验证
+
+- **最新 CI**：提交 f8339351 的 PR run 40169015644 与 push run 40169013328 均 completed/success；前一文档提交的运行被新提交取消，取消不计通过。
+- **隔离与故障**：新建标签 codex.scope=bootstrap-drill-1024 的 pgvector 0.8.0/PG16 容器，无宿主端口映射，不连接开发数据库。省略 agent_platform 数据库，原样输入 bootstrap_postgres.sql 到 psql（ON_ERROR_STOP=1）。连接目标库时报不存在，psql 退出 3；随后查询 agent_migrator/agent_app 数量为 0，证明后续角色初始化未执行。
+- **恢复与重复执行**：只补建 agent_platform 后，原脚本执行退出 0；再次执行也退出 0。两个项目数据库存在，agent_app/agent_migrator 均为非超级用户且无 BYPASSRLS。
+- **边界与清理**：失败前 template1 的 vector 扩展已经创建，脚本不是全局原子事务；本结果证明遇错停止与该故障后的可重跑，不证明任意中间状态均可恢复，也不替代远端初始化故障证据。核对标签后删除本轮容器及匿名测试卷，临时数据可由初始化重建，未删除开发数据。命令由模型执行，学习验收仍待完成。
