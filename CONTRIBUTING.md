@@ -1,6 +1,6 @@
 # 贡献指南
 
-> 项目规则见 [AGENTS.md](AGENTS.md)，设计和验收以 [主路线图](docs/plans/single_node_production_style_ai_application_roadmap.md) 为准；本文只说明协作流程。
+> 项目规则见 [AGENTS.md](AGENTS.md)，当前执行顺序与学习验收以 [改进与学习计划](docs/plans/improvement_and_learning_plan.md) 为准；[主路线图](docs/plans/single_node_production_style_ai_application_roadmap.md) 保留全局工程约束，冲突时遵循 AGENTS.md 的优先级。本文只说明协作流程。
 
 ## 开始前
 
