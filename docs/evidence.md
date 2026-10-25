@@ -3377,3 +3377,11 @@
 - **隔离与故障**：新建标签 codex.scope=bootstrap-drill-1024 的 pgvector 0.8.0/PG16 容器，无宿主端口映射，不连接开发数据库。省略 agent_platform 数据库，原样输入 bootstrap_postgres.sql 到 psql（ON_ERROR_STOP=1）。连接目标库时报不存在，psql 退出 3；随后查询 agent_migrator/agent_app 数量为 0，证明后续角色初始化未执行。
 - **恢复与重复执行**：只补建 agent_platform 后，原脚本执行退出 0；再次执行也退出 0。两个项目数据库存在，agent_app/agent_migrator 均为非超级用户且无 BYPASSRLS。
 - **边界与清理**：失败前 template1 的 vector 扩展已经创建，脚本不是全局原子事务；本结果证明遇错停止与该故障后的可重跑，不证明任意中间状态均可恢复，也不替代远端初始化故障证据。核对标签后删除本轮容器及匿名测试卷，临时数据可由初始化重建，未删除开发数据。命令由模型执行，学习验收仍待完成。
+
+## 2026-10-25 — 落实原计划的上传入口冻结
+
+- **问题与范围**：源码仍挂载文件上传和三项会话附件写入入口，前端仍有上传控件，旧测试要求 202；因此此前“入口已关闭”不是实现事实。本次按原计划关闭外部入口，不重做模块、不删历史数据，JSON 文档录入和读取保持不变。
+- **实现**：文档文件上传归入不挂载的 upload_router；生产根路由不再挂载附件 router；前端移除文件/附件控件与对应事件处理。保留内部服务与客户端协议代码。旧模块测试仅使用独立 FastAPI 测试应用 frozen_upload_client，不改变生产 app；该测试应用复用请求上下文和错误处理。
+- **红/绿验证**：新增四条 POST 拒绝与一条 OpenAPI 边界测试，修改前 5 failed（入口进入鉴权并返回 401、文档仍暴露上传）；修改后 5 passed。关闭后的 POST 返回 404/405，JSON `/documents` POST 仍在 OpenAPI 中。首轮全回归发现独立测试应用缺 request_id 中间件，补齐测试装配后重新运行，未放松生产入口断言。
+- **回归**：专用 scope=freeze-1025 的 PGvector/PG16 与 Redis，loopback 49799/49802，应用 agent_app、迁移 agent_migrator；Python 3.13 执行 `pytest tests/unit tests/scripts tests/integration -m 'not e2e and not slow' -k 'not business_gold' -q -x --tb=short`，887 passed、2 skipped、11 deselected，40.82s，退出 0。Ruff 全目录通过，334 文件格式通过，Pyright 0 errors。前端 7 tests passed，TypeScript/Vite 构建通过；文档页面测试确认无文件控件且文本录入仍成功。
+- **清理与边界**：核对标签后删除本轮两个容器及匿名测试卷，临时数据可重建，开发服务未操作。未部署或重启已有服务，未撤销历史直传授权，不证明已有运行进程已关闭入口或在途任务已停止；未运行 Worker/对象存储 E2E、旧 Gold 或真实模型评测。该变更恢复计划约束，不代表阶段 1 学习验收或阶段 2 完成。远端新提交 CI 结果待确认，PR 不合并。

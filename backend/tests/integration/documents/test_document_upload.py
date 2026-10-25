@@ -3,6 +3,11 @@ from app.modules.organizations.models import Company, CompanyMember
 from fastapi.testclient import TestClient
 
 
+@pytest.fixture
+def client(frozen_upload_client):
+    return frozen_upload_client
+
+
 @pytest.fixture(autouse=True)
 def approved_company_for_document_api(db_session, test_user):
     company = Company(name="document-upload-company")

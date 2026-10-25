@@ -33,6 +33,7 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from sqlalchemy.orm import Session
 
 router = APIRouter()
+upload_router = APIRouter()  # Frozen: not mounted by the production application.
 
 
 @router.get("/documents", response_model=list[DocumentOut])
@@ -153,7 +154,7 @@ def update_document(
     return record
 
 
-@router.post(
+@upload_router.post(
     "/documents/upload",
     response_model=DocumentOut,
     status_code=status.HTTP_202_ACCEPTED,

@@ -38,6 +38,11 @@ from sqlalchemy.orm import Session
 _REQUEST_FINGERPRINT = "a" * 64
 
 
+@pytest.fixture
+def client(frozen_upload_client):
+    return frozen_upload_client
+
+
 @pytest.mark.parametrize("builder", ["request", "initiation", "completion"])
 @pytest.mark.parametrize("persisted_status", ["completed", "invalid-state"])
 def test_receipt_builders_validate_persisted_status(builder, persisted_status):

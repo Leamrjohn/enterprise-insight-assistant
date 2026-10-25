@@ -55,6 +55,8 @@ describe("DocumentPage", () => {
     );
 
     await user.click(screen.getByRole("button", { name: "录入文本" }));
+    expect(document.querySelector('input[type="file"]')).toBeNull();
+    expect(screen.queryByRole("button", { name: "上传并解析" })).toBeNull();
     await user.type(screen.getByLabelText("资料名称"), "华东回访纪要");
     await user.clear(screen.getByLabelText("来源"));
     await user.type(screen.getByLabelText("来源"), "经营例会");

@@ -17,6 +17,7 @@ from app.db.session import engine, get_db
 from app.main import app
 from app.modules.identity.authentication import get_current_user
 from app.modules.identity.models import User
+from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
@@ -78,3 +79,22 @@ def client(
             yield test_client
     finally:
         app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def frozen_upload_client(db_session: Session, test_user: User):
+    """Exercise retained module contracts without reopening the production app."""
+    from app.api.router import router
+    from app.core.middleware import request_context_middleware
+    from app.modules.documents.api import upload_router
+    from app.modules.input_artifacts.api import router as attachment_router
+
+    isolated_app = FastAPI(exception_handlers=app.exception_handlers)
+    isolated_app.middleware("http")(request_context_middleware)
+    isolated_app.include_router(router)
+    isolated_app.include_router(upload_router)
+    isolated_app.include_router(attachment_router)
+    isolated_app.dependency_overrides[get_db] = lambda: db_session
+    isolated_app.dependency_overrides[get_current_user] = lambda: test_user
+    with TestClient(isolated_app) as test_client:
+        yield test_client

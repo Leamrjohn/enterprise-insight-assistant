@@ -2,8 +2,14 @@ from types import SimpleNamespace
 from unittest.mock import Mock
 
 import app.modules.documents.api as document_api
+import pytest
 from app.core.exceptions import InsufficientStorageError
 from fastapi.testclient import TestClient
+
+
+@pytest.fixture
+def client(frozen_upload_client):
+    return frozen_upload_client
 
 
 def test_upload_document_enqueues_ingestion_and_returns_pending(

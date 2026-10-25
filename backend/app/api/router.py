@@ -3,7 +3,6 @@ from fastapi import APIRouter
 from app.modules.conversations.api import router as conversations_router
 from app.modules.documents.api import router as document_router
 from app.modules.identity.api import router as auth_router
-from app.modules.input_artifacts.api import router as input_artifacts_router
 from app.modules.observability.api import router as observability_router
 from app.modules.observability.health_api import router as health_router
 from app.modules.organizations.api import router as companies_router
@@ -17,4 +16,4 @@ router.include_router(conversations_router)
 router.include_router(companies_router)
 router.include_router(review_requests_router)
 router.include_router(observability_router)
-router.include_router(input_artifacts_router)
+# Upload routers remain unmounted until the stage-10 redesign is accepted.
