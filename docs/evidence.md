@@ -3337,3 +3337,36 @@
 - **直接日志**：Backend unit job 121027054532 为 **794 passed, 2 skipped, 2 deselected in 23.83s**；Backend integration job 121027054449 为 **90 passed, 7 deselected in 11.06s**。两者分别运行，总计 884 passed；CI 包含本地回归排除的两项 Gold 文件检查，不据此宣称独立密封留出评测。被跳过或排除的测试仍未证明。
 - **产物与边界**：API 确认 backend-unit-1、backend-integration-1 两个 JUnit artifact 存在且未过期。PR 仍为 OPEN/draft，head 与上述提交一致；未合并。mergeStateStatus=CLEAN 只表示当前平台合并状态，不证明已经配置必需检查。
 - **剩余验收**：主动制造测试失败并恢复、实际必需检查/审查机制及用户独立操作尚未完成；此前意外 Compose 失败与恢复不能代替“用户主动设计并完成故障演练”的学习证据。阶段 1 尚未完成，后续阶段不因此自动开始。
+
+## 2026-10-24 — 阶段 1：默认分支 PR 与必需检查规则
+
+- **授权与变更**：用户明确允许后，新建 active ruleset 25808727（Default branch PR and CI gate），目标为默认分支，当前是 feature/api-contracts。规则要求 PR 和七项检查：Static (ruff)、Static (ruff-format)、Static (pyright)、Backend (unit)、Backend (integration)、Frontend、Compose configuration；检查来源绑定 GitHub Actions app 15368，strict_required_status_checks_policy=true。
+- **读回验证**：ruleset API 与默认分支实际生效规则 API 均返回上述配置，bypass_actors 为空。未要求额外他人审批（required_approving_review_count=0），因此不能称为强制人工代码审查。PR #1 仍 OPEN/draft、mergedAt=null，未执行合并。
+- **证据边界**：已证明规则配置及分支适用关系，尚未通过主动失败场景证明本规则下的拒绝行为；草稿 PR 自身也阻止合并，不能单凭草稿的不可合并状态归因于 CI 门禁。用户独立设计、实施、恢复与解释证据仍待验收。
+
+## 2026-10-24 — 阶段 1：用户提出对照方案后的端口故障示范
+
+- **学习来源**：用户提出“正常测试成功，改后失败”；补充恢复后再通过以加强因果证据。本轮由模型执行，只证明共同设计与示范，不标记用户独立操作已掌握。
+- **隔离与变量**：新建 scope=port-drill-91ab 的独立 PG/pgvector 容器，复用初始化 SQL；同一个 test_conversation_migration_shape 测试使用 agent_platform_test，三次命令除 DATABASE_PORT 外保持相同环境，PGCONNECT_TIMEOUT=3。正确宿主端口 52387，错误端口 52388；不改变真实 .env、源码或数据库服务配置。
+- **绿/红/绿**：端口 52387 时 **1 passed in 1.77s**、退出 0；改为 52388 时 **1 error in 3.77s**、退出 1，setup 阶段出现 sqlalchemy.exc.OperationalError / psycopg.errors.ConnectionTimeout，尚未执行测试体断言；pg_isready 同时确认专用数据库 accepting connections；恢复 52387 后 **1 passed in 0.20s**、退出 0。Ruff 全目录检查仍通过。
+- **边界**：本机 Python 3.13 的单测试对照，不能替代远端 PR 故障注入、合并拒绝验证或用户独立练习。没有把连接超时错误写成业务断言失败，也没有修改业务状态以制造通过。
+
+## 2026-10-24 — 阶段 1：远端端口故障与恢复提交
+
+- **注入**：f9f967d3 仅在 CI 的 pytest 步骤增加 DATABASE_PORT=1、PGCONNECT_TIMEOUT=3 及注释；初始化和迁移仍使用正常端口。未提交同时存在的 README、数据生成脚本及知识库说明修改。
+- **远端证据**：PR run 40165042308 completed/failure；Ruff、格式、Pyright、Frontend、Compose 成功，两项 Backend 失败。unit job 121084260043 的迁移成功、测试失败、Preserve test results 成功；integration job 121084259997 日志明确为 127.0.0.1:1 Connection refused，23 failed、67 errors、7 deselected。两个未过期 artifact（backend-unit-1、backend-integration-1）均存在。
+- **恢复**：用 git revert 创建 34bc1c5c 并推送，删除三行故障设置，不改写失败提交历史，不删除失败日志。恢复版本远端结果尚待确认；不能提前把整个绿/红/绿演练算作完成。
+- **边界**：未调用合并接口或取消草稿状态；已证明检查失败传播与报告保留，未单独实证合并拒绝的原因。执行由模型完成，学习能力不据此标记为独立掌握。
+
+### 远端端口演练恢复结果
+
+- 恢复提交 34bc1c5c 的 PR run https://github.com/LeamrJohn/enterprise-insight-assistant/actions/runs/40165345812 已完成，watch 退出 0，七项检查全部成功。unit 日志为 794 passed、2 skipped、2 deselected in 23.22s；integration 为 90 passed、7 deselected in 11.21s，两个 JUnit artifact 均存在且未过期。
+- `git diff --exit-code 7760c34d HEAD -- .github/workflows/ci.yml` 退出 0，确认恢复版工作流与故障前一致。至此形成正常 run 40146087562 → 故障 run 40165042308 → 恢复 run 40165345812 的对照；失败记录未覆盖。
+- PR 仍 OPEN/draft、mergedAt=null；没有发起合并或改动其他工作区修改。本结果证明远端失败传播与恢复，不证明独立人工审查、用户独立实施或实际合并拒绝，阶段 1 的学习验收仍未完成。
+
+## 2026-10-24 — 阶段 1：排除草稿干扰的合并门禁对照
+
+- **授权与基线**：用户要求进行验证；暂时将 PR #1 改为 ready for review，不执行合并。34bc1c5c 对应必需检查全部通过，isDraft=false、mergeStateStatus=CLEAN、mergedAt=null。规则 25808727 保持 active，要求七项 Actions 检查。
+- **故障**：b24a47c8 仅向 pytest 步骤增加错误端口 1、连接超时 3 秒及注释。PR run https://github.com/LeamrJohn/enterprise-insight-assistant/actions/runs/40168274746 最终 failure；两个 Backend 失败，另外五个 job 成功。集成日志明确 127.0.0.1:1 Connection refused。所有检查结束后读取 PR：isDraft=false、mergeable=MERGEABLE（无代码合并冲突）、mergeStateStatus=BLOCKED、mergedAt=null。失败检查被 gh pr checks --required 列为必需检查，不以运行中 pending 状态代替最终失败证据。
+- **恢复**：git revert 产生 9442b997 并推送；`git diff --exit-code 34bc1c5c HEAD -- .github/workflows/ci.yml` 退出 0。恢复 PR run https://github.com/LeamrJohn/enterprise-insight-assistant/actions/runs/40168465098 completed/success，七项检查全部通过；在仍非草稿时读回 mergeStateStatus=CLEAN、mergedAt=null。
+- **收尾与范围**：对照期间目标分支 SHA 均为 a0d8578a94fc0d0c7759b018c23a5d530f83a391。最后恢复 PR 为 draft，API 确认 draft=true、merged=false。未修改分支规则、未调用合并接口、未提交工作区其他改动。此证据支持必需检查导致平台合并资格从 CLEAN→BLOCKED→CLEAN；没有冒险执行合并写入来测试拒绝响应，也不等于已完成独立人工审查或用户独立操作验收。
