@@ -3323,3 +3323,10 @@
 - **最新回归**：独立 PG/pgvector 与 Redis（scope=pr-62c1），Python 3.13 执行 `pytest tests/unit tests/scripts tests/integration -m 'not e2e and not slow' -k 'not business_gold' -q --tb=short`，**882 passed, 2 skipped, 11 deselected in 45.25s**，退出 0。与先前差异为两项 LocalStack 场景从 skip 改为 e2e 排除，不是删除断言。
 - **静态与提交**：Ruff 通过、333 文件格式通过、Pyright 0 errors/0 warnings、actionlint 退出 0；各代码组真实提交 hook 通过。完整回归针对分组前的组合工作树，不声称每个中间提交都独立跑过全套测试或远端 CI。
 - **仍待验收**：草稿 PR 上的 CI、故意失败与恢复、必需检查、审查及用户独立操作。本记录不宣称阶段 1 完成，不授权合并或修改分支保护。
+
+## 2026-10-24 — 阶段 1：草稿 PR 首轮 Compose 失败定位
+
+- **发布**：已推送 codex/engineering-foundation-ci 并创建草稿 PR https://github.com/LeamrJohn/enterprise-insight-assistant/pull/1 ，未合并、未修改分支保护。PR 首轮 run 40145811939 的 Compose job 121026776182 明确报 backend/.env 不存在，退出 1；不是业务代码测试失败。
+- **根因与复现**：docker-compose.yml 的服务 env_file 指向被忽略的 backend/.env；原本机 config 检查依赖本地文件，不能代替干净 checkout。临时目录仅复制 Compose 与 .env.example，config --quiet 同样退出 1；只补充示例副本为临时 backend/.env 后命令退出 0，未启动任何服务，未读取或覆盖真实 .env。
+- **修复**：仅在 Compose CI job 加入 `cp backend/.env.example backend/.env`，继续执行原 config 检查；不降低运行环境必需配置要求，也不向工作流注入真实凭据。临时复现目录 codex-compose-ci-4c16e82f7ad54d8da7a57b9a4d5345ad 保留在系统 TEMP 中，仅含上述示例配置。
+- **边界**：待新提交远端 CI 确认，其他 job 按实际结果记录；此修复不是全套 CI 已通过的声明。
