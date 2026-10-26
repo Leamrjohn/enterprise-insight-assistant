@@ -3421,3 +3421,10 @@
 - **结果**：华东 delivered 订单 2025-07 为 31 笔/2014010.64，2025-08 为 29 笔/1847604.72；独立汇总 sales_order_items.line_amount 得到相同金额。区域存在且唯一，2020-03 不限订单状态的匹配数为 0。复算及断言进程退出 0，独立明细 SQL 退出 0。查询和复现调用顺序记录在设计稿。
 - **指纹**：单月、跨月、空月份分别匹配 7c587b5fb455ebe3e3a51ecfe11a23325708b41653cd4eb012798489a1bb46cd、ab3c4bf4b2e5bc713bdebeba47802bc96dd01f8c97348cd9fb8c3ebff1921228、4012d5a713b509655890e39fbc864ab4054cbd784178f3a0485e882309860ded。对应开发 fixture 文件 SHA256 分别为 32f449765a4f9e3037f1a5b5a2862d25a16907ef8b8101106dab9bad5c81e05b、c09d29e0e6e12dfa86c5d59b2d7a11e717c95efbb114698438f8e8f02b562fb4、c5746e2635b5f51727a0d3b0cd13c8e9a1d46453ed73e4de8f6c813b8740314c；未改答案以适应运行结果。
 - **CI 与边界**：cdfef124 的 PR run 40277863624 completed/success。本轮未调用模型、未创建业务任务或伪造持久化 Observation；只证明合成库预期一致性，不证明当前真实连接的数据版本、运行权限、业务全链或学习能力。23 例仍未冻结，7 例外部留出仍待独立持有人。
+
+## 2026-10-26 — 准备入口拒绝专用故障案例
+
+- **根因**：build_preparation_plan → _select_cases 原本只排除 security_rejection；六类专用探针可进入语料准备，而 submit_prepared_tasks 只会创建普通会话消息，不能因此产生超时、重复投递或执行权冲突的故障证据。
+- **反例与修正**：六个显式 development fixture 的测试先得到 6 failed：实际继续读取不存在的语料 manifest，而非按类型拒绝。随后在统一选择函数中只放行 analysis / clarification，保留原 HTTP 拒绝错误信息。未修改 fixture 预期或实际业务 Agent。
+- **验证**：准备工具测试排除需数据库的 cleanup 后为 20 passed、1 deselected，0.25s；包含原正常准备、澄清和 heldout 开关契约。Ruff 检查通过，格式检查发现一行过长后按要求换行。仅验证准备入口，不证明专用故障执行器成功、旧 prepared manifest 可信或真正实现盲测隔离。
+- **真实评测前置**：已向用户询问模型运行的费用/时限与外部留出持有人；未获得前不进行付费运行。下一次真实基线必须重新准备，不能复用未验真的旧准备清单。

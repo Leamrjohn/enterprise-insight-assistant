@@ -132,6 +132,16 @@ def _select_cases(
             "route and cannot be submitted as analysis tasks: "
             f"{security_cases}"
         )
+    probe_cases = sorted(
+        case.case_id
+        for case in selected
+        if case.evaluation_kind not in {"analysis", "clarification"}
+    )
+    if probe_cases:
+        raise HarnessError(
+            "non-task cases require a dedicated evaluation executor and cannot "
+            f"be submitted as analysis tasks: {probe_cases}"
+        )
     return selected
 
 

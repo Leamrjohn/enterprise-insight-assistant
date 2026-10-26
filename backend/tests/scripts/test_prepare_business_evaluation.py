@@ -179,6 +179,31 @@ def test_plan_refuses_cases_without_a_valid_preparation_route(
         )
 
 
+@pytest.mark.parametrize(
+    "fixture_name",
+    [
+        "business_runtime_tool_rejection_development_v1.json",
+        "business_sql_schema_injection_rejection_development_v1.json",
+        "business_sql_timeout_development_v1.json",
+        "business_sql_result_limit_development_v1.json",
+        "business_duplicate_delivery_rejection_development_v1.json",
+        "business_execution_fence_cancellation_development_v1.json",
+    ],
+)
+def test_plan_rejects_dedicated_probes_before_reading_corpus(
+    tmp_path: Path, fixture_name: str
+) -> None:
+    fixture_path = (
+        Path(__file__).resolve().parents[1] / "fixtures/evaluation" / fixture_name
+    )
+    with pytest.raises(HarnessError, match="dedicated evaluation executor"):
+        build_preparation_plan(
+            fixture_path=fixture_path,
+            corpus_dir=tmp_path / "must-not-be-read",
+            requested_case_ids=None,
+        )
+
+
 def test_plan_allows_a_development_clarification_case(tmp_path: Path) -> None:
     fixture_path, corpus_dir = _write_fixture_and_corpus(
         tmp_path,
