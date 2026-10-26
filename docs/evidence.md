@@ -3462,3 +3462,9 @@
 - **最小验证**：主机已有 paraphrase-multilingual-MiniLM-L12-v2 快照 e8f8c211226b894fcb81acc59f3b34ba3efd5f42。仅将这个模型目录只读挂载到 /model-cache 下对应目录，设置 HF_HUB_CACHE，仍禁用网络且不注入 API 密钥；同一镜像真实 embed_batch 两条合成中文文本，每条 384 维且全部有限，初始化与计算 6.97 秒，退出 0。镜像 ID sha256:06aec4327c6972948d9933af3c11f4afe0f1cded1802e32cf1a43f311956c92d，sentence-transformers=5.7.0。
 - **决策**：复用已有缓存，不新增依赖、不改业务模型、不扩大超时、不下载重复权重；预检命令及失败阻断规则加入评测设计稿。两个临时探测容器通过 --rm 自动清除，原缓存未修改。
 - **未证明**：尚未验证 reranker 缓存、完整文档摄取和 RAG 结果；没有把上次 processing/超时记录改成成功。下一轮付费评测必须有新的运行窗口授权，当前预算窗口不自动重置。
+
+## 2026-10-26 — 重排模型离线预检
+
+- **当前验证**：复用 agent-worker 镜像及当前 reranker.py，network=none，不载入 .env 或 API 密钥。仅只读挂载主机 BAAI/bge-reranker-base 缓存，refs/main 为 2cfc18c9415c912f9d8155881c133215df768a70；HF_HUB_OFFLINE=1、TRANSFORMERS_OFFLINE=1、HF_HUB_CACHE=/model-cache。
+- **结果**：真实 LocalCrossEncoderReranker 对一个合成问题与两段合成文本评分，输出 [0.997832715511322, 0.00003741728869499639]；两项长度/有限值断言通过，相关片段得分更高。初始化与计算 8.02 秒，退出 0；未下载权重、未调用模型供应商 API。临时容器 --rm 清除，缓存未修改。
+- **落点与边界**：设计稿补充双模型缓存要求，不新增代码或依赖。embedding 与 reranker 已分别离线验证；同时加载的资源峰值、JSON 文档完整摄取、授权检索及知识回答仍未验证，不能据两个合成文本宣布 RAG 评测通过。

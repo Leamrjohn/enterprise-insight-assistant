@@ -67,7 +67,9 @@ docker run --rm --network none `
 if ($LASTEXITCODE -ne 0) { throw '离线向量预检失败，不启动知识评测' }
 ```
 
-本预检只覆盖 embedding，不覆盖另一个 reranker 模型的缓存、JSON 文档摄取、检索质量、权限或真实知识回答。实际知识链仍需预检 reranker 及摄取，再运行已授权的新一轮开发评测；原 30 分钟窗口不自动续期。不要把本次离线向量成功回填成上次准备成功。
+本预检只覆盖 embedding，不覆盖 JSON 文档摄取、检索质量、权限或真实知识回答。实际知识链仍需预检 reranker 及摄取，再运行已授权的新一轮开发评测；原 30 分钟窗口不自动续期。不要把本次离线向量成功回填成上次准备成功。
+
+补充 reranker 预检：以相同镜像、禁网及只读源码方式，仅挂载主机 `models--BAAI--bge-reranker-base` 到 `/model-cache/models--BAAI--bge-reranker-base`，保留上述三个 HF 环境变量；调用 `LocalCrossEncoderReranker('BAAI/bge-reranker-base').score` 对问题“华东区销售额是多少？”和两条合成文本“华东区销售额为100元。”、“仓库设备需要维修。”评分。快照 `2cfc18c9415c912f9d8155881c133215df768a70` 实测 8.02 秒，分数约 0.997833 与 0.0000374，长度与有限值断言通过。未来知识评测进程需同时挂载这两个独立模型目录，不能只带 embedding 缓存。这个简单正反例不构成真实检索准确率证明。
 
 ### 开发材料盘点（2026-10-26）
 
