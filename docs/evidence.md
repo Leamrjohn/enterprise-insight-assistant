@@ -3468,3 +3468,11 @@
 - **当前验证**：复用 agent-worker 镜像及当前 reranker.py，network=none，不载入 .env 或 API 密钥。仅只读挂载主机 BAAI/bge-reranker-base 缓存，refs/main 为 2cfc18c9415c912f9d8155881c133215df768a70；HF_HUB_OFFLINE=1、TRANSFORMERS_OFFLINE=1、HF_HUB_CACHE=/model-cache。
 - **结果**：真实 LocalCrossEncoderReranker 对一个合成问题与两段合成文本评分，输出 [0.997832715511322, 0.00003741728869499639]；两项长度/有限值断言通过，相关片段得分更高。初始化与计算 8.02 秒，退出 0；未下载权重、未调用模型供应商 API。临时容器 --rm 清除，缓存未修改。
 - **落点与边界**：设计稿补充双模型缓存要求，不新增代码或依赖。embedding 与 reranker 已分别离线验证；同时加载的资源峰值、JSON 文档完整摄取、授权检索及知识回答仍未验证，不能据两个合成文本宣布 RAG 评测通过。
+
+## 2026-10-26 — 带缓存的真实 JSON 文档摄取
+
+- **环境**：HEAD 11350df8，当前 backend 源码只读挂载；独立 internal=true Docker 网络 codex-ingest1026，四个 scope=ingest1026 容器（PGvector16、Redis7、API、Worker），平台迁移到 head。没有传入 env-file，显式清空两个付费 API 密钥；容器网络不能访问外网，HF 离线模式，仅只读挂载已核验的多语 embedding 缓存。Worker queue=test、concurrency=1、hard time limit=120 秒。
+- **真实调用链**：准备器的 _bootstrap_tenant 创建两个隔离公司身份，持有第一家公司临时凭据的 httpx 客户端 JSON POST /documents 得到 202；API 投递 Celery，独立 Worker 调用 process_document_chunks 和真实 LocalEmbeddingProvider 写入 PG。每秒通过 HTTP GET 轮询，45 秒 deadline 内观察到 pending→processing→completed，耗时 8.47 秒。
+- **断言**：真实 DocumentChunk 两条、归属正确公司、embedding 均非空/384 维/数值有限；另一公司凭据读取该 document_id 返回 404；运行 OpenAPI 无 /documents/upload。Python 验证进程退出 0。数据库复核 completed、2 chunks、min/max vector_dims=384、model_call_records=0，SQL 退出 0。
+- **产物与清理**：停止专用 Worker 后导出本地 ingestion-preflight.dump（artifacts/evaluation-20261026-bounded），SHA256=ef9a4f492a0942b5da58c9d81cd01db27902964c3b6f69319065b1877032f109。核验标签后移除四个容器、临时卷及网络；不删除主机模型缓存、不操作原有服务。备份未公开提交，尚未做恢复演练。
+- **决策与边界**：已证明复用缓存可以让合成 JSON 文档经真实 API/队列/Worker/PG 完成摄取，不修改业务代码或延长模型下载等待。另一公司 HTTP 拒绝只覆盖该访问路径，不替代检索的范围、撤权或 RLS 全面测试。未运行授权检索→重排→模型回答链，也未运行其余开发案例；不把此前知识准备超时回填为通过。
