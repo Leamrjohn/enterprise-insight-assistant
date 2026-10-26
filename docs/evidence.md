@@ -3493,3 +3493,10 @@
 - **Bad Case 2（第四例）**：空文档范围触发 tool_document_scope_denied，终止原因 knowledge_denied；这是权限拒绝而非前三例的路由遗漏。需另行核对“诚实证据不足”的业务契约与工具拒绝之间的映射，不能通过扩大空范围或放宽权限使其通过。
 - **费用与产物**：14 次 provider_model 调用全部 settled，输入 16941、输出 1818，应用美元账本合计 0.007266；另有 6 次 settled 本地资源记录，不计作付费模型调用。按当次官方价格页 https://api-docs.deepseek.com/zh-cn/quick_start/pricing/ 的 Flash 高峰未缓存输入 2 元/百万、输出 8 元/百万保守估算为 0.048426 元，非供应商实扣账单。原始 prepare/run/report、4 份 HTML trace、运行脚本与 environment 保存在本地 artifacts/evaluation-20261026-knowledge，不公开提交。清理前 knowledge-final.dump 的 SHA256=186292e4ff1b9ca964c581ea05e85968ee823f8950caf156acf1611f51eb6bb8，尚未实证恢复该份备份。容器评分器 git_revision=unavailable，由 environment 旁录源码版本，不伪造自动捕获。
 - **清理与结论**：Worker 停止后，四次现有 harness cleanup 均退出 0、导出 trace，数据库读回 analysis_tasks=0；核验标签后删除六个临时容器、匿名卷与独立网络，标签查询无残留，保留主机备份、缓存和失败报告，原有服务不动。本轮只完成四例知识开发失败基线，累计与首轮为 8/23 个案例已有真实评分，不代表通过 8 例。尚无完整 23 例、独立留出、冻结阈值验收或用户独立实施证据，阶段 2 不晋升；下一变量为纯知识成功路径的确定性路由修复。
+
+## 2026-10-26 — 纯知识成功路径路由候选
+
+- **唯一变量与契约**：保留上一轮真实失败基线，只修复 choose_next_action 对 knowledge_only、knowledge_status=ready、data_status=None/not_run 的遗漏，返回 stop/evidence_complete；smart_router_node 据此生成 completed 终态。仅表示证据路线完成，实际发布仍由既有校验、执行权和人工审核规则决定。无数据库/API/数据迁移，回滚此代码提交即可恢复旧判定。
+- **反例与边界**：新增两个参数化成功场景，修复前 2 failed、24 passed，均复现 failed/non_retryable_or_unknown_failure。另加 8 项边界：hybrid、data_only、已有 SQL 失败、知识拒绝/取消、Reviewer 重试、引用与数字校验失败；新分支放在既有校验/NodeOutcome 处理之后，不改变空文档范围授权或旧失败证据。
+- **验证**：test_workflow_router.py、test_workflow.py、test_publication.py、test_worker_terminal_result.py、test_task_state.py 共 84 passed in 1.52s；router.py Pyright 0 errors。Ruff 初次发现测试导入排序问题，修正后两文件检查及格式检查通过。尝试整个 workflow 目录及 not integration 筛选均进入含 db_session 的测试等待，已中止，不算通过；目录名称与该 marker 筛选不能据此保证无数据库依赖。
+- **决策与未证**：确定性候选保留，未重新运行真实 PG/Worker/供应商对照、未验证 CI、未晋升评测基线；没有新增付费调用，也不标记用户独立掌握。第四个空范围 Bad Case 不在本修复范围。

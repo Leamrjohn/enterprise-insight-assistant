@@ -1,5 +1,63 @@
+import pytest
 from app.modules.workflow.orchestration.nodes import smart_router_node
 from app.modules.workflow.orchestration.router import build_feedback, choose_next_action
+
+
+@pytest.mark.parametrize("data_result", [None, {"status": "not_run"}])
+def test_ready_knowledge_only_finishes_without_sql(data_result) -> None:
+    result = smart_router_node(
+        {
+            "plan": {"route": "knowledge_only"},
+            "data_result": data_result,
+            "knowledge_result": {"status": "ready"},
+            "review_result": {"review_status": "completed"},
+            "reviewer_outcome": {"status": "succeeded"},
+        }
+    )
+
+    assert result["terminal_result"] == {
+        "outcome": "completed",
+        "reason": "evidence_complete",
+    }
+
+
+@pytest.mark.parametrize(
+    ("override", "expected"),
+    [
+        ({"plan": {"route": "hybrid"}}, ("stop", "non_retryable_or_unknown_failure")),
+        (
+            {"plan": {"route": "data_only"}},
+            ("stop", "non_retryable_or_unknown_failure"),
+        ),
+        (
+            {"data_result": {"status": "failed"}},
+            ("stop", "non_retryable_or_unknown_failure"),
+        ),
+        ({"knowledge_outcome": {"status": "denied"}}, ("stop", "knowledge_denied")),
+        ({"knowledge_outcome": {"status": "cancelled"}}, ("stop", "cancelled")),
+        (
+            {"reviewer_outcome": {"status": "retryable_error", "retry_hint": "retry"}},
+            ("retry_reviewer", "retryable_reviewer_failure"),
+        ),
+        (
+            {"review_result": {"answer_validation": {"citations_valid": False}}},
+            ("stop", "validation_failure"),
+        ),
+        (
+            {"review_result": {"answer_validation": {"numbers_valid": False}}},
+            ("replan", "validation_failure"),
+        ),
+    ],
+)
+def test_ready_knowledge_does_not_bypass_other_requirements(override, expected) -> None:
+    state = {
+        "plan": {"route": "knowledge_only"},
+        "data_result": None,
+        "knowledge_result": {"status": "ready"},
+        "review_result": {"review_status": "completed"},
+        **override,
+    }
+    assert choose_next_action(state) == expected
 
 
 def test_retries_only_data_when_knowledge_is_cached() -> None:

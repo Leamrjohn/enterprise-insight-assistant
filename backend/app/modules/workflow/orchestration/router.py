@@ -117,6 +117,13 @@ def choose_next_action(state: Mapping[str, Any]) -> tuple[RoutingAction, str]:
     knowledge_code = knowledge_result.get("error_code")
 
     if (
+        (state.get("plan") or {}).get("route") == "knowledge_only"
+        and knowledge_status == "ready"
+        and data_status in {None, "not_run"}
+    ):
+        return "stop", "evidence_complete"
+
+    if (
         knowledge_status == "insufficient_evidence"
         and (state.get("plan") or {}).get("route") == "knowledge_only"
     ):
