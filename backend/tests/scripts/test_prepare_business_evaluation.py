@@ -105,6 +105,15 @@ def test_submission_budget_refuses_a_task_cap_above_the_user_ceiling() -> None:
     )
 
 
+@pytest.mark.parametrize("invalid", ["NaN", "sNaN", "Infinity", "-Infinity"])
+@pytest.mark.parametrize("field", ["default_task_max_cost", "requested_cost_ceiling"])
+def test_submission_budget_rejects_nonfinite_limits(field: str, invalid: str) -> None:
+    limits = {"default_task_max_cost": "0.15", "requested_cost_ceiling": "0.15"}
+    limits[field] = invalid
+    with pytest.raises(HarnessError, match="finite"):
+        _validate_submission_budget(**limits)
+
+
 def test_submission_governance_uses_the_server_owned_task_budget(monkeypatch) -> None:
     settings = get_settings().model_copy(
         update={"analysis_task_model_max_cost": "0.16"}

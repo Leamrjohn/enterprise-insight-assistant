@@ -249,6 +249,8 @@ def _validate_submission_budget(
         requested_cap = Decimal(requested_cost_ceiling)
     except (InvalidOperation, TypeError) as exc:
         raise HarnessError("model cost limits must be decimal values") from exc
+    if not task_cap.is_finite() or not requested_cap.is_finite():
+        raise HarnessError("model cost limits must be finite")
     if task_cap <= 0 or requested_cap <= 0:
         raise HarnessError("model cost limits must be positive")
     if task_cap > requested_cap:

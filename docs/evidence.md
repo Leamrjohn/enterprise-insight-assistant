@@ -3428,3 +3428,10 @@
 - **反例与修正**：六个显式 development fixture 的测试先得到 6 failed：实际继续读取不存在的语料 manifest，而非按类型拒绝。随后在统一选择函数中只放行 analysis / clarification，保留原 HTTP 拒绝错误信息。未修改 fixture 预期或实际业务 Agent。
 - **验证**：准备工具测试排除需数据库的 cleanup 后为 20 passed、1 deselected，0.25s；包含原正常准备、澄清和 heldout 开关契约。Ruff 检查通过，格式检查发现一行过长后按要求换行。仅验证准备入口，不证明专用故障执行器成功、旧 prepared manifest 可信或真正实现盲测隔离。
 - **真实评测前置**：已向用户询问模型运行的费用/时限与外部留出持有人；未获得前不进行付费运行。下一次真实基线必须重新准备，不能复用未验真的旧准备清单。
+
+## 2026-10-26 — 费用上限拒绝非有限值
+
+- **调用链与根因**：CLI 与 submit_prepared_tasks 均调用 _require_submission_governance → _validate_submission_budget。Decimal 构造允许 Infinity/NaN，原逻辑仅检查正数和大小；请求上限 Infinity 被接受，NaN/sNaN 比较抛出底层 InvalidOperation。此证据不表示服务端任务费用上限可被绕过。
+- **反例**：对任务上限和用户请求上限分别传入 NaN、sNaN、Infinity、-Infinity，共 8 项先失败；其中负无穷和任务正无穷原已被其他检查拒绝，失败仅为错误分类不符合新增有限值契约，不能将 8 项全部描述为原来可通过。
+- **修复与验证**：在比较之前用 Decimal.is_finite 检查两项输入，统一返回 HarnessError；复用原正数和大小检查。准备工具测试排除数据库 cleanup 后 28 passed、1 deselected，0.17s；两文件 Ruff/格式通过，准备脚本 Pyright 0 errors，命令均退出 0。
+- **边界**：未调用模型或数据库，未改变价格表、预算金额或计价币种。当前参数只比较单任务上限，不是跨案例总预算；用户的整轮预算和执行时限仍待确认，不能据本修复宣称整轮费用治理完成。
