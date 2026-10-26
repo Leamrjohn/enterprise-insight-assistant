@@ -3476,3 +3476,10 @@
 - **断言**：真实 DocumentChunk 两条、归属正确公司、embedding 均非空/384 维/数值有限；另一公司凭据读取该 document_id 返回 404；运行 OpenAPI 无 /documents/upload。Python 验证进程退出 0。数据库复核 completed、2 chunks、min/max vector_dims=384、model_call_records=0，SQL 退出 0。
 - **产物与清理**：停止专用 Worker 后导出本地 ingestion-preflight.dump（artifacts/evaluation-20261026-bounded），SHA256=ef9a4f492a0942b5da58c9d81cd01db27902964c3b6f69319065b1877032f109。核验标签后移除四个容器、临时卷及网络；不删除主机模型缓存、不操作原有服务。备份未公开提交，尚未做恢复演练。
 - **决策与边界**：已证明复用缓存可以让合成 JSON 文档经真实 API/队列/Worker/PG 完成摄取，不修改业务代码或延长模型下载等待。另一公司 HTTP 拒绝只覆盖该访问路径，不替代检索的范围、撤权或 RLS 全面测试。未运行授权检索→重排→模型回答链，也未运行其余开发案例；不把此前知识准备超时回填为通过。
+
+## 2026-10-26 — 摄取备份恢复与本地检索重排
+
+- **恢复**：HEAD b351733a，独立 internal 网络 retrieve1026 和新 PGvector16 容器，先初始化角色，再以 pg_restore --exit-on-error 恢复上一条 ingestion-preflight.dump，退出 0。读回 document 1/company 1 为 completed，2 条 chunk 向量维度均 384。此次是该小型合成库的真实恢复证据，不是业务生产备份完整性或 RTO/RPO 达标证明。
+- **调用链**：同一 runner 只读挂载两个已核验模型缓存、无外网、无 API 密钥；以 agent_app（非 superuser、非 BYPASSRLS）及 set_tenant_scope(1) 调用 retrieve_evidence → 真实 embed → PGvector 范围查询 → rerank_evidences → 真实 CrossEncoder。未降低默认检索阈值、未修改语料或模型。
+- **结果**：合成问题“华东区2025年8月销售额是多少？”召回并重排 1 条目标文档证据，top rerank_score=0.9999300241470337，内容含合成值 100；分数有限断言通过。document_ids=[] 返回空；company 2 正常范围查询返回空；company 2 伪造 document_ids=[1] 触发 VectorSearchError，未返回证据。初始化及所有检查共 9.83 秒，退出 0。
+- **边界与清理**：直接调用检索层，不冒充经完整 ToolRuntime 的动态成员身份/撤权验证；也不把单个合成命中当作检索准确率或模型答案质量。provider model_call_records=0。核验标签后删除两容器、临时卷和专用网络，原备份和模型缓存保留；未启动新一轮付费模型调用。
