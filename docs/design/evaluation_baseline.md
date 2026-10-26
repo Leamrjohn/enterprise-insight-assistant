@@ -49,6 +49,26 @@
 
 ## 未证明范围
 
+### 知识评测运行前：离线模型预检
+
+2026-10-26 真实准备超时后的诊断：新建 agent-worker 容器未挂载 Hugging Face 缓存，网络禁用时 LocalEmbeddingProvider 退出 1（LocalEntryNotFoundError）；主机对应模型快照已存在。只读挂载该模型目录后，同一镜像、当前源码、禁用网络，实际生成两条 384 维有限向量通过，模型初始化和计算共 6.97 秒。无需修改业务代码、放宽轮询超时或使用假向量。
+
+后续临时评测 Worker 和需要本地模型的评测进程均应使用已核验缓存；先在不携带 API 密钥且无网络的独立容器运行下列预检，再启动付费评测窗口。只挂载所需模型目录，不挂载整个用户缓存或令牌目录；以当次核验的模型快照和镜像 ID 记录版本。以下为本机示例，路径不同须先核验，不能直接创建空目录冒充缓存：
+
+```powershell
+$modelCache = 'C:/Users/qyf21/.cache/huggingface/hub/models--sentence-transformers--paraphrase-multilingual-MiniLM-L12-v2'
+if (-not (Test-Path -LiteralPath "$modelCache/refs/main")) { throw '模型缓存缺失' }
+$backendPath = (Resolve-Path backend).Path
+docker run --rm --network none `
+  -e HF_HUB_OFFLINE=1 -e TRANSFORMERS_OFFLINE=1 -e HF_HUB_CACHE=/model-cache `
+  --mount "type=bind,source=$modelCache,target=/model-cache/models--sentence-transformers--paraphrase-multilingual-MiniLM-L12-v2,readonly" `
+  --mount "type=bind,source=$backendPath,target=/app,readonly" `
+  agent-worker python -c "import math; from app.modules.knowledge.rag.embeddings_local import LocalEmbeddingProvider; v=LocalEmbeddingProvider().embed_batch(['合成测试：华东销售额','合成测试：缺少时间范围']); assert len(v)==2 and all(len(x)==384 and all(math.isfinite(n) for n in x) for x in v); print('offline embedding preflight passed')"
+if ($LASTEXITCODE -ne 0) { throw '离线向量预检失败，不启动知识评测' }
+```
+
+本预检只覆盖 embedding，不覆盖另一个 reranker 模型的缓存、JSON 文档摄取、检索质量、权限或真实知识回答。实际知识链仍需预检 reranker 及摄取，再运行已授权的新一轮开发评测；原 30 分钟窗口不自动续期。不要把本次离线向量成功回填成上次准备成功。
+
 ### 开发材料盘点（2026-10-26）
 
 仅读取 `backend/tests/fixtures/evaluation/business_*_development_v*.json`，不读取 Gold、heldout 或阈值文件。30 份文件全部通过当前 `EvaluationFixture` 校验，42 条记录全部标为 development；共有 30 个不同 case_id、20 个文件系列。文件系列不是场景数，case_id 不同也不自动代表独立场景。

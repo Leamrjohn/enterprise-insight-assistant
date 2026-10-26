@@ -3454,3 +3454,11 @@
 - **知识准备失败**：knowledge-quality-batch-evidence 的 JSON 文档已进入 processing；首次本地 SentenceTransformer 加载期间，准备器 30 秒轮询到期退出 1，未创建第五个分析任务。日志仅证明 Hugging Face 请求/模型加载，尚不能断定为网络故障或模型文件损坏。未用假向量绕过，也未修改文档或预期。停止 Worker 后文档仍 processing，这是隔离演练遗留状态，不称已成功摄取。
 - **产物**：本地 artifacts/evaluation-20261026-bounded 下保存 environment、四份准备/评分结果、四份 HTML trace、知识准备失败清单，以及清理前 platform-final.dump。备份 255910 字节，SHA256=8f30bb915f165fb85573af669d9cbcd5b266d5a994b309aba681a334318db55d；pg_restore --list 可读取 545 项目录，未实证恢复。原始产物及数据库备份未纳入公开提交。容器内运行器 git_revision=unavailable，旁录 environment.git_revision=25e4b407；未篡改原始报告补成自动捕获成功。
 - **清理与边界**：四份任务清理由现有 harness 导出 trace 后执行，数据库读回 remaining_tasks=0；核验标签后删除六个临时容器、匿名卷和专用网络，原有服务不动。只有 4/23 开发案例完成真实评分；准备失败不计作模型案例失败。无完整 23 例报告、无新留出、无统一阈值验收、无性能规模或学习独立能力证明，不晋升阶段 2 基线。
+
+## 2026-10-26 — 知识准备的离线缓存诊断
+
+- **前轮分类**：真实评测已有 4 例持久化证据，本轮不新增付费调用。04b4a8a1 的 PR run 40319849725 completed/success。
+- **反例**：在 agent-worker 新建容器中，HF_HUB_OFFLINE=1、TRANSFORMERS_OFFLINE=1 且 network=none，缓存根目录和目标模型目录均不存在；当前 LocalEmbeddingProvider 加载失败，退出 1，异常链含 LocalEntryNotFoundError。原常驻 Worker 仅挂载 logs/storage，没有模型缓存挂载。此证据定位到隔离环境缺缓存，不证明此前网络本身故障。
+- **最小验证**：主机已有 paraphrase-multilingual-MiniLM-L12-v2 快照 e8f8c211226b894fcb81acc59f3b34ba3efd5f42。仅将这个模型目录只读挂载到 /model-cache 下对应目录，设置 HF_HUB_CACHE，仍禁用网络且不注入 API 密钥；同一镜像真实 embed_batch 两条合成中文文本，每条 384 维且全部有限，初始化与计算 6.97 秒，退出 0。镜像 ID sha256:06aec4327c6972948d9933af3c11f4afe0f1cded1802e32cf1a43f311956c92d，sentence-transformers=5.7.0。
+- **决策**：复用已有缓存，不新增依赖、不改业务模型、不扩大超时、不下载重复权重；预检命令及失败阻断规则加入评测设计稿。两个临时探测容器通过 --rm 自动清除，原缓存未修改。
+- **未证明**：尚未验证 reranker 缓存、完整文档摄取和 RAG 结果；没有把上次 processing/超时记录改成成功。下一轮付费评测必须有新的运行窗口授权，当前预算窗口不自动重置。
