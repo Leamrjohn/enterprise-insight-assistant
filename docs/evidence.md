@@ -3399,3 +3399,10 @@
 - **候选**：新增 docs/design/development_case_selection.json，23 项均引用现有开发文件和明确 case_id，不改题目、答案或阈值。10 项 persisted_task、1 项 request_rejection、6 项 runtime_tool_rejection、SQL 三类各 1、duplicate_delivery 1、execution_fence 2；选择与补充回归的取舍写入设计草案。
 - **校验**：离线读取清单及显式开发来源，断言数量 23、ID 唯一、引用唯一命中、development 标记及 Observation 来源映射，退出 0。初次校验命令的 PowerShell 引号错误及漏写 security_rejection→request_rejection 映射已修正；没有据此更改产品契约或源案例。
 - **边界**：清单为 proposed_not_frozen，23 项 oracle_review 均 pending。没有真实数据库、Worker、模型调用或留出评测，不宣称已建立基线；预期的独立业务依据与当前数据 hash 仍待核对。未读取旧 Gold 或密封留出文件，未修改另外三项工作区改动。
+
+## 2026-10-26 — 开发评测补齐原文限制条件
+
+- **依据**：质量复盘明确不是所有产品或客户的质量结论；回款资料明确逾期不等于坏账。原 v1_4 的两个候选缺少 qualification 预期；新反例测试得到 2 failed，原因是缺少上述限制的合成 Observation 仍 passed，而非外部依赖失败。
+- **改动**：新增 development v1_7，仅为质量批次与回款风险两例增加原文限制词组；候选清单对应两项改为引用新文件。旧 fixture、源文档、评分器及业务代码不变，不依据模型结果放宽标准。
+- **验证**：`pytest tests/unit/evaluation/test_business_evaluation.py -k 'not business_gold' -q` 为 62 passed、2 deselected，0.13s；两项新测试同时验证限制语句来自对应原文、缺失被拒绝、补齐被接受。修改测试 Ruff 与格式检查通过。
+- **边界**：Mock/合成观测仅证明确定性评分要求，不证明真实模型、引用、文档数字、运行权限或任意矛盾表述被检测。完整业务预期复核仍 pending；未调用真实模型、未读取留出文件、未合并 PR。

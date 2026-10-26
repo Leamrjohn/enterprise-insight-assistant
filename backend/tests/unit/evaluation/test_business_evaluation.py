@@ -1425,6 +1425,56 @@ def test_document_term_expectations_reject_a_negated_literal() -> None:
     assert result.required_claims_supported is False
 
 
+@pytest.mark.parametrize(
+    ("case_id", "claim", "qualification"),
+    [
+        (
+            "knowledge-quality-batch-evidence",
+            "SUP-003 的传感器批次存在异常。",
+            "该复盘不是对所有产品或所有客户的质量结论。",
+        ),
+        (
+            "knowledge-receivable-risk-boundary",
+            "CUST-0280 回款风险上升，需催收跟进。",
+            "未付款和逾期不等于坏账，仍需按后续回款及信用政策评估。",
+        ),
+    ],
+)
+def test_selected_knowledge_cases_require_source_qualifications(
+    case_id, claim, qualification
+) -> None:
+    root = Path(__file__).resolve().parents[4]
+    selection = json.loads(
+        (root / "docs/design/development_case_selection.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    entry = next(item for item in selection["cases"] if item["case_id"] == case_id)
+    fixture = EvaluationFixture.model_validate_json(
+        (root / "backend/tests/fixtures/evaluation" / entry["file"]).read_bytes()
+    )
+    case = next(item for item in fixture.cases if item.case_id == case_id)
+    source = (root / "data/business_knowledge_base" / case.document_scope[0]).read_text(
+        encoding="utf-8"
+    )
+    assert qualification in source
+    observation = _observation(
+        case_id=case_id,
+        actual_route="knowledge_only",
+        actual_supported_claims=[claim],
+        actual_confirmed_facts=[],
+        returned_document_paths=case.document_scope,
+        actual_document_qualifications=[],
+    )
+    missing_boundary = evaluate_case(case, observation)
+    assert not missing_boundary.passed
+    assert "document_qualifications_supported" in missing_boundary.violations
+    with_boundary = observation.model_copy(
+        update={"actual_document_qualifications": [qualification]}
+    )
+    assert evaluate_case(case, with_boundary).passed
+
+
 def test_document_qualification_terms_are_independent_of_partial_limitations() -> None:
     case = _case(
         expected_route="knowledge_only",

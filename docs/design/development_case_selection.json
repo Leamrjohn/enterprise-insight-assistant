@@ -31,7 +31,7 @@
       "oracle_review": "pending"
     },
     {
-      "file": "business_knowledge_development_v1_4.json",
+      "file": "business_knowledge_development_v1_7.json",
       "case_id": "knowledge-quality-batch-evidence",
       "purpose": "纯知识路线的支持证据",
       "observation_source": "persisted_task",
@@ -45,7 +45,7 @@
       "oracle_review": "pending"
     },
     {
-      "file": "business_knowledge_development_v1_4.json",
+      "file": "business_knowledge_development_v1_7.json",
       "case_id": "knowledge-receivable-risk-boundary",
       "purpose": "风险结论的证据边界",
       "observation_source": "persisted_task",
