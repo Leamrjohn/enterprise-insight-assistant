@@ -3385,3 +3385,10 @@
 - **红/绿验证**：新增四条 POST 拒绝与一条 OpenAPI 边界测试，修改前 5 failed（入口进入鉴权并返回 401、文档仍暴露上传）；修改后 5 passed。关闭后的 POST 返回 404/405，JSON `/documents` POST 仍在 OpenAPI 中。首轮全回归发现独立测试应用缺 request_id 中间件，补齐测试装配后重新运行，未放松生产入口断言。
 - **回归**：专用 scope=freeze-1025 的 PGvector/PG16 与 Redis，loopback 49799/49802，应用 agent_app、迁移 agent_migrator；Python 3.13 执行 `pytest tests/unit tests/scripts tests/integration -m 'not e2e and not slow' -k 'not business_gold' -q -x --tb=short`，887 passed、2 skipped、11 deselected，40.82s，退出 0。Ruff 全目录通过，334 文件格式通过，Pyright 0 errors。前端 7 tests passed，TypeScript/Vite 构建通过；文档页面测试确认无文件控件且文本录入仍成功。
 - **清理与边界**：核对标签后删除本轮两个容器及匿名测试卷，临时数据可重建，开发服务未操作。未部署或重启已有服务，未撤销历史直传授权，不证明已有运行进程已关闭入口或在途任务已停止；未运行 Worker/对象存储 E2E、旧 Gold 或真实模型评测。该变更恢复计划约束，不代表阶段 1 学习验收或阶段 2 完成。远端新提交 CI 结果待确认，PR 不合并。
+
+## 2026-10-26 — 评测准备的文本接口契约
+
+- **范围**：补充评测基线设计草案，不改原计划、评分器或业务代码。复用准备工具与 httpx MockTransport，用临时合成 fixture/文档验证实际请求序列；未读取旧 Gold 或新留出内容。
+- **契约**：`_upload_documents` 只发送 JSON POST `/documents`，payload 严格等于文档名称、正文、来源与可见角色；标准答案哨兵不进入请求。随后 GET `/documents/73` 读取完成状态，并返回文档 ID、路径与 hash。不使用已冻结文件或附件上传入口。
+- **验证**：`pytest tests/scripts/test_prepare_business_evaluation.py -k 'not cleanup' tests/unit/test_upload_entrypoints_frozen.py -q` 为 19 passed、1 deselected，0.61s，退出 0；修改测试文件 Ruff 和格式检查通过。排除的是需要数据库的清理测试，不宣称本轮执行真实 PG、Worker 或模型评测。
+- **决策**：采用准备工具的窄契约回归；评测基线设计仍为草案，23 例开发集、7 例独立密封留出、真实运行预算和基线报告均未据此完成。三项原有工作区修改未纳入本切片。

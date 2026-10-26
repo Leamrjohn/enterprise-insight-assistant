@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 from uuid import uuid4
 
+import httpx
 import pytest
 import scripts.evaluation.prepare_business_evaluation as evaluation_harness
 from app.core.settings import get_settings
@@ -239,6 +240,56 @@ def test_plan_allows_only_explicit_heldout_evaluation(tmp_path: Path) -> None:
             requested_case_ids=["analysis-case", "development-case"],
             heldout_evaluation=True,
         )
+
+
+def test_document_preparation_uses_json_without_answer_keys(tmp_path: Path) -> None:
+    fixture_path, corpus_dir = _write_fixture_and_corpus(
+        tmp_path,
+        _case(expected_supported_claims=["answer-key-must-not-be-sent"]),
+    )
+    plan = build_preparation_plan(
+        fixture_path=fixture_path,
+        corpus_dir=corpus_dir,
+        requested_case_ids=["analysis-case"],
+    )
+    requests: list[httpx.Request] = []
+
+    def respond(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        if request.method == "POST":
+            assert request.url.path == "/documents"
+            assert request.headers["content-type"] == "application/json"
+            assert request.headers["x-request-id"] == "p0-contract-doc-0"
+            assert json.loads(request.content) == {
+                "name": "events/east.md",
+                "content": "已授权业务资料",
+                "source": "events/east.md",
+                "min_view_role": "any",
+            }
+            return httpx.Response(202, json={"id": 73})
+        assert request.method == "GET"
+        assert request.url.path == "/documents/73"
+        return httpx.Response(200, json={"status": "completed"})
+
+    with httpx.Client(
+        base_url="http://evaluation.test/", transport=httpx.MockTransport(respond)
+    ) as client:
+        documents = evaluation_harness._upload_documents(
+            client=client,
+            plan=plan,
+            corpus_dir=corpus_dir,
+            run_id="contract",
+            timeout_seconds=1,
+        )
+
+    assert len(requests) == 2
+    assert documents == [
+        {
+            "document_id": 73,
+            "path": "events/east.md",
+            "sha256": plan.documents[0].sha256,
+        }
+    ]
 
 
 def test_upload_records_document_id_before_wait_failure(
