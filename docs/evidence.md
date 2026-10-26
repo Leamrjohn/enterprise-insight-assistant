@@ -3392,3 +3392,10 @@
 - **契约**：`_upload_documents` 只发送 JSON POST `/documents`，payload 严格等于文档名称、正文、来源与可见角色；标准答案哨兵不进入请求。随后 GET `/documents/73` 读取完成状态，并返回文档 ID、路径与 hash。不使用已冻结文件或附件上传入口。
 - **验证**：`pytest tests/scripts/test_prepare_business_evaluation.py -k 'not cleanup' tests/unit/test_upload_entrypoints_frozen.py -q` 为 19 passed、1 deselected，0.61s，退出 0；修改测试文件 Ruff 和格式检查通过。排除的是需要数据库的清理测试，不宣称本轮执行真实 PG、Worker 或模型评测。
 - **决策**：采用准备工具的窄契约回归；评测基线设计仍为草案，23 例开发集、7 例独立密封留出、真实运行预算和基线报告均未据此完成。三项原有工作区修改未纳入本切片。
+
+## 2026-10-26 — 开发候选清单与引用校验
+
+- **盘点**：只读取 business_*_development_v*.json，30 文件、42 记录、30 个不同 case_id、20 个文件系列，全部通过当前 EvaluationFixture 且 split 为 development。知识文件的四个 case_id 各重复出现四次；不能据记录数认定独立场景数。
+- **候选**：新增 docs/design/development_case_selection.json，23 项均引用现有开发文件和明确 case_id，不改题目、答案或阈值。10 项 persisted_task、1 项 request_rejection、6 项 runtime_tool_rejection、SQL 三类各 1、duplicate_delivery 1、execution_fence 2；选择与补充回归的取舍写入设计草案。
+- **校验**：离线读取清单及显式开发来源，断言数量 23、ID 唯一、引用唯一命中、development 标记及 Observation 来源映射，退出 0。初次校验命令的 PowerShell 引号错误及漏写 security_rejection→request_rejection 映射已修正；没有据此更改产品契约或源案例。
+- **边界**：清单为 proposed_not_frozen，23 项 oracle_review 均 pending。没有真实数据库、Worker、模型调用或留出评测，不宣称已建立基线；预期的独立业务依据与当前数据 hash 仍待核对。未读取旧 Gold 或密封留出文件，未修改另外三项工作区改动。
