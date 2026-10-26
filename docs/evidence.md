@@ -3435,3 +3435,22 @@
 - **反例**：对任务上限和用户请求上限分别传入 NaN、sNaN、Infinity、-Infinity，共 8 项先失败；其中负无穷和任务正无穷原已被其他检查拒绝，失败仅为错误分类不符合新增有限值契约，不能将 8 项全部描述为原来可通过。
 - **修复与验证**：在比较之前用 Decimal.is_finite 检查两项输入，统一返回 HarnessError；复用原正数和大小检查。准备工具测试排除数据库 cleanup 后 28 passed、1 deselected，0.17s；两文件 Ruff/格式通过，准备脚本 Pyright 0 errors，命令均退出 0。
 - **边界**：未调用模型或数据库，未改变价格表、预算金额或计价币种。当前参数只比较单任务上限，不是跨案例总预算；用户的整轮预算和执行时限仍待确认，不能据本修复宣称整轮费用治理完成。
+
+## 2026-10-26 — 首轮有界真实开发评测（未冻结基线）
+
+- **授权与窗口**：用户确认本轮最多人民币 10 元、30 分钟，密封留出暂缓。开始 09:58:20 UTC，截止 10:28:20 UTC；Worker 实际 FinishedAt=10:06:42.026079515Z。后续收尾恢复于 12:03 UTC，未重启 Worker 或新增调用；其余空闲容器的清理晚于运行窗口，不能称整套环境自动按时销毁。
+- **版本与隔离**：代码 25e4b407 只读挂载到现有 agent-api/agent-worker 镜像；新建 eval1026 标记的独立 PGvector16、Redis7、合成经营库、API、Worker 和 runner，独立网络。平台迁移至 x1a2b3c4d5e6；经营库固定 seed 20260718、只读账号 acme_readonly。原有三项工作区修改未改变或提交。此运行复用镜像依赖，不是干净重建镜像的证明。
+- **执行限制**：串行提交，每任务服务端上限 0.15 美元、8 次模型调用、16000 tokens；输出上限 1024，调用超时 30 秒；隔离 Worker concurrency=1，soft/hard task limit=540/600 秒。APP_ENV=test；容量准入在此测试环境关闭，因此不验证容量门禁。运行 OpenAPI 返回 200 且无文件上传路由。未使用现有正在重启的 API。
+- **计价**：官方 https://api-docs.deepseek.com/zh-cn/quick_start/pricing/ 当次读取说明旧 deepseek-v4-flash 别名由 V4.1-Flash-1017 服务；高峰价未缓存输入 2 元/百万、输出 8 元/百万。17 次调用全部 settled，输入 28561、输出 2391，应用美元账本合计 0.011438；按上述人民币高峰价且输入全部按未命中估算为 0.076250 元。没有将美元金额当人民币，也没有进行供应商账户账单对账；这是用量估算，不是实扣证明。
+
+| 开发案例 | task_id / 任务终态 | 当前评分结果 |
+|---|---|---|
+| data-east-delivered-revenue-2025-08 | 1 / failed | 未通过 outcome_correct；SQL 结果仍有 unknown |
+| data-east-sales-comparison-repair-v2 | 2 / completed | 通过 |
+| data-known-region-empty-month-v7 | 3 / partial | 通过，其数据结果为预期的证据不足 |
+| clarification-missing-time-range | 4 / needs_clarification | 通过；不纳入可信业务分析成功率分母 |
+
+- **Bad Case**：首例模型候选使用 customers.region_code='EAST' 推断华东，语义复核认为快照未证明代码到名称映射，返回 insufficient_schema；sql_attempts=0，没有 SQL 工具调用记录。快照存在 customers.region_code→regions.code 联结。保留原题、原预期和失败，不通过改答案或重复采样刷绿。该结果说明本次查询生成/修复路径未利用可用名称联结，不意味着数据库缺表或越权事故；待后续候选针对这一失败做确定性回归与真实对照。
+- **知识准备失败**：knowledge-quality-batch-evidence 的 JSON 文档已进入 processing；首次本地 SentenceTransformer 加载期间，准备器 30 秒轮询到期退出 1，未创建第五个分析任务。日志仅证明 Hugging Face 请求/模型加载，尚不能断定为网络故障或模型文件损坏。未用假向量绕过，也未修改文档或预期。停止 Worker 后文档仍 processing，这是隔离演练遗留状态，不称已成功摄取。
+- **产物**：本地 artifacts/evaluation-20261026-bounded 下保存 environment、四份准备/评分结果、四份 HTML trace、知识准备失败清单，以及清理前 platform-final.dump。备份 255910 字节，SHA256=8f30bb915f165fb85573af669d9cbcd5b266d5a994b309aba681a334318db55d；pg_restore --list 可读取 545 项目录，未实证恢复。原始产物及数据库备份未纳入公开提交。容器内运行器 git_revision=unavailable，旁录 environment.git_revision=25e4b407；未篡改原始报告补成自动捕获成功。
+- **清理与边界**：四份任务清理由现有 harness 导出 trace 后执行，数据库读回 remaining_tasks=0；核验标签后删除六个临时容器、匿名卷和专用网络，原有服务不动。只有 4/23 开发案例完成真实评分；准备失败不计作模型案例失败。无完整 23 例报告、无新留出、无统一阈值验收、无性能规模或学习独立能力证明，不晋升阶段 2 基线。
