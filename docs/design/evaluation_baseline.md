@@ -88,4 +88,31 @@
 
 这是源文本支持关系与确定性契约的局部复核；不验证文档数字可复算性、模型语义质量、实际引用或权限，也不能防住所有矛盾表述。因此两例的完整 oracle_review 仍 pending，后续还须验证真实持久化 Observation。
 
-此草案不是 30 例已完成、基线已建立或密封流程已可用的证据。四项确定性测试仅证明 unknown/缺失观测的局部处理，未验证真实业务质量、独立留出或生产规模。
+### 数据预期复算：华东销售额与空月份
+
+2026-10-26 在独立 PostgreSQL 16 临时容器中，以生成器 seed 20260718 调用 `recreate_schema` → `seed_dimensions` → `seed_transactions`；不生成或覆盖语料文件。提交生成事务后，以只读事务查询 `sales_orders → customers → regions`，按区域名称“华东”、状态 delivered、半开月份区间过滤。
+
+| 月份 | 订单数 | 订单 total_amount 合计 | 明细 line_amount 独立合计 |
+|---|---:|---:|---:|
+| 2025-07 | 31 | 2014010.64 | 2014010.64 |
+| 2025-08 | 29 | 1847604.72 | 1847604.72 |
+
+2020-03 用相同区域和半开日期区间、不添加状态条件，订单数为 0；regions 中“华东”恰有 1 行，排除了区域不存在导致空结果的混淆。三个候选的金额/两月语义/空结果指纹均与当前 fixture 相同。这里仅证明输入数据和预期计算的一致性；空结果的业务降级策略仍是待验证的系统契约，不是数据库自动给出的结论。
+
+复算查询（将日期范围替换为待测区间；明细校验再连接 sales_order_items 并汇总 line_amount）：
+
+```sql
+SELECT to_char(o.order_date, 'YYYY-MM') AS month,
+       count(*) AS order_count, sum(o.total_amount) AS revenue
+FROM sales_orders o
+JOIN customers c ON c.id = o.customer_id
+JOIN regions r ON r.code = c.region_code
+WHERE r.name = '华东' AND o.status = 'delivered'
+  AND o.order_date >= DATE '2025-07-01'
+  AND o.order_date < DATE '2025-09-01'
+GROUP BY 1 ORDER BY 1;
+```
+
+单月结果按现有“销售额”单指标序列化；两月结果按 `revenue/v1` 投影；空结果按 no_matching_records 契约序列化后，复用现有指纹函数比较。这些是审查用计算值，不写入实际任务 Observation。真实经营库是否仍与此生成版本一致、Agent 的 SQL/权限/发布链、真实成本和时延仍未验证，因此完整 oracle_review 保持 pending。
+
+此草案不是 30 例已完成、基线已建立或密封流程已可用的证据。确定性测试和合成库复算不替代真实业务质量、独立留出或生产规模验证。

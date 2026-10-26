@@ -3413,3 +3413,11 @@
 - **读取边界**：先根据显式 development 文件名白名单和解析后的父目录检查路径，再读取对应内容；没有读取 Gold 或留出文件。此约束只属于本测试，不宣称整个运行器已实现盲测隔离。
 - **验证**：候选清单测试加业务评测单元回归为 63 passed、2 deselected，0.19s；排除旧 Gold 测试。Ruff 检查通过；首次格式检查指出函数名过长，已缩短名称后重新检查。
 - **边界与回滚**：未改变业务预期、案例数、阈值或 pending 状态；无真实 PG、Worker、模型运行。删除新增测试并回退对应说明即可回滚，不涉及数据迁移。阶段 2 基线仍未建立。
+
+## 2026-10-26 — 三例数据候选的隔离数据库复算
+
+- **环境**：HEAD cdfef124；独立容器 codex-oracle-pg-1026，scope=development-oracle-1026，无宿主挂载，127.0.0.1 随机端口 53737，库 oracle_audit。PostgreSQL 镜像 ID sha256:57c72fd2a128e416c7fcc499958864df5301e940bca0a56f58fddf30ffc07777。仅在此新库执行生成器建表/造数，随后只读事务审查；未连接已有经营库。
+- **版本**：生成器工作区文件 SHA256 为 42f8ea8a562bed6f044a9d6289ea6af224d6ca80e52e49c07858365b1519061e，seed=20260718；已有未提交差异仅为语料 README 的合成数据声明，本轮未修改或提交它。调用 recreate_schema、seed_dimensions、seed_transactions，不调用语料生成或读取 evaluation.scenario_truth。
+- **结果**：华东 delivered 订单 2025-07 为 31 笔/2014010.64，2025-08 为 29 笔/1847604.72；独立汇总 sales_order_items.line_amount 得到相同金额。区域存在且唯一，2020-03 不限订单状态的匹配数为 0。复算及断言进程退出 0，独立明细 SQL 退出 0。查询和复现调用顺序记录在设计稿。
+- **指纹**：单月、跨月、空月份分别匹配 7c587b5fb455ebe3e3a51ecfe11a23325708b41653cd4eb012798489a1bb46cd、ab3c4bf4b2e5bc713bdebeba47802bc96dd01f8c97348cd9fb8c3ebff1921228、4012d5a713b509655890e39fbc864ab4054cbd784178f3a0485e882309860ded。对应开发 fixture 文件 SHA256 分别为 32f449765a4f9e3037f1a5b5a2862d25a16907ef8b8101106dab9bad5c81e05b、c09d29e0e6e12dfa86c5d59b2d7a11e717c95efbb114698438f8e8f02b562fb4、c5746e2635b5f51727a0d3b0cd13c8e9a1d46453ed73e4de8f6c813b8740314c；未改答案以适应运行结果。
+- **CI 与边界**：cdfef124 的 PR run 40277863624 completed/success。本轮未调用模型、未创建业务任务或伪造持久化 Observation；只证明合成库预期一致性，不证明当前真实连接的数据版本、运行权限、业务全链或学习能力。23 例仍未冻结，7 例外部留出仍待独立持有人。
