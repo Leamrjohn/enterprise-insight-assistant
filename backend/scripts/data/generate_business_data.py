@@ -1124,6 +1124,10 @@ def generate_business_knowledge_base(cur: psycopg.Cursor) -> None:
 
 本目录由 `backend/scripts/data/generate_business_data.py` 从固定 seed 的业务数据库生成。不要手工修改 Markdown 或 `manifest.json`；数据库重建后重新运行生成器即可同步刷新。
 
+本目录是个人学习项目的合成经营语料。公司、客户、员工姓名、交易金额、欠款、信用风险与沟通记录均作为虚构业务场景使用，不代表真实企业或个人的经营情况。`confidential` 等密级是权限测试标签，不是这些样例来自真实企业机密的声明。授信、催收等建议仅用于评测，不应作为真实业务决策依据。
+
+本说明仅适用于仓库随附的合成语料，不适用于用户另行上传的资料或接入的数据库；真实数据须独立核实来源与处理授权。
+
 测试默认使用 `manifest.json` 的场景小语料（通常 1–3 篇），避免每次运行都嵌入全量文档。`full_regression` 仅用于少量独立回归或 E2E。
 
 文档只包含可复算事实、明确的业务背景和结论边界；不包含 `evaluation.scenario_truth` 中的答案键。
