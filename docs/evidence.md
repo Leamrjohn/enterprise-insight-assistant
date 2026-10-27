@@ -3558,3 +3558,12 @@
 - **空范围边界**：本轮验证的是直接 execute 的检索拒绝；上一轮知识工作流 wrap 适配器在当前授权通过后将合法空资源映射为 insufficient_evidence、不执行检索，两者不矛盾。当前文档权限与成员状态是在认领后变更，证明 Runtime 会复核，而非仅依赖任务创建时授权。
 - **产物与清理**：artifacts/evaluation-20261027-runtime 保留 probe、两轮映射/环境/评分、12 份 HTML trace、清理前 runtime.dump；dump SHA256=c8bd776642600b3773efd03222aa37489934a9435d31e1193a26b596c562780f。原始产物只保留本地。核验资源 scope 后删除两容器、PG 匿名卷和网络，标签查询无残留，备份保留；未删除共享数据库或主机缓存。
 - **进度与未证**：累计 19/23 个不同开发案例已有真实数据库或业务链评分，不代表全部业务成功，也未冻结为统一基线。剩余开发案例为两项混合路线、HTTP 伪造范围及 SQL Schema 注入；7 例独立留出、oracle 审核、统一阈值和学习门禁仍未完成。模型代执行只作为示范，不标记用户独立掌握。
+
+## 2026-10-27 — HTTP 伪造文档范围与 SQL Schema 注入拒绝
+
+- **环境**：5548bb3e 当前源码，只读挂载；internal 网络 guard1027、新 PGvector16、真实 Uvicorn API 与 runner。启动时以 comment-only empty.env 遮蔽容器 /app/.env，API 和 runner 有效 DeepSeek/OpenAI 密钥为空断言通过。无 Worker、无模型调用，不改业务代码、fixture 或原评分器。
+- **HTTP 证据**：直接在隔离库准备已批准 analyst、当前公司会话和另一公司的 completed 文档；持同一临时 API key GET 自己的会话返回 200，再向真实消息端点提交外公司 document_id，返回 422、message=所选文档不存在或当前用户无权检索。持久化 conversation_message 拒绝审计；提交后任务、消息、Outbox、模型记录数均为 0。会话为直接准备且未关联经营数据源，证明文档校验在其前拒绝，不证明正常会话创建、任务准入或业务执行成功。
+- **探针纠正**：第一次已收到 422 并记审计，但局部执行器按 FastAPI 默认 detail 读取，KeyError 后退出 1。沿 app.core.exceptions.http_exception_handler 确认项目响应使用 message，修正探针后在新租户重跑退出 0；旧拒绝审计仍保留，不把执行器字段错误归因于鉴权失败。主机核验命令另有一次 PowerShell foreach 管道语法错误，纠正后核验成功，未修改应用状态。
+- **SQL 证据**：真实 claim_execution → ToolRuntime.execute(SQLTool) → validate_sql，对 SELECT * FROM evaluation.scenario_truth 返回 sql_validation_error / 不允许指定数据库或Schema；持久化 failed 工具记录，finish_execution 后任务 failed、无报告。该路径在经营数据库连接前校验，本轮没有配置经营数据源或连接经营库，不称数据库权限/只读账号验证，也没有读取目标表或任何留出内容。
+- **评分与产物**：两个原 development_v1 案例分别由 request_rejection、sql_validation_rejection 适配器读取持久化证据，success_count=1、hard_gate_status=passed、violations=[]。终态数据库模型记录 0、消息 0、Outbox 0，唯一任务为 SQL 拒绝探针。artifacts/evaluation-20261027-input-guards 本地保留运行脚本、环境、映射、HTTP/SQL 证明、两份评分、SQL HTML trace 和 guards.dump；dump SHA256=e6e25f2b0991508047334d08c74d200738d4b978fce1e0281c35f4147f058ee3。备份后核验标签，删除三个容器、PG 匿名卷和网络，标签查询无残留；原始产物不公开提交。
+- **结论**：累计 21/23 个不同开发案例已有评分证据，仍未统一冻结或全部业务通过；剩余两项混合路线真实运行、独立留出、oracle 审核、阈值与学习门禁未完成。此轮仅完成专用拒绝验证，不推进到阶段 3，也不将模型代操作记作用户掌握。
