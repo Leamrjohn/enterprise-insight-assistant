@@ -3525,3 +3525,18 @@
 - **真实执行与评分**：专用执行器创建任务→原子认领→ToolRuntime→SQLTool→只读 PostgreSQL→工具/执行记录持久化；不经过 HTTP、Redis 或 Celery 投递。超时案例冻结 100 ms、查询含 pg_sleep(0.2)，记录 sql_statement_timeout、115 ms、任务 failed；sql_timeout Observation 对原 development_v1 fixture 评分通过。结果上限案例请求 LIMIT 100000，记录实际 row_count=1000、15 ms、任务 completed；sql_result_limit Observation 对原 development_v1 fixture 评分通过。执行器与评分命令退出 0，两份报告逐例 passed=true、无 violations；业务分析成功率为 unknown，不冒充可信回答成功。
 - **费用与产物**：数据库复核 model_call_records=0；两个案例均为专用故障/限制观测，不是合成 Observation 或付费模型回答。本地 artifacts/evaluation-20261027-sql 保存准备清单、映射、评分、两份 HTML trace、环境旁录和清理前 sql-probes.dump；dump SHA256=4f42e9a3eabceb93540ad7c0b5be83ce02ac01e595e5faad6a8cc52658b80fb5，未实证恢复。容器评分器 git_revision=unavailable，environment 旁录完整源码提交；原始产物不公开提交。
 - **清理与边界**：两执行器按各自资源清单 cleanup 均退出 0，analysis_tasks 读回 0；核验标签后删除三个容器、匿名卷和专用网络，标签查询无残留。备份/报告保留，现有服务不动。累计候选清单 10/23 个不同案例已有真实专用或业务评分（不是 10 个通过）；完整开发集、冻结阈值、独立留出、知识修复付费对照仍未完成，本轮不新增授权也不宣称阶段 2 完成。
+
+## 2026-10-27 — 重复认领真实持久化开发评测
+
+- **范围与执行**：459163aa 源码只读挂载，internal 网络 duplicate1027、新 PGvector16 和无供应商凭据 runner。局部探针复用 claim_execution / finish_execution：两个线程各用独立 Session 认领同一个真实任务，结果 [attempt 1, None]；胜出者完成后断言仅一条尝试。未使用同步屏障保证数据库语句同时到达，不称高并发压力测试；也未经过 Redis/Celery 投递。
+- **准备修正**：首次局部脚本遗漏 Documents ORM 注册，在任务 flush 前因外键元数据缺失退出 1，事务回滚；补充该模型导入后执行退出 0。不把执行器加载问题算作系统重复认领失败，也不改业务认领代码。
+- **证据与评分**：实际持久化 execution_claimed → execution_claim_rejected(error_code=execution_already_claimed) → execution_finished，task 1/company 2 completed，单一尝试；model_call_records=0。从原 duplicate_delivery Observation 适配器读取数据库，对原 development_v1 案例评分 passed=true，无 violations，业务分析成功率 unknown。该 probe 的完成结果是确定性操作收尾，不是业务报告生成证据。
+- **产物与清理**：本地 artifacts/evaluation-20261027-duplicate 保存运行脚本、映射、环境旁录、原评分、HTML trace 和清理前 duplicate.dump；未公开原始产物。核验 scope 标签后删除两容器、匿名卷及网络，标签查询无残留，备份保留；没有对共享数据库执行清空。容器评分器 Git 字段仍 unavailable，由 environment 旁录提交。累计 11/23 个不同案例已有真实评分，不代表全部通过，阶段 2 仍未完成。
+
+## 2026-10-27 — 取消与替代执行的迟到写入拒绝
+
+- **环境与边界**：459163aa 当前源码只读挂载，独立 internal 网络 fence1027、新 PGvector16、无供应商凭据 runner；使用真实 app 角色、迁移角色及原有生命周期函数。未修改业务代码或 fixture，未通过 HTTP/队列/Worker 进程执行，不把专用探针称为全链路业务评测。
+- **取消**：真实任务认领后调用 cancel_task 并提交，再由原 attempt 调用 finish_execution 写入 stale 结果，返回 False。读回任务 cancelled、active_execution_id=NULL、result_summary/result_data=NULL，并持久化 execution_write_rejected / execution_fence_lost。
+- **替代执行**：另一任务认领后将该 attempt 的 lease_expires_at 主动设为数据库当前时间前 1 秒；原 recover_expired_executions 回收任务，新 attempt 认领并写入 fresh 结果。旧 attempt 随后 finish_execution 返回 False；读回任务 completed、结果仍严格等于 fresh / {probe: fresh}。这是租约过期故障注入，不是真实杀 Worker、断电或长时间恢复的证明。
+- **评分与产物**：两例均由 execution_fence Observation 读取持久化状态/事件，对原 cancellation/replacement development_v1 fixture 评分 passed=true，无 violations；两次执行/评分退出 0，模型记录数 0，业务分析成功率 unknown。artifacts/evaluation-20261027-fence 本地保存 probe、环境、映射、两份评分/HTML trace 和清理前 fence.dump；容器 Git 自动捕获 unavailable，环境旁录提交，不公开原始产物。
+- **清理与结论**：核验标签后删除两容器、匿名卷与专用网络，标签查询无残留；备份和报告保留，原服务不动。累计 13/23 个不同开发案例已有真实评分，不代表全部通过；独立留出、统一阈值验收、知识修复真实对照与学习门禁仍未完成。
