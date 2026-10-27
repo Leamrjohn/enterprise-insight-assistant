@@ -1,6 +1,6 @@
 # 评测基线设计
 
-- 状态：准备草案，未评审通过、未实施；不代表阶段 1 学习验收完成。
+- 状态：设计与开发验证进行中，尚未冻结/验收为统一基线；最新执行证据见 `../evidence.md`。不代表阶段 1 学习验收完成。
 - 依据：`docs/plans/improvement_and_learning_plan.md` 阶段 2，保持 23 开发 + 7 仓库外密封留出，不修改原计划。
 - 作者：模型示范；案例业务预期与独立留出由用户负责。
 
@@ -161,4 +161,4 @@ GROUP BY 1 ORDER BY 1;
 | 11 运维 | 无迁移；候选代码可整体 revert，原失败报告不可覆盖；配置/模型/fixture 不变，一次只验证空范围处理这一变量。 |
 | 12 安全 | 不扩大资源范围、不伪造引用、不把未检索说成检索命中；不足说明应准确表达没有可用文档证据，不声称已扫描整个公司资料。 |
 
-不采用两个捷径：在 KnowledgeAgent 看到 [] 就直接成功（绕过当前身份复核）；捕获 tool_document_scope_denied 后统一改为不足（混淆非法调用与正常无资源）。候选已实现于现有 RuntimeTool/ToolRuntime，复用 KnowledgeAgent 既有 insufficient_evidence 分支，不新增节点接口；真实 PG 与节点链验证见 evidence.md。尚未运行付费 API/Worker 开发对照，不能将原第四例计为通过。实现由模型示范；用户独立学习证据仍需之后说明“已授权范围为空”和“授权失败”的区别，并为新场景设计反例。
+不采用两个捷径：在 KnowledgeAgent 看到 [] 就直接成功（绕过当前身份复核）；捕获 tool_document_scope_denied 后统一改为不足（混淆非法调用与正常无资源）。候选已实现于现有 RuntimeTool/ToolRuntime，复用 KnowledgeAgent 既有 insufficient_evidence 分支，不新增节点接口；真实 PG、节点链及 2026-10-27 付费 API/Worker 开发对照见 `../evidence.md`。原第四例在新运行中 partial / published_partial，原评分通过；旧失败证据保留，不因此宣称独立留出通过或完整基线已建立。实现由模型示范；用户独立学习证据仍需之后说明“已授权范围为空”和“授权失败”的区别，并为新场景设计反例。

@@ -3567,3 +3567,11 @@
 - **SQL 证据**：真实 claim_execution → ToolRuntime.execute(SQLTool) → validate_sql，对 SELECT * FROM evaluation.scenario_truth 返回 sql_validation_error / 不允许指定数据库或Schema；持久化 failed 工具记录，finish_execution 后任务 failed、无报告。该路径在经营数据库连接前校验，本轮没有配置经营数据源或连接经营库，不称数据库权限/只读账号验证，也没有读取目标表或任何留出内容。
 - **评分与产物**：两个原 development_v1 案例分别由 request_rejection、sql_validation_rejection 适配器读取持久化证据，success_count=1、hard_gate_status=passed、violations=[]。终态数据库模型记录 0、消息 0、Outbox 0，唯一任务为 SQL 拒绝探针。artifacts/evaluation-20261027-input-guards 本地保留运行脚本、环境、映射、HTTP/SQL 证明、两份评分、SQL HTML trace 和 guards.dump；dump SHA256=e6e25f2b0991508047334d08c74d200738d4b978fce1e0281c35f4147f058ee3。备份后核验标签，删除三个容器、PG 匿名卷和网络，标签查询无残留；原始产物不公开提交。
 - **结论**：累计 21/23 个不同开发案例已有评分证据，仍未统一冻结或全部业务通过；剩余两项混合路线真实运行、独立留出、oracle 审核、阈值与学习门禁未完成。此轮仅完成专用拒绝验证，不推进到阶段 3，也不将模型代操作记作用户掌握。
+
+## 2026-10-27 — 开发证据清单交叉核验（非统一基线报告）
+
+- **核验范围**：在 6cd77119 核对 development_case_selection.json 与显式七组本地产物目录：evaluation-20261026-bounded、evaluation-20261027-knowledge-candidate、evaluation-20261027-sql、evaluation-20261027-duplicate、evaluation-20261027-fence、evaluation-20261027-runtime/no-dotenv、evaluation-20261027-input-guards。仅读取这些开发运行的 run.json，不扫描旧 Gold 或留出。逐份检查单案例/单 Observation、case_id 在候选清单中唯一、Observation 来源一致，并计算文件 SHA256；21 项唯一性与数量断言通过。
+- **分层结果**：10 项任务类中已有 8 项真实运行，7 项原评分通过、1 项失败；失败仍是 data-east-delivered-revenue-2025-08，violation=outcome_correct，sql_result_equivalent 未知，不能把它遗漏为已解决。13 项权限/可靠性专用案例均已有评分并通过，但不是 13 次业务回答成功。两项未运行案例为 hybrid-east-delivered-revenue-causality-boundary、hybrid-unknown-sku-comparison-cause。总计 20 通过 / 1 失败 / 2 未执行只表示上述跨版本证据盘点，不计算成当前 HEAD 的整体成功率。
+- **版本与门禁**：产物旁录版本包含 25e4b407、bc841d82、459163aa、f88c3ab6、5548bb3e；容器无法自动捕获 Git 的字段不能代替旁录。Git 对照 25e4b407→当前 HEAD，在 app/开发 fixture/评测脚本范围内仅 ToolRuntime 与 orchestration router 有变化；这不等于旧结果已在当前代码重新验证。候选仍 proposed_not_frozen，23 项 oracle_review 均 pending，尚无统一阈值基线与独立留出证明，不将阶段标为完成。
+- **文档同步**：修正设计稿开头“未实施”和空范围小节“尚未付费对照”的过时当前状态，历史诊断保留。两项混合路线已询问新的 10 元 / 30 分钟授权，未收到确认前不新增模型调用；本轮是离线核验，不使用旧付费窗口。
+- **结构回归**：本机 Python 3.13 执行 `pytest backend/tests/unit/evaluation/test_development_case_selection.py -q`，1 passed in 0.10s，退出 0；仅证明引用、数量、唯一性、development split 与适配器类型匹配，不批准业务预期或冻结基线。
