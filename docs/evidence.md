@@ -3540,3 +3540,21 @@
 - **替代执行**：另一任务认领后将该 attempt 的 lease_expires_at 主动设为数据库当前时间前 1 秒；原 recover_expired_executions 回收任务，新 attempt 认领并写入 fresh 结果。旧 attempt 随后 finish_execution 返回 False；读回任务 completed、结果仍严格等于 fresh / {probe: fresh}。这是租约过期故障注入，不是真实杀 Worker、断电或长时间恢复的证明。
 - **评分与产物**：两例均由 execution_fence Observation 读取持久化状态/事件，对原 cancellation/replacement development_v1 fixture 评分 passed=true，无 violations；两次执行/评分退出 0，模型记录数 0，业务分析成功率 unknown。artifacts/evaluation-20261027-fence 本地保存 probe、环境、映射、两份评分/HTML trace 和清理前 fence.dump；容器 Git 自动捕获 unavailable，环境旁录提交，不公开原始产物。
 - **清理与结论**：核验标签后删除两容器、匿名卷与专用网络，标签查询无残留；备份和报告保留，原服务不动。累计 13/23 个不同开发案例已有真实评分，不代表全部通过；独立留出、统一阈值验收、知识修复真实对照与学习门禁仍未完成。
+
+## 2026-10-27 — 两项知识修复后的真实开发对照
+
+- **授权与隔离**：用户明确授权新一轮 10 元 / 30 分钟，从首次提交模型任务开始计时，环境准备不计时。当前代码 f88c3ab6118eb82c795f6c426c59b06691a6d6db，独立 scope=knowledge1027candidate 的六个容器及网络，源码/语料/两个离线模型缓存只读挂载。新数据库迁移、合成经营库初始化、API、上传关闭、供应商配置存在性和预算预检通过；提交前任务/模型记录均为 0，未输出密钥。未改变 fixture、语料、模型别名或评分标准，未读取留出。
+- **时间与执行**：首次提交前记时 06:43:15.371533 UTC，授权截止 07:13:15.371533 UTC；四例串行执行器退出 0，Worker 于 06:44:36.132833354 UTC 主动停止。仍限制每任务 8 次调用 / 16000 tokens / 0.15 USD、输出 1024 tokens、并发 1，Worker 外层 1800 秒超时从更早的启动时计时；未实证超时触发。容量准入仍在 test 环境关闭，不作为容量门禁证据。
+- **原评分对照**：quality-batch、receivable-risk、margin-two-factors 从原 failed 变为 completed，持久化 publication.decision=published、terminal.reason=evidence_complete；empty-supplier-certification 从 failed 变为 partial，publication=published_partial、terminal.reason=knowledge_insufficient。四例原评分均 success_count=1、hard_gate_status=passed、无 violations，未重试采样或修改预期。第四例有 knowledge_scope_empty / insufficient_evidence 事件，没有 tool_denied；这是合法空范围的证据不足，不是扩大范围检索。
+- **成本与时延**：14 次 provider_model 全部 settled，输入 16971、输出 1851，应用美元账本 0.007314；6 次本地资源记录零 tokens/零费用。按已核对官方 Flash 高峰未缓存输入 2 元/百万、输出 8 元/百万估算 0.048750 元，非供应商实扣账单。旧账本 0.007266 USD，本轮略增；按上述案例顺序，单次时延旧值 18224/8861/6464/3390 ms，新值 28830/8016/9682/5732 ms，不宣称性能改善，单轮随机生成与冷启动也不足以证明稳定回归。
+- **产物与清理**：本地 artifacts/evaluation-20261027-knowledge-candidate 保存新运行脚本、环境、四份评分/映射/HTML trace 与清理前 knowledge-candidate.dump，SHA256=267789e71cbe04e9c196806c2a80adbdd78eb1ee86b82433924cfe434112cbf3；旧失败产物不变，不公开原始产物。四份 prepare 清理状态均 completed，清理后任务数 0；核验 scope 后删除六容器、匿名卷和网络，标签查询无残留。原服务、主机模型缓存和三项无关工作区修改未动。
+- **结论与边界**：支持此前分别提交/本地验证的路由完成判断与合法空文档范围处理在这四例真实 API→队列→Worker→模型/检索→发布链上有效；本轮同时包含两项修复，不是分别消融试验。未新增业务代码，不替代独立密封留出、稳定性能测量、统一冻结基线或用户独立能力验收；累计仍为 13/23 个不同开发案例有真实评分，阶段 2 未完成。回退仍按 e0641bc6、bc841d82 两个独立修复提交处理，本轮不回退已通过案例。
+
+## 2026-10-27 — 六项 Runtime 拒绝开发探针与 dotenv 隔离纠正
+
+- **范围**：f88c3ab6 当前源码，scope=runtime1027 的 internal Docker 网络、新 PGvector16 和 runner，迁移至 head。分别为冻结范围越界、直接空范围检索、当前文档不可见、成员撤权、未登记工具、预算耗尽创建独立租户/任务，调用真实 claim_execution → ToolRuntime.execute → finish_execution；工具实现是执行哨兵，计数必须为 0。不经 HTTP、Redis/Celery、Worker 或真实检索，不称业务全链路验证。没有修改业务代码、fixture 或原评分器。
+- **隔离问题及纠正**：首轮未传 env-file，但 backend 只读挂载包含 .env，Settings 自动读取后 deepseek_key_present=True；无凭据断言实际退出 1。internal 网络读回 true，首轮六例及模型记录 0，不把“未传 env-file”写成“无凭据”。按 systematic-debugging 从 settings.py 的 env_file 来源确认根因，仅重建 runner，在 /app/.env 覆盖挂载 comment-only empty.env，主机原文件不变；随后 DeepSeek/OpenAI 有效密钥均为空断言通过。在相同数据库另建六任务重跑，旧产物保留。此前同类探针“无供应商凭据”措辞没有有效配置读回证据，撤回这一未经验证的隔离保证；既有零模型调用证据不因此改写。
+- **结果**：首轮 task 1–6、遮蔽 dotenv 后 task 7–12 均持久化 failed，每任务只有一条 denied 工具记录，错误码依次为 tool_document_scope_denied（两项）、tool_document_current_authorization_denied、tool_current_authorization_denied、tool_not_allowlisted、tool_budget_exhausted；工具执行哨兵计数 0、无报告，整库模型记录 0。两次 probe 退出 0；遮蔽后的六份原 development_v1 评分均 success_count=1、hard_gate_status=passed、violations=[]，安全专用案例不计算为业务分析成功率。
+- **空范围边界**：本轮验证的是直接 execute 的检索拒绝；上一轮知识工作流 wrap 适配器在当前授权通过后将合法空资源映射为 insufficient_evidence、不执行检索，两者不矛盾。当前文档权限与成员状态是在认领后变更，证明 Runtime 会复核，而非仅依赖任务创建时授权。
+- **产物与清理**：artifacts/evaluation-20261027-runtime 保留 probe、两轮映射/环境/评分、12 份 HTML trace、清理前 runtime.dump；dump SHA256=c8bd776642600b3773efd03222aa37489934a9435d31e1193a26b596c562780f。原始产物只保留本地。核验资源 scope 后删除两容器、PG 匿名卷和网络，标签查询无残留，备份保留；未删除共享数据库或主机缓存。
+- **进度与未证**：累计 19/23 个不同开发案例已有真实数据库或业务链评分，不代表全部业务成功，也未冻结为统一基线。剩余开发案例为两项混合路线、HTTP 伪造范围及 SQL Schema 注入；7 例独立留出、oracle 审核、统一阈值和学习门禁仍未完成。模型代执行只作为示范，不标记用户独立掌握。
