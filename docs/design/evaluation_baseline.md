@@ -141,3 +141,24 @@ GROUP BY 1 ORDER BY 1;
 单月结果按现有“销售额”单指标序列化；两月结果按 `revenue/v1` 投影；空结果按 no_matching_records 契约序列化后，复用现有指纹函数比较。这些是审查用计算值，不写入实际任务 Observation。真实经营库是否仍与此生成版本一致、Agent 的 SQL/权限/发布链、真实成本和时延仍未验证，因此完整 oracle_review 保持 pending。
 
 此草案不是 30 例已完成、基线已建立或密封流程已可用的证据。确定性测试和合成库复算不替代真实业务质量、独立留出或生产规模验证。
+
+### 空冻结文档范围：失败案例修复契约（2026-10-26，候选验证中）
+
+真实开发案例 `knowledge-empty-supplier-certification-evidence` 的预期为证据不足，实际失败为 `knowledge_denied`。当前链路是 Worker 从 AnalysisTaskDocument 读冻结集合 → 同时注入 WorkflowState.document_ids 与 ToolRuntimeContext.allowed_document_ids → KnowledgeAgent.run 请求 rag_search → Runtime 当前身份复核通过后拒绝空冻结集合 → knowledge_node 写 denied → Router 终止 failed。直接工具调用拒绝是已有安全契约，不应删除；缺少的是业务编排无需发起检索的空范围路径。
+
+| 设计问题 | 本切片契约 |
+|---|---|
+| 1 职责 | 在 KnowledgeAgent 使用的 RuntimeTool 适配器中识别已授权的空冻结范围，不执行检索；Runtime 仍负责当前授权，节点不能自行信任前端字段。 |
+| 2 数据生命周期 | 复用任务冻结文档关系、当前用户/成员关系和现有审计事件；不新增表或永久缓存。空列表不转换为 None，不补全公司全部文档。 |
+| 3 接口 | RuntimeTool.execute 先调用 Runtime.resolve_empty_document_scope(tool, input)：None 表示不适用，ToolOutput 表示已核验空范围或拒绝。不适用时继续原 Runtime.execute；直接 Runtime.execute 的拒绝契约不变。禁止用 truthiness 将缺失范围当空范围。 |
+| 4 状态 | 仅已核验空范围可写 knowledge_result.status=insufficient_evidence、evidences=[]；Reviewer 和既有终态/发布流程继续处理。拒绝保持 denied，不把 tool_document_scope_denied 泛化为成功。 |
+| 5 权限 | 复用现有 rag_search 白名单、当前用户启用状态、approved 成员及角色检查；节点公司必须匹配 Runtime 公司，显式 [] 必须与 Runtime 冻结空集合一致。无 Runtime、范围缺失/冲突或授权依赖异常不得走快捷成功路径。 |
+| 6 失败 | 授权查询失败、撤权、禁用、公司冲突保持 fail closed；不得捕获后降级成“未找到资料”。原始工具错误继续沿用原语义。 |
+| 7 资源 | 空范围不执行检索或 MCP 工具，不加载 embedding/reranker，不调用 Knowledge 模型；允许既有无 I/O 工具对象构造，不消耗工具执行预算，仍产生业务判断审计。后续 Reviewer 的预算仍由原机制管理。 |
+| 8 一致性 | 预检只读取当前授权并记录判定，不改变冻结集合；Checkpoint/终态写入仍受原执行权机制约束。本切片不宣称解决所有发布前撤权竞态。 |
+| 9 可观测 | 记录空范围判定事件及稳定 reason_code，不记录问题正文或原始身份凭据；不得记录成一次真实 rag_search 成功。 |
+| 10 测试 | 正常空范围应零工具/零 Knowledge 模型调用且产生不足结果；None、伪造公司、非空冻结集合却传 []、禁用用户、撤销成员、无工具许可、授权查询异常均不得进入该路径；直接 Runtime.execute 的空范围拒绝测试原样保留。再验证真实 PG→知识节点→Reviewer→终态链，付费对照须在有效授权窗口内。 |
+| 11 运维 | 无迁移；候选代码可整体 revert，原失败报告不可覆盖；配置/模型/fixture 不变，一次只验证空范围处理这一变量。 |
+| 12 安全 | 不扩大资源范围、不伪造引用、不把未检索说成检索命中；不足说明应准确表达没有可用文档证据，不声称已扫描整个公司资料。 |
+
+不采用两个捷径：在 KnowledgeAgent 看到 [] 就直接成功（绕过当前身份复核）；捕获 tool_document_scope_denied 后统一改为不足（混淆非法调用与正常无资源）。候选已实现于现有 RuntimeTool/ToolRuntime，复用 KnowledgeAgent 既有 insufficient_evidence 分支，不新增节点接口；真实 PG 与节点链验证见 evidence.md。尚未运行付费 API/Worker 开发对照，不能将原第四例计为通过。实现由模型示范；用户独立学习证据仍需之后说明“已授权范围为空”和“授权失败”的区别，并为新场景设计反例。

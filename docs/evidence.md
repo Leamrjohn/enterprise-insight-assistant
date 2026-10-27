@@ -3500,3 +3500,16 @@
 - **反例与边界**：新增两个参数化成功场景，修复前 2 failed、24 passed，均复现 failed/non_retryable_or_unknown_failure。另加 8 项边界：hybrid、data_only、已有 SQL 失败、知识拒绝/取消、Reviewer 重试、引用与数字校验失败；新分支放在既有校验/NodeOutcome 处理之后，不改变空文档范围授权或旧失败证据。
 - **验证**：test_workflow_router.py、test_workflow.py、test_publication.py、test_worker_terminal_result.py、test_task_state.py 共 84 passed in 1.52s；router.py Pyright 0 errors。Ruff 初次发现测试导入排序问题，修正后两文件检查及格式检查通过。尝试整个 workflow 目录及 not integration 筛选均进入含 db_session 的测试等待，已中止，不算通过；目录名称与该 marker 筛选不能据此保证无数据库依赖。
 - **决策与未证**：确定性候选保留，未重新运行真实 PG/Worker/供应商对照、未验证 CI、未晋升评测基线；没有新增付费调用，也不标记用户独立掌握。第四个空范围 Bad Case 不在本修复范围。
+
+### 路由候选的真实 PG 回归与远端 CI
+
+- e0641bc6 在独立 PGvector16 容器 routing1026、agent_platform_test、agent_app 及迁移角色下运行 `pytest tests/unit/workflow tests/unit/runtime/test_tool_runtime.py -q`，134 passed in 6.40s，退出 0；显式清空供应商 API 密钥。覆盖之前本机未完成的数据库依赖测试及空冻结范围拒绝契约，不是付费知识回答对照。核验标签后删除临时容器及匿名卷，标签查询无残留，原有服务不动。
+- 该提交的 PR run https://github.com/LeamrJohn/enterprise-insight-assistant/actions/runs/40367896268 completed/success，watch 退出 0，七项检查全部成功。PR #1 读回仍 OPEN/draft、mergedAt=null；未合并。
+- 空范围 Bad Case 调用链已确认：KnowledgeAgent.run 将 document_ids=[] 原样交给 Runtime；_validate_scope 按既有契约返回 tool_document_scope_denied；knowledge_node 映射 denied，smart_router_node 终止失败。fixture v1_6 期待 insufficient_evidence，与当前编排行为不符。后续须设计“冻结空范围无需检索”的显式业务路径，并继续保持直接工具调用拒绝、缺失/伪造范围拒绝和当前身份检查；不能把所有 tool_document_scope_denied 一概改成成功，也不能回写原失败为通过。本轮只定位，不改 fixture 或权限规则。
+
+## 2026-10-26 — 已授权空范围的无检索候选
+
+- **契约与实现**：按评测设计稿的 12 问契约，在现有 RuntimeTool 适配器调用 resolve_empty_document_scope；只有 rag_search 的显式 []、匹配公司、冻结空集合、合法输入、工具白名单及当前启用用户/有效成员角色均通过，才返回 insufficient_evidence。复用 KnowledgeAgent 的既有不足分支，不新增 Agent/节点接口，不执行底层工具或模型；直接 ToolRuntime.execute 的空范围拒绝保持不变。为复用现有工具协议允许轻量工具对象构造，不加载模型或启动检索。
+- **反例**：原实现对正常空范围返回拒绝，新增测试复现失败；非空冻结集合却传 [] 原会执行工具，新增契约要求拒绝。首轮另有一个测试错误地用非法空白名单模拟禁用 RAG，修正为合法的 sql_query-only 策略，不将其算业务缺陷。节点链测试首次补丁指向不存在的 Reviewer 网关符号，按真实 SemanticReviewService 调用点修正后运行。
+- **验证**：独立 empty1026 PGvector16、agent_platform_test、app/migrator 角色，供应商密钥显式清空。空范围专测 11 passed，覆盖正常、禁用用户、撤销成员、伪造公司、冻结范围冲突、无 RAG 许可、授权查询异常、缺失/None/非空请求，以及真实 Knowledge→Reviewer→Router 不足终态。检索/知识模型/语义复核网关入口设置为调用即断言失败；成功分支无 ToolCallRecord、无工具预算消耗，产生 knowledge_scope_empty 审计且无问题正文。整个 workflow 与 test_tool_runtime.py 共 145 passed in 5.26s，退出 0；Runtime Pyright 0 errors。原直接空范围拒绝用例保留并通过。
+- **边界与后续**：这是实际 PG 授权查询和节点调用链，不是完整 API/队列/Worker/付费模型对照，也不是所有发布前撤权竞态已解决；旧第四例仍保持失败。无 fixture/语料/价格变化，无迁移；回滚本候选提交即可恢复旧行为。候选尚待远端 CI 与独立真实开发对照，不晋升阶段 2、不标记用户独立能力。

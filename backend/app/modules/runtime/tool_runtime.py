@@ -55,6 +55,9 @@ class RuntimeTool(Tool):
         return self._tool.description
 
     def execute(self, input: ToolInput) -> ToolOutput:
+        empty_scope = self._runtime.resolve_empty_document_scope(self._tool, input)
+        if empty_scope is not None:
+            return empty_scope
         return self._runtime.execute(self._tool, input)
 
 
@@ -76,6 +79,44 @@ class ToolRuntime:
 
     def wrap(self, tool: Tool) -> RuntimeTool:
         return RuntimeTool(self, tool)
+
+    def resolve_empty_document_scope(
+        self, tool: Tool, input: ToolInput
+    ) -> ToolOutput | None:
+        """Resolve an authorized no-resource case without executing a search."""
+        if tool.name != "rag_search" or input.parameters.get("document_ids") != []:
+            return None
+        policy = ToolPolicy.model_validate(self._task().tool_policy_snapshot)
+        if tool.name not in policy.allowed_tools:
+            return self._deny(tool, "tool_not_allowlisted", {})
+        denied = self._validate_current_authorization(tool)
+        if denied is not None:
+            return denied
+        validated = self._validate_input(tool, input)
+        if isinstance(validated, ToolOutput):
+            return validated
+        if validated.parameters.get("company_id") != self._context.company_id:
+            return self._deny(tool, "tool_company_scope_denied", {})
+        if self._context.allowed_document_ids:
+            return self._deny(tool, "tool_document_scope_denied", {})
+        append_workflow_event(
+            self._db,
+            attempt=self._attempt,
+            company_id=self._context.company_id,
+            event_type="knowledge_scope_empty",
+            node_name="knowledge",
+            status="insufficient_evidence",
+            details={"reason_code": "frozen_document_scope_empty"},
+        )
+        self._db.commit()
+        return ToolOutput(
+            success=True,
+            data={
+                "status": "insufficient_evidence",
+                "answer": "当前任务没有可用的文档证据，未执行文档检索。",
+                "evidences": [],
+            },
+        )
 
     @staticmethod
     def _tool_contract_version(tool: Tool) -> str:

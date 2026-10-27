@@ -158,6 +158,138 @@ def test_new_task_freezes_default_tool_timeout_policy(db_session) -> None:
     assert task.tool_policy_snapshot["rag_database_timeout_ms"] == 10_000
 
 
+@pytest.mark.parametrize(
+    "failure", [None, "disabled", "revoked", "company", "scope", "policy", "database"]
+)
+def test_wrapped_empty_scope_is_insufficient_only_after_authorization(
+    db_session, monkeypatch, failure
+):
+    _, attempt, company = _runtime(db_session)
+    task = db_session.get(AnalysisTask, attempt.task_id)
+    runtime = ToolRuntime(
+        db=db_session,
+        attempt=attempt,
+        context=ToolRuntimeContext(
+            task_id=task.id,
+            company_id=company.id,
+            allowed_document_ids=frozenset({11}) if failure == "scope" else frozenset(),
+        ),
+    )
+    if failure == "disabled":
+        db_session.get(User, task.user_id).is_active = False
+    if failure == "revoked":
+        db_session.query(CompanyMember).filter_by(company_id=company.id).delete()
+    if failure == "policy":
+        task.tool_policy_snapshot = {
+            **task.tool_policy_snapshot,
+            "allowed_tools": ["sql_query"],
+        }
+    db_session.flush()
+    tool = _FakeRagTool()
+    wrapped = runtime.wrap(tool)
+    request = ToolInput(
+        parameters={
+            "question": "private question",
+            "company_id": company.id + 1 if failure == "company" else company.id,
+            "document_ids": [],
+        }
+    )
+    if failure == "database":
+
+        def unavailable(*args, **kwargs):
+            raise RuntimeError("authorization unavailable")
+
+        monkeypatch.setattr(runtime, "_validate_current_authorization", unavailable)
+        with pytest.raises(RuntimeError, match="authorization unavailable"):
+            wrapped.execute(request)
+    else:
+        result = wrapped.execute(request)
+        assert result.success is (failure is None)
+        if failure is None:
+            assert result.data["status"] == "insufficient_evidence"
+            assert result.data["evidences"] == []
+            assert db_session.query(ToolCallRecord).count() == 0
+            event = (
+                db_session.query(WorkflowEvent)
+                .filter_by(event_type="knowledge_scope_empty")
+                .one()
+            )
+            assert event.details == {"reason_code": "frozen_document_scope_empty"}
+    assert tool.inputs == []
+    assert task.tool_budget_usage.get("calls", 0) == 0
+
+
+@pytest.mark.parametrize(
+    "parameters", [{}, {"document_ids": None}, {"document_ids": [11]}]
+)
+def test_empty_scope_adapter_does_not_accept_missing_or_nonempty_request(
+    db_session, parameters
+):
+    _, attempt, company = _runtime(db_session)
+    runtime = ToolRuntime(
+        db=db_session,
+        attempt=attempt,
+        context=ToolRuntimeContext(
+            task_id=attempt.task_id,
+            company_id=company.id,
+            allowed_document_ids=frozenset(),
+        ),
+    )
+    tool = _FakeRagTool()
+    result = runtime.wrap(tool).execute(
+        ToolInput(parameters={"company_id": company.id, "question": "q", **parameters})
+    )
+    assert result.success is False
+    assert result.error_code == "tool_document_scope_denied"
+    assert tool.inputs == []
+
+
+def test_empty_scope_reaches_insufficient_terminal_without_search_or_model(
+    db_session, monkeypatch
+):
+    from app.modules.knowledge.tool import RAGTool
+    from app.modules.workflow.orchestration.nodes import (
+        knowledge_node,
+        reviewer_node,
+        smart_router_node,
+    )
+
+    _, attempt, company = _runtime(db_session)
+    task = db_session.get(AnalysisTask, attempt.task_id)
+    runtime = ToolRuntime(
+        db=db_session,
+        attempt=attempt,
+        context=ToolRuntimeContext(
+            task_id=task.id, company_id=company.id, allowed_document_ids=frozenset()
+        ),
+    )
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("empty scope must not search or call a model")
+
+    monkeypatch.setattr(RAGTool, "execute", forbidden)
+    monkeypatch.setattr("app.modules.knowledge.agent.get_model_gateway", forbidden)
+    monkeypatch.setattr(
+        "app.modules.reporting.semantic_review_service.get_model_gateway", forbidden
+    )
+    state = {
+        "question": "有哪些资料？",
+        "user_id": task.user_id,
+        "company_id": company.id,
+        "document_ids": [],
+        "tool_runtime": runtime,
+        "plan": {"route": "knowledge_only", "intent": {"kind": "document_question"}},
+        "data_result": None,
+    }
+    state.update(knowledge_node(state))
+    assert state["knowledge_result"]["status"] == "insufficient_evidence"
+    state.update(reviewer_node(state))
+    assert state["review_result"]["review_status"] == "partial"
+    state.update(smart_router_node(state))
+    assert state["terminal_result"]["outcome"] == "insufficient_evidence"
+    assert db_session.query(ToolCallRecord).count() == 0
+
+
 def test_tool_runtime_records_redacted_start_and_completion_events(db_session) -> None:
     runtime, attempt, company = _runtime(db_session)
 
