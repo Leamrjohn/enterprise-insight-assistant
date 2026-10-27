@@ -42,3 +42,5 @@ backend/pyright_output.json
 
 # Personal files kept outside the repository
 output/
+/artifacts/
+/agent-platform-postgres --tail 40
