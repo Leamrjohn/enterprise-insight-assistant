@@ -3513,3 +3513,15 @@
 - **反例**：原实现对正常空范围返回拒绝，新增测试复现失败；非空冻结集合却传 [] 原会执行工具，新增契约要求拒绝。首轮另有一个测试错误地用非法空白名单模拟禁用 RAG，修正为合法的 sql_query-only 策略，不将其算业务缺陷。节点链测试首次补丁指向不存在的 Reviewer 网关符号，按真实 SemanticReviewService 调用点修正后运行。
 - **验证**：独立 empty1026 PGvector16、agent_platform_test、app/migrator 角色，供应商密钥显式清空。空范围专测 11 passed，覆盖正常、禁用用户、撤销成员、伪造公司、冻结范围冲突、无 RAG 许可、授权查询异常、缺失/None/非空请求，以及真实 Knowledge→Reviewer→Router 不足终态。检索/知识模型/语义复核网关入口设置为调用即断言失败；成功分支无 ToolCallRecord、无工具预算消耗，产生 knowledge_scope_empty 审计且无问题正文。整个 workflow 与 test_tool_runtime.py 共 145 passed in 5.26s，退出 0；Runtime Pyright 0 errors。原直接空范围拒绝用例保留并通过。
 - **边界与后续**：这是实际 PG 授权查询和节点调用链，不是完整 API/队列/Worker/付费模型对照，也不是所有发布前撤权竞态已解决；旧第四例仍保持失败。无 fixture/语料/价格变化，无迁移；回滚本候选提交即可恢复旧行为。候选尚待远端 CI 与独立真实开发对照，不晋升阶段 2、不标记用户独立能力。
+
+### 空范围候选远端验证（2026-10-27 UTC）
+
+- bc841d82 的 PR run https://github.com/LeamrJohn/enterprise-insight-assistant/actions/runs/40432057074 completed/success，watch 退出 0，七项检查全部成功。PR #1 仍 OPEN/draft、mergedAt=null，未合并。
+- 本次仅确认确定性回归与 CI，不把它代替知识回答真实对照。上一轮付费窗口已结束，已询问新一轮最多 10 元、首次提交起 30 分钟的授权；未确认前不新增付费调用。后续无模型专用案例可复用现有 SQL 超时/结果上限执行器，仍须保存真实 Observation 和评分，不能仅用单元测试数量冒充开发集完成。
+
+## 2026-10-27 — 无模型 SQL 超时与结果上限开发评测
+
+- **范围**：bc841d82 当前源码只读挂载，复用已有 run_p0_sql_timeout_candidate / run_p0_sql_result_limit_candidate；独立 internal Docker 网络 sqlprobe1027、平台 PGvector16、经营 PostgreSQL16 和 runner，无 env-file，供应商密钥显式为空。现有镜像依赖，非干净重建证明。经营库 seed 20260718；acme_readonly 为非 superuser/非 BYPASSRLS，对 sales_orders 的 SELECT=true、INSERT/UPDATE/DELETE=false。准备时经营库尚未就绪导致一次连接拒绝，pg_isready 确认 accepting connections 后初始化成功；此启动错误不计作 SQL 超时证据。
+- **真实执行与评分**：专用执行器创建任务→原子认领→ToolRuntime→SQLTool→只读 PostgreSQL→工具/执行记录持久化；不经过 HTTP、Redis 或 Celery 投递。超时案例冻结 100 ms、查询含 pg_sleep(0.2)，记录 sql_statement_timeout、115 ms、任务 failed；sql_timeout Observation 对原 development_v1 fixture 评分通过。结果上限案例请求 LIMIT 100000，记录实际 row_count=1000、15 ms、任务 completed；sql_result_limit Observation 对原 development_v1 fixture 评分通过。执行器与评分命令退出 0，两份报告逐例 passed=true、无 violations；业务分析成功率为 unknown，不冒充可信回答成功。
+- **费用与产物**：数据库复核 model_call_records=0；两个案例均为专用故障/限制观测，不是合成 Observation 或付费模型回答。本地 artifacts/evaluation-20261027-sql 保存准备清单、映射、评分、两份 HTML trace、环境旁录和清理前 sql-probes.dump；dump SHA256=4f42e9a3eabceb93540ad7c0b5be83ce02ac01e595e5faad6a8cc52658b80fb5，未实证恢复。容器评分器 git_revision=unavailable，environment 旁录完整源码提交；原始产物不公开提交。
+- **清理与边界**：两执行器按各自资源清单 cleanup 均退出 0，analysis_tasks 读回 0；核验标签后删除三个容器、匿名卷和专用网络，标签查询无残留。备份/报告保留，现有服务不动。累计候选清单 10/23 个不同案例已有真实专用或业务评分（不是 10 个通过）；完整开发集、冻结阈值、独立留出、知识修复付费对照仍未完成，本轮不新增授权也不宣称阶段 2 完成。
