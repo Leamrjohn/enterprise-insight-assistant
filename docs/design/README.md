@@ -2,7 +2,7 @@
 
 每个模块在改造前先在本目录写一页设计稿，评审通过后再写代码。文件名用模块名，例如 `memory.md`、`tool_layer.md`、`task_state_machine.md`。
 
-方法来源：[改进与学习计划第 1 节](../plans/improvement_and_learning_plan.md)。
+方法来源：[改进与学习计划第 1 节](../history/plans/improvement_and_learning_plan.md)。
 
 ## 模板
 

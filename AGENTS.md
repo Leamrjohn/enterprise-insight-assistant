@@ -58,9 +58,9 @@
 不要使用“生产级”“已完成”“稳定”这类词，除非有本次运行的证据。
 
 ## 文档规则
-- docs/evidence.md 冻结为历史记录，不再追加。
+- docs/history/evidence.md 冻结为历史记录，不再追加。
 - 新记录写 docs/worklog.md：每个工单最多 5 行（日期、做了什么、验证结果、遗留问题）。
-- docs/plans/ 下的旧计划和路线图仅作历史参考，用户点名才读。
+- docs/history/plans/ 下的旧计划和路线图仅作历史参考，用户点名才读。
 
 ## 环境约定
 - 终端是 Windows PowerShell；Python 虚拟环境放在项目根目录 .venv。

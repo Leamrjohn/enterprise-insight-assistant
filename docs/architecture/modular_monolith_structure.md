@@ -1,6 +1,6 @@
 # 目录结构与模块边界
 
-> 本文是仓库目录的唯一权威说明：每个文件放在哪里、为什么放在那里、模块之间怎么调用。实施顺序以 [改进与学习计划](../plans/improvement_and_learning_plan.md) 为准。
+> 本文是仓库目录的唯一权威说明：每个文件放在哪里、为什么放在那里、模块之间怎么调用。实施顺序以 [改进与学习计划](../history/plans/improvement_and_learning_plan.md) 为准。
 > 最近一次调整：2026-10-19（仓库级整理 + workflow / analysis / input_artifacts 分子包）。
 
 ## 1. 仓库顶层

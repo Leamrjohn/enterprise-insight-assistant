@@ -1,6 +1,6 @@
 # 单机运行与故障恢复 Runbook
 
-> 本文提供现有工具的操作入口，不代表恢复与运行治理已经验收。生产级要求见 [主路线图](../plans/single_node_production_style_ai_application_roadmap.md)，已验证/未验证范围见 [项目审计](../audits/project_core_audit_20260915.md)。
+> 本文提供现有工具的操作入口，不代表恢复与运行治理已经验收。生产级要求见 [主路线图](../history/plans/single_node_production_style_ai_application_roadmap.md)，已验证/未验证范围见 [项目审计](../audits/project_core_audit_20260915.md)。
 
 ## 运行拓扑
 

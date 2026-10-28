@@ -98,7 +98,7 @@ python -m pip install --no-index --no-build-isolation -r backend/requirements/ba
 python -m pip check
 ```
 
-第二步不访问索引，不允许依赖声明需要的新包被在线解析后悄悄绕过锁。然后运行静态检查与独立数据库测试；当前锁的本地验证范围见 `docs/evidence.md`。Python 补丁版本、操作系统镜像与系统工具不由该 Python 锁文件固定。
+第二步不访问索引，不允许依赖声明需要的新包被在线解析后悄悄绕过锁。然后运行静态检查与独立数据库测试；当前锁的本地验证范围见 `docs/history/evidence.md`。Python 补丁版本、操作系统镜像与系统工具不由该 Python 锁文件固定。
 
 ## 变更要求
 
