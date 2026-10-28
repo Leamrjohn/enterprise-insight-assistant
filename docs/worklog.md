@@ -48,3 +48,8 @@
 - 启动已有 frontend、demo_business_acme、demo_business_beta；13 个常驻服务运行，API 就绪与前端首页 HTTP 200，两个更新容器均 healthy。
 - 验证：Compose config --quiet、git diff --check 通过；启动后约 25 秒两个库 missing database 匹配均 0，挂载仍为 agent_postgres_data 与 agent_business_data。
 - 待办：启停脚本、修复缺解释器的根 .venv、lint 和非 E2E 测试；测试 db_session 会调用迁移，运行前须核对并授权；无模型调用，0.3 尚未整体验收。
+## 2026-10-28 — 0.3b 日常启停与状态命令
+- 新增 up/down/status 与共用 stack 脚本、隔离自检，README 补充命令；按项目标签、目录、agent- 名称和 13 服务白名单校验，不创建容器或启动迁移/种子任务。
+- 验证：test-stack.ps1 的 8 项模拟检查通过；真实 status→down→up→status 退出 0，13 服务恢复、API readiness=True，18 个容器 ID 不变，两个数据库原卷挂载不变。
+- Docker 提示 --time 弃用后改用 --timeout；本机 help 确认支持，修改后重跑隔离检查通过；首次模拟失败为测试作用域问题，已修正。
+- 待办：根 .venv、lint/非 E2E 测试与版本固定核对；本轮不证明业务链路或 Worker 就绪，不运行迁移、种子或模型问题，0.3 尚未整体验收。

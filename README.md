@@ -99,13 +99,17 @@ contract and is not substituted by `gpus: all`.
 
 首次使用可通过 `POST /auth/bootstrap-owner` 创建首个公司所有者；请求结构以 OpenAPI 页面为准。
 
-停止服务：
+已有容器的日常启停与检查（从项目根目录执行）：
 
 ```powershell
-docker compose down
+.\scripts\ops\up.ps1
+.\scripts\ops\status.ps1
+.\scripts\ops\down.ps1
 ```
 
-`docker compose down -v` 会删除本地数据库卷，不应作为普通停止命令使用。
+这些命令只操作当前目录所属 `agent` 项目的 13 个常驻服务，保留容器和数据卷，不启动迁移、种子或测试任务。`up` 最多等待 120 秒检查容器健康与 API 就绪；`status` 检查失败会返回错误。缺少容器时停止并提示核对初始化流程，不自动创建环境。`up`、`down` 支持 `-WhatIf` 预览。
+
+`down` 使用 Docker stop；禁止使用 `docker compose down -v` 删除数据卷。首次初始化或数据库迁移仍须按 AGENTS.md 获得授权。隔离自检：`.\scripts\ops\test-stack.ps1`，仅使用模拟 Docker 与 HTTP。
 
 ### 本地开发
 
