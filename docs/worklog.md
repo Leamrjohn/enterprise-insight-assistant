@@ -53,3 +53,8 @@
 - 验证：test-stack.ps1 的 8 项模拟检查通过；真实 status→down→up→status 退出 0，13 服务恢复、API readiness=True，18 个容器 ID 不变，两个数据库原卷挂载不变。
 - Docker 提示 --time 弃用后改用 --timeout；本机 help 确认支持，修改后重跑隔离检查通过；首次模拟失败为测试作用域问题，已修正。
 - 待办：根 .venv、lint/非 E2E 测试与版本固定核对；本轮不证明业务链路或 Worker 就绪，不运行迁移、种子或模型问题，0.3 尚未整体验收。
+## 2026-10-28 — 0.3c 本地环境与后端检查
+- 修复根 .venv（Python 3.13.14）；镜像源 SSL 失败后从官方 PyPI 安装既有 base 与 dev 依赖；README 增加 base 安装步骤，修复仅装 dev 时缺 botocore 的收集错误，不改依赖声明。
+- 验证：pip check、ruff check app tests 均退出 0；pytest tests -x -q -m "not e2e and not slow" --tb=short 得 928 passed、2 skipped、9 deselected，43.06 秒，退出 0。
+- 测试限定本机 agent_platform_test、本地模型及占位密钥；测试前后库版本均等于代码 head x1a2b3c4d5e6，无待执行结构迁移；测试后 status 显示 13 服务运行且 API 就绪。
+- 版本检查无 latest，但 Python/Redis/Node 标签未锁 digest；待办 pytest-asyncio 默认 loop scope 弃用提示；本轮不证明真实模型 E2E、2 项跳过或 9 项排除的行为，阶段 0 用户验收与学习口试尚待进行，未打阶段标签。

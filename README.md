@@ -118,6 +118,7 @@ python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 
 Set-Location backend
+pip install -r requirements/base.txt
 pip install -e ".[dev]"
 # 仅在本机运行真实 RAG/slow 测试时安装本地 CPU 模型依赖；普通 API
 # 开发和测试不需要它。
