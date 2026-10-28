@@ -58,3 +58,8 @@
 - 验证：pip check、ruff check app tests 均退出 0；pytest tests -x -q -m "not e2e and not slow" --tb=short 得 928 passed、2 skipped、9 deselected，43.06 秒，退出 0。
 - 测试限定本机 agent_platform_test、本地模型及占位密钥；测试前后库版本均等于代码 head x1a2b3c4d5e6，无待执行结构迁移；测试后 status 显示 13 服务运行且 API 就绪。
 - 版本检查无 latest，但 Python/Redis/Node 标签未锁 digest；待办 pytest-asyncio 默认 loop scope 弃用提示；本轮不证明真实模型 E2E、2 项跳过或 9 项排除的行为，阶段 0 用户验收与学习口试尚待进行，未打阶段标签。
+## 2026-10-28 — 1.1 冒烟能力只读调查
+- 新增 docs/smoke_results/reuse_inventory.md：核对 8 题配比、账号/数据源/文档夹具、HTTP 调用链、评分器和任务状态，保留原期望与留出边界。
+- 验证：8/8 fixture 可定位，配比 3 数据+3 知识+1 混合+1 澄清；分类自检 5 条通过；旧事件重新汇总为首轮 8 失败、后两轮未运行。
+- 发现 1.2 缺口：首轮后自动继续、模型/数据身份记录不全、续跑未校验版本一致性；不重写评分器。
+- 未调用模型、未创建平台资源、未复核余额；阶段 0 学习验收未确认，阶段 1 尚无有效三轮基线。
