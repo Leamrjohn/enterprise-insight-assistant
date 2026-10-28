@@ -44,3 +44,4 @@ backend/pyright_output.json
 output/
 /artifacts/
 /agent-platform-postgres --tail 40
+/.venv-py313/
