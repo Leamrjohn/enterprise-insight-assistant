@@ -43,3 +43,8 @@
 - 项目外备份：../agent-stage-0.2c-backup/，含修改前文件与迁移哈希清单；冻结 evidence 逐字节一致，历史正文忽略链接目标后完全一致。
 - 验证：5 份历史资料均存在，83 个迁移前有效链接的目标仍存在；Git 差异检查通过；不将历史正文里的旧路径记载改写成当前事实。
 - 0.2 的规则复用、当前入口与历史归档已落实；未验证 Markdown 标题锚点或业务运行，下一工单 0.3 环境一键化与健康检查，阶段 0 尚未验收。
+## 2026-10-28 — 0.3a 数据库健康检查与服务恢复
+- 复现平台库和经营库的周期性 missing database 日志；Compose 两处 pg_isready 增加显式 -d，复用原数据卷更新两容器，未执行迁移或初始化任务。
+- 启动已有 frontend、demo_business_acme、demo_business_beta；13 个常驻服务运行，API 就绪与前端首页 HTTP 200，两个更新容器均 healthy。
+- 验证：Compose config --quiet、git diff --check 通过；启动后约 25 秒两个库 missing database 匹配均 0，挂载仍为 agent_postgres_data 与 agent_business_data。
+- 待办：启停脚本、修复缺解释器的根 .venv、lint 和非 E2E 测试；测试 db_session 会调用迁移，运行前须核对并授权；无模型调用，0.3 尚未整体验收。

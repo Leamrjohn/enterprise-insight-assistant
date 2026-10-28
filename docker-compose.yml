@@ -45,7 +45,7 @@ services:
       - postgres_data:/var/lib/postgresql/data
       - ./backend/scripts/db/bootstrap_postgres.sql:/docker-entrypoint-initdb.d/bootstrap.sql
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U agent_app"]
+      test: ["CMD-SHELL", "pg_isready -U agent_app -d agent_platform"]
       interval: 5s
       timeout: 3s
       retries: 5
@@ -362,7 +362,7 @@ services:
     volumes:
       - business_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U business_app"]
+      test: ["CMD-SHELL", "pg_isready -U business_app -d business_data"]
       interval: 5s
       timeout: 3s
       retries: 5
