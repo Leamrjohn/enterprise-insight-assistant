@@ -6,7 +6,7 @@
 
 本项目目标是全模块符合明确适用范围的生产级设计与工程要求，并在单电脑与存储服务环境完成真实验证，不要求上线。当前实现尚未通过整体生产级验收；目标与进度分开记录。
 
-**查看计划与进度，从 [文档阅读导航](docs/README.md) 开始。**
+**当前执行从 [计划总览](docs/roadmap/00_overview.md) 开始，进度与验证见 [工作日志](docs/worklog.md)。每次只读当前工单；其他资料见 [文档索引](docs/README.md)。**
 
 ## 已有模块与能力基础
 
@@ -195,10 +195,12 @@ docker-compose.yml      本地服务编排
 ## 项目文档
 
 - [文档索引](docs/README.md)
-- [当前执行计划：改进与学习计划](docs/plans/improvement_and_learning_plan.md)
+- [当前执行计划：阶段 0～9 总览](docs/roadmap/00_overview.md)
+- [当前工单：阶段 0～2](docs/roadmap/01_stages_0-2.md)
+- [工作日志](docs/worklog.md)
 - [目录结构与模块边界](docs/architecture/modular_monolith_structure.md)
-- [证据记录](docs/evidence.md)
-- [最终设计范围路线图](docs/plans/single_node_production_style_ai_application_roadmap.md)
+- [历史证据（冻结）](docs/evidence.md)
+- [历史设计范围路线图（仅供查询）](docs/plans/single_node_production_style_ai_application_roadmap.md)
 - [产品定义与边界](PRODUCT.md)
 - [前端设计系统](DESIGN.md)
 - [单机运行与故障恢复](docs/operations/single_node_runbook.md)
