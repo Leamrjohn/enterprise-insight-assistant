@@ -31,6 +31,24 @@ def test_resume_requires_matching_identity_and_complete_unique_cases():
         smoke.resume_round(saved_round(identity)[:-1], identity)
 
 
+def test_run_names_are_independent_and_resume_is_explicit():
+    first = smoke.parse_run_args([])
+    second = smoke.parse_run_args([])
+    assert first.run_id != second.run_id
+    assert not first.resume
+    resumed = smoke.parse_run_args(["--resume", "--run-id", first.run_id])
+    assert resumed.resume and resumed.run_id == first.run_id
+
+
+@pytest.mark.parametrize(
+    "args",
+    [["--resume"], ["--run-id", "../old"], ["--run-id", "C:\\old"], ["--run-id", ""]],
+)
+def test_run_name_rejects_missing_or_unsafe_paths(args):
+    with pytest.raises(SystemExit):
+        smoke.parse_run_args(args)
+
+
 @pytest.mark.parametrize("start_round", [None, 2, 3])
 def test_one_invocation_submits_only_one_round(monkeypatch, start_round):
     import httpx

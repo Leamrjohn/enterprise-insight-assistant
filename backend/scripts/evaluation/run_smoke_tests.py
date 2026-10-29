@@ -1,14 +1,16 @@
 """Run from repository root: python backend/scripts/evaluation/run_smoke_tests.py.
 
 Uses the existing worker's dependencies; credentials live only in memory.
-Each invocation runs one round; later rounds require an explicitly approved --resume.
+One round per invocation; approved continuation uses --resume --run-id ID.
 --self-test checks classification without Docker, database writes or model calls.
 """
 
 # fmt: off
 
+import argparse
 import hashlib
 import json
+import re
 import secrets
 import subprocess
 import sys
@@ -202,7 +204,21 @@ def render(payload, events):
     return "\n".join(lines) + "\n"
 
 
+def parse_run_args(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--run-id")
+    parser.add_argument("--resume", action="store_true")
+    args = parser.parse_args(argv)
+    if args.resume and not args.run_id:
+        parser.error("--resume requires the original --run-id")
+    if args.run_id is not None and not re.fullmatch(r"[A-Za-z0-9_-]{1,80}", args.run_id):
+        parser.error("run-id must contain 1-80 ASCII letters, digits, underscores or hyphens")
+    args.run_id = args.run_id or datetime.now(ZoneInfo("America/New_York")).strftime("%Y%m%dT%H%M%S-") + secrets.token_hex(4)
+    return args
+
+
 def main():
+    args = parse_run_args()
     root = Path(__file__).resolve().parents[3]
     selection = json.loads((root / "docs/design/development_case_selection.json").read_text(encoding="utf-8"))
     payload = {"selected": [], "documents": {}, "date": datetime.now(ZoneInfo("America/New_York")).date().isoformat(),
@@ -220,8 +236,8 @@ def main():
             if hashlib.sha256(raw_doc).hexdigest() != hashes[source]:
                 raise ValueError("corpus manifest mismatch")
             payload["documents"][source] = raw_doc.decode("utf-8")
-    output = root / "docs/smoke_results" / (payload["date"] + ".md")
-    state = root / "artifacts/smoke" / (payload["date"] + ".json")
+    output = root / "docs/smoke_results" / (args.run_id + ".md")
+    state = root / "artifacts/smoke" / (args.run_id + ".json")
     if subprocess.check_output(["git", "status", "--porcelain", "--", "backend"], cwd=root, text=True).strip():
         raise ValueError("Commit backend changes before recording a baseline")
     identity = {"git": payload["git"],
@@ -229,7 +245,7 @@ def main():
                 "corpus_manifest_sha256": hashlib.sha256((corpus / "manifest.json").read_bytes()).hexdigest(),
                 "runner_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest()}
     events = [{"event": "identity", "value": identity}]
-    if "--resume" in sys.argv:
+    if args.resume:
         events = json.loads(state.read_text(encoding="utf-8"))
         payload["start_round"] = resume_round(events, identity)
     elif output.exists() or state.exists():
@@ -238,6 +254,7 @@ def main():
     state.parent.mkdir(parents=True, exist_ok=True)
     state.write_text(json.dumps(events, ensure_ascii=False), encoding="utf-8")
     output.write_text(render(payload, events), encoding="utf-8")
+    print("Run ID: " + args.run_id, flush=True)
     code = Path(__file__).read_text(encoding="utf-8")
     process = subprocess.Popen(["docker", "exec", "-i", "-e", "PYTHONDONTWRITEBYTECODE=1", "agent-worker-1", "python", "-u", "-c", code, "--container"],
                                stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, encoding="utf-8")
