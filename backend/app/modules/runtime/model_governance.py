@@ -22,6 +22,12 @@ class ModelBudgetExceeded(RuntimeError):
     code = "model_budget_exhausted"
 
 
+class ModelCallCancelled(RuntimeError):
+    """Do not start another model operation after task cancellation."""
+
+    code = "task_cancelled"
+
+
 CHAT_MESSAGE_OVERHEAD_TOKENS = 4
 
 
@@ -245,9 +251,13 @@ def reserve_model_call(
         return None
     if provider == "local" and charge_kind == "provider_model":
         charge_kind = "simulation"
-    task = scope.db.get(AnalysisTask, scope.task.id, with_for_update=True)
+    task = scope.db.get(
+        AnalysisTask, scope.task.id, with_for_update=True, populate_existing=True
+    )
     if task is None:
         raise ModelBudgetExceeded("task disappeared")
+    if task.status == "cancelled":
+        raise ModelCallCancelled("task cancelled")
     parameters = pricing_parameters or {}
     price_version, pricing_key, prompt_price, completion_price = _price_for_call(
         task.model_policy_snapshot or {},
@@ -351,9 +361,13 @@ def reserve_local_resource_call(
     scope = _scope.get()
     if scope is None:
         return None
-    task = scope.db.get(AnalysisTask, scope.task.id, with_for_update=True)
+    task = scope.db.get(
+        AnalysisTask, scope.task.id, with_for_update=True, populate_existing=True
+    )
     if task is None:
         raise ModelBudgetExceeded("task disappeared")
+    if task.status == "cancelled":
+        raise ModelCallCancelled("task cancelled")
     record = ModelCallRecord(
         model_call_id=str(uuid4()),
         task_id=task.id,

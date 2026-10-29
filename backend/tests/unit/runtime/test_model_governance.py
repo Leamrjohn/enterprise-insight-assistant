@@ -41,6 +41,7 @@ class FakeDb:
 
 class Task:
     id = 7
+    status = "running"
 
     def __init__(self) -> None:
         self.model_policy_snapshot = {}
@@ -66,6 +67,44 @@ def test_chat_reservation_includes_system_user_and_message_framing() -> None:
 
 class Attempt:
     id = 9
+
+
+@pytest.mark.parametrize("local_resource", [False, True])
+def test_cancelled_task_cannot_reserve_another_model_call(local_resource) -> None:
+    task = Task()
+    task.status = "cancelled"
+    db = FakeDb(task)
+    with (
+        model_call_scope(db, task=task, attempt=Attempt(), node_name="knowledge"),
+        pytest.raises(RuntimeError, match="task cancelled"),
+    ):
+        if local_resource:
+            reserve_local_resource_call(
+                resource_kind="rerank", model_name="test-model", resource_usage={}
+            )
+        else:
+            reserve_model_call(provider="local", model_name="local-simulator")
+    assert db.records == []
+    assert db.commits == 0
+    assert task.model_budget_usage["calls"] == 0
+
+
+def test_cancellation_does_not_discard_an_in_flight_call_settlement() -> None:
+    task = Task()
+    db = FakeDb(task)
+    with model_call_scope(db, task=task, attempt=Attempt(), node_name="knowledge"):
+        scope = reserve_model_call(provider="local", model_name="local-simulator")
+        task.status = "cancelled"
+        record_model_call(
+            scope,
+            provider="local",
+            model_name="local-simulator",
+            prompt_tokens=4,
+            completion_tokens=2,
+            result_category="success",
+        )
+    assert db.records[0].billing_status == "settled"
+    assert task.model_budget_usage["tokens"] == 6
 
 
 def test_fake_tasks_do_not_share_mutable_budget_state() -> None:

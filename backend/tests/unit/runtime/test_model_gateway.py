@@ -418,6 +418,7 @@ def test_deepseek_gateway_uses_frozen_fallback_only_after_temporary_error(monkey
 
         task = SimpleNamespace(
             id=99,
+            status="running",
             model_policy_snapshot={
                 "fallback_models": ["deepseek-fallback"],
                 "max_attempts": 2,
