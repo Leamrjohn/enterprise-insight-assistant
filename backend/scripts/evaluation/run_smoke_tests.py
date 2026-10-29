@@ -43,6 +43,19 @@ def emit(event, **fields):
     print(json.dumps(dict(event=event, **fields), ensure_ascii=True), flush=True)
 
 
+def resume_round(events, identity):
+    identities = [e for e in events if e.get("event") == "identity"]
+    if identities != [{"event": "identity", "value": identity}]:
+        raise ValueError("Missing or changed run identity; do not combine baselines")
+    rounds = [e.get("round") for e in events if e.get("event") == "round"]
+    if rounds not in ([1], [1, 2]) or events[-1].get("event") != "done":
+        raise ValueError("Resume requires a completed round and remaining task budget")
+    rows = Counter((e.get("round"), e.get("case_id")) for e in events if e.get("event") == "result")
+    if rows != Counter((n, cid) for n in rounds for cid in IDS):
+        raise ValueError("Incomplete or duplicate round results")
+    return rounds[-1] + 1
+
+
 def run_container(payload):
     import httpx
     from app.core.security import hash_password
@@ -185,7 +198,7 @@ def render(payload, events):
     for r in rows:
         lines.append(f"| {r['round']} | {r['case_id']} | {r['task_id']} | {r['status']}/{r['stage']} | {r['seconds']} | {r['tokens']} | {r['cost']} | {','.join(r['violations'])}; {r['error_type']} |")
     lines += ["", "## 执行事件（不含凭据）", ""]
-    lines += ["- " + json.dumps(e, ensure_ascii=False) for e in events if e.get("event") in {"fixture", "round", "stop", "done", "fatal"}]
+    lines += ["- " + json.dumps(e, ensure_ascii=False) for e in events if e.get("event") in {"identity", "fixture", "round", "stop", "done", "fatal"}]
     return "\n".join(lines) + "\n"
 
 
@@ -209,18 +222,22 @@ def main():
             payload["documents"][source] = raw_doc.decode("utf-8")
     output = root / "docs/smoke_results" / (payload["date"] + ".md")
     state = root / "artifacts/smoke" / (payload["date"] + ".json")
-    events = []
+    if subprocess.check_output(["git", "status", "--porcelain", "--", "backend"], cwd=root, text=True).strip():
+        raise ValueError("Commit backend changes before recording a baseline")
+    identity = {"git": payload["git"],
+                "cases_sha256": hashlib.sha256(json.dumps(payload["selected"], sort_keys=True).encode()).hexdigest(),
+                "corpus_manifest_sha256": hashlib.sha256((corpus / "manifest.json").read_bytes()).hexdigest(),
+                "runner_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest()}
+    events = [{"event": "identity", "value": identity}]
     if "--resume" in sys.argv:
         events = json.loads(state.read_text(encoding="utf-8"))
-        rounds = [e["round"] for e in events if e.get("event") == "round"]
-        payload["start_round"] = max(rounds, default=0) + 1
-        count = sum(e.get("event") == "result" for e in events)
-        if not rounds or count != max(rounds) * 8 or payload["start_round"] > 3:
-            raise ValueError("Resume requires complete prior rounds and remaining task budget")
+        payload["start_round"] = resume_round(events, identity)
     elif output.exists() or state.exists():
         raise FileExistsError("Refusing to overwrite prior smoke results")
     output.parent.mkdir(parents=True, exist_ok=True)
     state.parent.mkdir(parents=True, exist_ok=True)
+    state.write_text(json.dumps(events, ensure_ascii=False), encoding="utf-8")
+    output.write_text(render(payload, events), encoding="utf-8")
     code = Path(__file__).read_text(encoding="utf-8")
     process = subprocess.Popen(["docker", "exec", "-i", "-e", "PYTHONDONTWRITEBYTECODE=1", "agent-worker-1", "python", "-u", "-c", code, "--container"],
                                stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, encoding="utf-8")

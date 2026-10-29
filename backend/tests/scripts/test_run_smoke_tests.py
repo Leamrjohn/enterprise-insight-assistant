@@ -7,6 +7,30 @@ from scripts.evaluation import prepare_business_evaluation as prepare
 from scripts.evaluation import run_smoke_tests as smoke
 
 
+def saved_round(identity):
+    return [
+        {"event": "identity", "value": identity},
+        *[{"event": "result", "round": 1, "case_id": cid} for cid in smoke.IDS],
+        {"event": "round", "round": 1},
+        {"event": "done"},
+    ]
+
+
+def test_resume_requires_matching_identity_and_complete_unique_cases():
+    identity = {"git": "revision-a", "fixtures": "hash-a"}
+    assert smoke.resume_round(saved_round(identity), identity) == 2
+    with pytest.raises(ValueError):
+        smoke.resume_round(saved_round(identity), {**identity, "git": "revision-b"})
+    with pytest.raises(ValueError):
+        smoke.resume_round(saved_round(identity)[1:], identity)
+    duplicate = saved_round(identity)
+    duplicate[2] = duplicate[1].copy()
+    with pytest.raises(ValueError):
+        smoke.resume_round(duplicate, identity)
+    with pytest.raises(ValueError):
+        smoke.resume_round(saved_round(identity)[:-1], identity)
+
+
 @pytest.mark.parametrize("start_round", [None, 2, 3])
 def test_one_invocation_submits_only_one_round(monkeypatch, start_round):
     import httpx
