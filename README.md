@@ -109,6 +109,8 @@ contract and is not substituted by `gpus: all`.
 
 这些命令只操作当前目录所属 `agent` 项目的 13 个常驻服务，保留容器和数据卷，不启动迁移、种子或测试任务。`up` 最多等待 120 秒检查容器健康与 API 就绪；`status` 检查失败会返回错误。缺少容器时停止并提示核对初始化流程，不自动创建环境。`up`、`down` 支持 `-WhatIf` 预览。
 
+Worker 的本地检索模型缓存保存在 `backend/storage/huggingface/`，通过 `HF_HOME` 复用已有持久化目录，重建容器后仍保留。首次没有缓存时仍需下载模型，API 就绪检查不代表模型已经加载；首次冒烟前应确认模型准备完成。缓存属于本机运行数据，不提交 Git。
+
 `down` 使用 Docker stop；禁止使用 `docker compose down -v` 删除数据卷。首次初始化或数据库迁移仍须按 AGENTS.md 获得授权。隔离自检：`.\scripts\ops\test-stack.ps1`，仅使用模拟 Docker 与 HTTP。
 
 ### 本地开发
