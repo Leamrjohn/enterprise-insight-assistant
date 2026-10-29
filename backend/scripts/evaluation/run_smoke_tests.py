@@ -220,6 +220,9 @@ def parse_run_args(argv=None):
 def main():
     args = parse_run_args()
     root = Path(__file__).resolve().parents[3]
+    sys.path.insert(0, str(root / "backend"))
+    from scripts.evaluation.smoke_runtime_identity import collect_runtime_identity
+
     selection = json.loads((root / "docs/design/development_case_selection.json").read_text(encoding="utf-8"))
     payload = {"selected": [], "documents": {}, "date": datetime.now(ZoneInfo("America/New_York")).date().isoformat(),
                    "git": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()}
@@ -241,6 +244,7 @@ def main():
     if subprocess.check_output(["git", "status", "--porcelain", "--", "backend"], cwd=root, text=True).strip():
         raise ValueError("Commit backend changes before recording a baseline")
     identity = {"git": payload["git"],
+                "runtime": collect_runtime_identity(root),
                 "cases_sha256": hashlib.sha256(json.dumps(payload["selected"], sort_keys=True).encode()).hexdigest(),
                 "corpus_manifest_sha256": hashlib.sha256((corpus / "manifest.json").read_bytes()).hexdigest(),
                 "runner_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest()}

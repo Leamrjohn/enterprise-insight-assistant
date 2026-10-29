@@ -40,6 +40,14 @@ def test_run_names_are_independent_and_resume_is_explicit():
     assert resumed.resume and resumed.run_id == first.run_id
 
 
+@pytest.mark.parametrize("field", ["model", "business_dump_sha256"])
+def test_resume_rejects_changed_runtime(field):
+    identity = {"runtime": {"model": "model-a", "business_dump_sha256": "data-a"}}
+    changed = {"runtime": {**identity["runtime"], field: "changed"}}
+    with pytest.raises(ValueError, match="changed run identity"):
+        smoke.resume_round(saved_round(identity), changed)
+
+
 @pytest.mark.parametrize(
     "args",
     [["--resume"], ["--run-id", "../old"], ["--run-id", "C:\\old"], ["--run-id", ""]],
