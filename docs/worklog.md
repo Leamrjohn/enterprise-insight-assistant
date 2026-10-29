@@ -103,3 +103,8 @@
 - status.ps1 退出 1：13 个常驻容器运行，已配置健康检查正常，但 API readiness=503，database/redis=ok、object_storage=unavailable。
 - 在 API 容器内用现有配置只读 HeadBucket，返回 ClientError/403；配置端点主机不为 localstack，未输出配置值或凭据，未切换存储。
 - 待用户决定修复当前对象存储访问或切换本地模拟存储；未验证模型充值是否生效，不以容器运行代替 API 就绪。
+## 2026-10-29 — 对象存储签名只读诊断
+- 使用 API 当前配置执行只读 HeadBucket 和 AWS STS GetCallerIdentity，不修改配置、权限或数据，不输出端点、身份标识或凭据。
+- 确认端点属于 AWS；HeadBucket 返回 403，响应桶区域与配置区域一致；STS 返回 SignatureDoesNotMatch。
+- 证据将问题缩小到当前请求的签名验证失败，不能仅归因于桶权限，也不能断言密钥一定错误；需用户核对现有访问密钥配对与有效性。
+- 未调用模型；阶段 1 仍待 API 就绪后运行。后续不得通过放宽桶权限或绕过就绪检查掩盖问题。
