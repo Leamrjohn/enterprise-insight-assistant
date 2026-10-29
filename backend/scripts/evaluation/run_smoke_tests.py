@@ -1,6 +1,7 @@
 """Run from repository root: python backend/scripts/evaluation/run_smoke_tests.py.
 
 Uses the existing worker's dependencies; credentials live only in memory.
+Each invocation runs one round; later rounds require an explicitly approved --resume.
 --self-test checks classification without Docker, database writes or model calls.
 """
 
@@ -83,7 +84,7 @@ def run_container(payload):
             document_ids[source] = doc["id"]
             emit("document", source=source, document_id=doc["id"])
             _wait_for_document(client, document_id=doc["id"], timeout_seconds=180)
-        for round_no in range(payload.get("start_round", 1), 4):
+        for round_no in [payload.get("start_round", 1)]:
             round_start, results = time.monotonic(), []
             for case in cases:
                 start, task, violations = time.monotonic(), {}, []
