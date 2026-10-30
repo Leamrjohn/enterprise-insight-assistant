@@ -148,8 +148,16 @@ def test_one_invocation_submits_only_one_round(smoke_runtime, start_round):
 def test_pending_review_stops_without_waiting_cancelling_or_submitting_more(
     monkeypatch, smoke_runtime
 ):
+    from app.modules.evaluation import observation
+
     payload, events, submissions, client = smoke_runtime
     original = prepare._request_json
+    terminal_observation = MagicMock(
+        side_effect=ValueError("task is not in an evaluable terminal state")
+    )
+    monkeypatch.setattr(
+        observation, "observation_from_persisted_task", terminal_observation
+    )
 
     def request(*args, **kwargs):
         result = original(*args, **kwargs)
@@ -165,6 +173,7 @@ def test_pending_review_stops_without_waiting_cancelling_or_submitting_more(
     assert submissions == [smoke.IDS[0]]
     sleep.assert_not_called()
     client.post.assert_not_called()
+    terminal_observation.assert_not_called()
     result = next(e for e in events if e["event"] == "result")
     assert result["status"] == "awaiting_review"
     assert result["category"] == "失败"

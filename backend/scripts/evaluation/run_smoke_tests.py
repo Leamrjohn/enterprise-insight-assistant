@@ -135,7 +135,7 @@ def run_container(payload):
                         response = client.post(path + "/cancel")
                         if response.status_code != 200:
                             raise RuntimeError("cancellation_not_confirmed")
-                    elif task["status"] != "cancelled":
+                    elif task["status"] not in {"cancelled", "awaiting_review"}:
                         with SessionLocal() as db:
                             db.execute(text("SET TRANSACTION READ ONLY"))
                             set_tenant_scope(db, resources["company_id"])
