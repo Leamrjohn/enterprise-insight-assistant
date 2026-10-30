@@ -143,3 +143,8 @@
 - 确认 Worker 空闲后构建并更新 API、Worker、report-worker，保留数据库、数据卷及检索缓存；三个容器源码与工作区一致、运行参数一致的身份检查通过。
 - status.ps1 退出 0，13 个常驻服务运行、API readiness=True；新增测试 Ruff 检查/格式通过，构建输出保留 artifacts/smoke/cancellation-deploy-build.log。
 - 未运行真实 Celery 并发取消端到端演练或新付费冒烟；169 仍待人工复核，首次下载/在途请求不可强制中断等既有边界保留，完整三轮基线仍未取得。
+## 2026-10-30 — 混合题待复核与用例期望核对
+- 只读核对任务 169：报告仅位于 report_draft，无已发布 report，publication=awaiting_human_review；对草稿运行 requires_human_review 返回 True。
+- 代码规则为 completed 报告含 hypotheses 时必须人工复核；该混合开发用例 expected_outcome=completed。此轮不符合用例期望，但不能据此认定发布规则错误或擅自放宽门禁。
+- 未修改用例、评分、权限或复核记录，未调用模型；此前取消保护及脚本修复已部署/验证的证据保留。
+- 新一轮最多 8 题/$0.20/30 分钟的授权仍待用户确认；完整三轮基线、目标数值校准和后续阶段未验收，自动推进不能代替付费或期望变更授权。
