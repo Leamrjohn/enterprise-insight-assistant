@@ -30,7 +30,7 @@ IDS = (
     "hybrid-east-delivered-revenue-causality-boundary",
     "clarification-missing-time-range",
 )
-TERMINAL = {"completed", "partial", "failed", "cancelled", "needs_clarification"}
+STOP_POLLING = {"completed", "partial", "failed", "cancelled", "needs_clarification", "awaiting_review"}
 
 
 def classify(status, passed, timed_out=False):
@@ -126,12 +126,12 @@ def run_container(payload):
                         if time.monotonic() - start > 180:
                             timed_out = True
                             break
-                        if task["status"] in TERMINAL:
+                        if task["status"] in STOP_POLLING:
                             break
                         time.sleep(min(2, max(0, 180 - (time.monotonic() - start))))
                     elapsed = time.monotonic() - start
                     client.timeout = httpx.Timeout(10)
-                    if timed_out:
+                    if timed_out and task.get("status") != "awaiting_review":
                         response = client.post(path + "/cancel")
                         if response.status_code != 200:
                             raise RuntimeError("cancellation_not_confirmed")
@@ -147,7 +147,7 @@ def run_container(payload):
                     violations = [type(error).__name__]
                     uncertain = True
                     # Do not retry POST: a transport failure may already have admitted a task.
-                    if path and task.get("status") not in TERMINAL:
+                    if path and task.get("status") not in STOP_POLLING:
                         client.timeout = httpx.Timeout(10)
                         client.post(path + "/cancel")
                 usage = (task.get("observability") or {}).get("model_usage", {})
@@ -160,8 +160,8 @@ def run_container(payload):
                            "violations": violations, "error_type": task.get("error_type"), "cost_limit_hit": cost_limit_hit}
                 results.append(row)
                 emit("result", **row)
-                if uncertain:
-                    emit("stop", reason="transport_or_cancellation_uncertain")
+                if uncertain or task.get("status") == "awaiting_review":
+                    emit("stop", reason="human_review_required" if task.get("status") == "awaiting_review" else "transport_or_cancellation_uncertain")
                     return
             elapsed = time.monotonic() - round_start
             tokens = sum(r["tokens"] or 0 for r in results)

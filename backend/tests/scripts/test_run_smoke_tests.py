@@ -57,8 +57,8 @@ def test_run_name_rejects_missing_or_unsafe_paths(args):
         smoke.parse_run_args(args)
 
 
-@pytest.mark.parametrize("start_round", [None, 2, 3])
-def test_one_invocation_submits_only_one_round(monkeypatch, start_round):
+@pytest.fixture
+def smoke_runtime(monkeypatch):
     import httpx
     from app.core import security
     from app.db import session
@@ -129,6 +129,12 @@ def test_one_invocation_submits_only_one_round(monkeypatch, start_round):
             for cid in smoke.IDS
         ],
     }
+    return payload, events, submissions, client
+
+
+@pytest.mark.parametrize("start_round", [None, 2, 3])
+def test_one_invocation_submits_only_one_round(smoke_runtime, start_round):
+    payload, events, submissions, _ = smoke_runtime
     if start_round is not None:
         payload["start_round"] = start_round
     smoke.run_container(payload)
@@ -137,3 +143,29 @@ def test_one_invocation_submits_only_one_round(monkeypatch, start_round):
         start_round or 1
     ]
     assert events[-1] == {"event": "done"}
+
+
+def test_pending_review_stops_without_waiting_cancelling_or_submitting_more(
+    monkeypatch, smoke_runtime
+):
+    payload, events, submissions, client = smoke_runtime
+    original = prepare._request_json
+
+    def request(*args, **kwargs):
+        result = original(*args, **kwargs)
+        if args[1] == "GET" and "/tasks/" in args[2]:
+            result.update(status="awaiting_review", stage="awaiting_review")
+        return result
+
+    monkeypatch.setattr(prepare, "_request_json", request)
+    sleep = MagicMock(side_effect=AssertionError("must not wait for human review"))
+    monkeypatch.setattr(smoke.time, "sleep", sleep)
+    client.post = MagicMock()
+    smoke.run_container(payload)
+    assert submissions == [smoke.IDS[0]]
+    sleep.assert_not_called()
+    client.post.assert_not_called()
+    result = next(e for e in events if e["event"] == "result")
+    assert result["status"] == "awaiting_review"
+    assert result["category"] == "失败"
+    assert events[-1] == {"event": "stop", "reason": "human_review_required"}
