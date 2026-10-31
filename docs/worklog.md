@@ -198,3 +198,8 @@
 - sql_generation 从 FILTER_VALUE_DEFINITIONS 提供 customers.region_code 的 EAST=华东；semantic_review_service._catalog_payload 仅发送 tables/joins。离线断言证实生成提示含 EAST、复核目录载荷缺失映射，退出 0。
 - Data 复核拒绝→Reviewer partial→Smart Router 以 data_repairable_error 重新规划→第 8 次调用后预算耗尽；另发现修复提示只带通用 sql_semantic_error，未传具体缺失条件，不在本工单顺手修改。
 - 建议仅给 SQL 语义复核输入补充按当前快照字段过滤的已有受控筛选定义并加隔离回归测试；涉及 SQL 复核输入，待用户确认后修改，不放宽决策/AST/权限或调预算；本轮无模型调用。
+## 2026-10-31 — SQL 语义复核补齐受控映射
+- 用户授权补齐输入并离线测试；只在 review_sql 载荷加入已有 FILTER_VALUE_DEFINITIONS，按当前快照的表及字段同时过滤，Planner 复核载荷不变。
+- 新测试先以缺少 filter_value_definitions 失败；补齐后验证 EAST=华东、delivered 映射，以及缺列/其他表同名列/空快照/无快照不泄露映射，保留模型 repair 决策，不自动放行。
+- SQL 复核测试 13 passed，生成器/语义目录/冒烟脚本关联测试 42 passed；修正测试导入排序后 Ruff 检查/格式通过，不修改 AST、权限、预算或原评分期望。
+- 未部署容器、未调用真实模型或运行全量测试；仅证实输入补齐和范围过滤，不能证明真实模型不再误判，185/188 历史结果保持原样。

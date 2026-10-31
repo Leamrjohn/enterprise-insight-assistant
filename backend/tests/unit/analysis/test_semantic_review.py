@@ -1,5 +1,6 @@
 import json
 
+import pytest
 from app.core.exceptions import RetryableModelError
 from app.modules.analysis.catalog.snapshot_catalog import SnapshotCatalog
 from app.modules.analysis.data.sql_candidate import SQLCandidate
@@ -25,6 +26,51 @@ class FakeGateway:
 
     def count_tokens(self, text: str) -> int:
         return len(text)
+
+
+@pytest.mark.parametrize(
+    "tables,expected_fields",
+    [
+        (
+            {
+                "customers": frozenset({"region_code"}),
+                "sales_orders": frozenset({"status"}),
+            },
+            {"customers.region_code", "sales_orders.status"},
+        ),
+        ({"customers": frozenset({"id"})}, set()),
+        ({"other_table": frozenset({"region_code"})}, set()),
+        ({}, set()),
+        (None, set()),
+    ],
+)
+def test_sql_review_receives_only_snapshot_allowed_filter_definitions(
+    tables, expected_fields
+):
+    gateway = FakeGateway(
+        {
+            "decision": "repair",
+            "reason": "missing condition",
+            "missing_requirements": ["time_range"],
+        }
+    )
+    catalog = (
+        None if tables is None else SnapshotCatalog(tables=tables, joins=frozenset())
+    )
+    decision = SemanticReviewService(gateway=gateway).review_sql(
+        question="华东销售额",
+        plan={"action": "analyze", "route": "data_only"},
+        candidate=SQLCandidate(sql='SELECT 1 AS "数量"', purpose="测试输入边界"),
+        catalog=catalog,
+    )
+    payload = json.loads(gateway.calls[0]["prompt"])
+    definitions = payload["filter_value_definitions"]
+    assert set(definitions) == expected_fields
+    if expected_fields:
+        assert definitions["customers.region_code"]["EAST"] == "华东"
+        assert "delivered" in definitions["sales_orders.status"]
+    assert decision.decision == "repair"
+    assert decision.missing_requirements == ["time_range"]
 
 
 def test_sql_semantic_reviewer_blocks_unrelated_fallback_query() -> None:

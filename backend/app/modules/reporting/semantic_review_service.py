@@ -9,6 +9,7 @@ from typing import Any
 from app.core.exceptions import RetryableModelError, StructuredOutputError
 from app.core.gateway.base import ModelGateway
 from app.core.gateway.factory import get_model_gateway
+from app.modules.analysis.catalog.semantic_catalog import FILTER_VALUE_DEFINITIONS
 from app.modules.analysis.catalog.snapshot_catalog import SnapshotCatalog
 from app.modules.analysis.data.sql_candidate import SQLCandidate
 from app.modules.analysis.planner.planner_decision import PlannerDecision
@@ -138,6 +139,13 @@ class SemanticReviewService:
             "plan": plan,
             "candidate": candidate.model_dump(),
             "schema_snapshot": _catalog_payload(catalog),
+            "filter_value_definitions": {
+                field: values
+                for field, values in FILTER_VALUE_DEFINITIONS.items()
+                if catalog is not None
+                and field.split(".", 1)[1]
+                in catalog.tables.get(field.split(".", 1)[0], frozenset())
+            },
         }
         raw_output = self._chat(system_prompt=system_prompt, payload=payload)
         return self._parse_with_repair(
