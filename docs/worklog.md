@@ -218,3 +218,8 @@
 - 支持 chunk_id 加空格/中英文冒号及整数编号；沿用标准引用格式，保留任务范围、公司成员及文档角色可见性查询；业务数值、小数/百分比/嵌入标识不因本修复被豁免。
 - 新增 15 个边界用例，相关 Agent/报告/引用离线测试合计 85 passed，1.61 秒；Python 网络连接禁用，Ruff 检查/格式及差异检查通过，无原期望放宽。
 - 未部署、未访问运行数据库或调用模型；日期文件名数字误判、任务 188 最终 Planner 异常及真实端到端验证仍未解决，三轮基线未齐。
+## 2026-10-31 — Planner 异常分类离线排查
+- 仅检查 PlannerAgent、PlanningService 及决策测试；PlannerAgent.run 的 except Exception 将未单列的治理异常转换为 planner_unexpected_error。
+- 注入不访问模型的规划服务，分别抛出实际 ModelBudgetExceeded、ModelCallCancelled；两次均被转换成 planner_unexpected_error，断言通过，命令退出 0。
+- 这证明存在分类信息丢失，不证明任务 188 的真实原始异常；该任务需原始错误证据才能进一步归因，不将推测记成预算耗尽事实。
+- 待办：评估在 Planner 边界保留治理异常并验证外层终态处理；本轮不修改主链、部署、访问数据库或调用模型，保持离线范围。
