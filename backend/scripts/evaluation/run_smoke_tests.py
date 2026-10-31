@@ -160,8 +160,8 @@ def run_container(payload):
                            "violations": violations, "error_type": task.get("error_type"), "cost_limit_hit": cost_limit_hit}
                 results.append(row)
                 emit("result", **row)
-                if uncertain:
-                    emit("stop", reason="transport_or_cancellation_uncertain")
+                if uncertain or (row["category"] != "成功" and task.get("status") != "awaiting_review"):
+                    emit("stop", reason="transport_or_cancellation_uncertain" if uncertain else "unexpected_result")
                     return
             elapsed = time.monotonic() - round_start
             tokens = sum(r["tokens"] or 0 for r in results)

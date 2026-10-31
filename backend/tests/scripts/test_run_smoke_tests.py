@@ -192,3 +192,73 @@ def test_pending_review_continues_without_waiting_cancelling_or_approving(
     assert all(r["category"] == "成功" for r in results if r is not result)
     assert not any(e["event"] == "stop" for e in events)
     assert events[-1] == {"event": "done"}
+
+
+@pytest.mark.parametrize(
+    "status,passed,category",
+    [
+        ("partial", False, "结果错误"),
+        ("completed", False, "结果错误"),
+        ("failed", False, "失败"),
+        ("cancelled", False, "失败"),
+        ("partial", True, "成功"),
+        ("needs_clarification", True, "成功"),
+    ],
+)
+def test_stop_after_unexpected_result_before_next_submission(
+    monkeypatch, smoke_runtime, status, passed, category
+):
+    from app.modules.evaluation import business
+
+    payload, events, submissions, client = smoke_runtime
+    original = prepare._request_json
+
+    def request(*args, **kwargs):
+        result = original(*args, **kwargs)
+        if args[1] == "GET" and args[2].endswith("/tasks/1"):
+            result.update(status=status)
+        return result
+
+    monkeypatch.setattr(prepare, "_request_json", request)
+    monkeypatch.setattr(
+        business,
+        "evaluate_case",
+        lambda *_: SimpleNamespace(
+            passed=passed, violations=[] if passed else ["outcome_correct"]
+        ),
+    )
+    client.post = MagicMock()
+    smoke.run_container(payload)
+    results = [e for e in events if e["event"] == "result"]
+    assert results[0]["category"] == category
+    assert submissions == (list(smoke.IDS) if passed else [smoke.IDS[0]])
+    client.post.assert_not_called()
+    if passed:
+        assert events[-1] == {"event": "done"}
+    else:
+        assert len(results) == 1
+        assert events[-1] == {"event": "stop", "reason": "unexpected_result"}
+        assert not any(e["event"] in {"round", "done"} for e in events)
+
+
+def test_timeout_cancels_and_stops_before_next_submission(monkeypatch, smoke_runtime):
+    payload, events, submissions, client = smoke_runtime
+    original = prepare._request_json
+    clock = [0]
+    monkeypatch.setattr(smoke.time, "monotonic", lambda: clock[0])
+
+    def request(*args, **kwargs):
+        result = original(*args, **kwargs)
+        if args[1] == "GET" and "/tasks/" in args[2]:
+            result.update(status="running")
+            clock[0] = 181
+        return result
+
+    monkeypatch.setattr(prepare, "_request_json", request)
+    client.post = MagicMock(return_value=SimpleNamespace(status_code=200))
+    smoke.run_container(payload)
+    assert submissions == [smoke.IDS[0]]
+    client.post.assert_called_once_with("conversations/1/tasks/1/cancel")
+    results = [e for e in events if e["event"] == "result"]
+    assert len(results) == 1 and results[0]["category"] == "无响应"
+    assert events[-1] == {"event": "stop", "reason": "unexpected_result"}
