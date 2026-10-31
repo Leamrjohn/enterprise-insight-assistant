@@ -223,3 +223,8 @@
 - 注入不访问模型的规划服务，分别抛出实际 ModelBudgetExceeded、ModelCallCancelled；两次均被转换成 planner_unexpected_error，断言通过，命令退出 0。
 - 这证明存在分类信息丢失，不证明任务 188 的真实原始异常；该任务需原始错误证据才能进一步归因，不将推测记成预算耗尽事实。
 - 待办：评估在 Planner 边界保留治理异常并验证外层终态处理；本轮不修改主链、部署、访问数据库或调用模型，保持离线范围。
+## 2026-10-31 — Planner 预算异常最小修复
+- 用户授权只修预算异常；PlannerAgent 导入 ModelBudgetExceeded 并在兜底捕获前原样抛出，普通异常和取消异常行为不变，不改变预算值或工作流结构。
+- 先复现预算异常未抛出；新增测试验证异常对象保持、普通异常仍分类，以及真实 Worker 函数配合模拟依赖进入 partial/model_budget_exhausted 且不重试/发布。
+- 初次 Worker 模拟缺少 attempt.task_id，补齐夹具后相关测试 74 passed，2.60 秒；Python 网络连接禁用，Ruff 检查/格式通过，业务变更仅 3 行。
+- 未部署、未访问数据库或调用真实模型；模拟调用替代了图执行，不是完整 HTTP/Celery 验证，也不能据此确认任务 188 当时的原始异常。

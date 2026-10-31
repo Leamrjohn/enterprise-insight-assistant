@@ -10,6 +10,7 @@ from app.core.exceptions import (
 from app.modules.analysis.agent_protocol import Agent, AgentInput, AgentOutput
 from app.modules.analysis.planner.planning import PlanningService
 from app.modules.analysis.tool_protocol import Tool
+from app.modules.runtime.model_governance import ModelBudgetExceeded
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +48,8 @@ class PlannerAgent(Agent):
             if input.context.get("attachment_context"):
                 kwargs["attachment_context"] = input.context["attachment_context"]
             decision = self._planning_service.decide(input.question, **kwargs)
+        except ModelBudgetExceeded:
+            raise
         except RetryableModelError as error:
             logger.warning("Planner model retryable failure exhausted")
             return AgentOutput(
