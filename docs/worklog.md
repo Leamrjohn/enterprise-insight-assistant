@@ -208,3 +208,8 @@
 - 在禁用 Python socket 连接的测试进程中运行 Agent、SQL 语义复核、报告校验及 Reviewer 校验四份测试，pytest -x -q：83 passed，1.98 秒。
 - 本次无业务代码修改；新建 docs/STATUS.md 记录接续点，既有 pytest-asyncio loop scope 弃用提示仍在，不扩展本工单处理。
 - 未验证真实模型效果、部署后 API 就绪或三轮基线；后续依照离线范围继续，付费或运行环境验证不能由本次通过推断。
+## 2026-10-31 — 任务 188 只读诊断
+- 用户授权单任务只读诊断；主机直连平台库，连接强制 default_transaction_read_only=on，租户范围 112；未执行容器命令、修改数据库或调用模型。
+- 检查点 8/18：Knowledge ready、语义 supported、引用有效，但数字校验把正文 chunk_id 139 当作数值拒绝；首次另报文件名日期 -5/-6，触发两次 validation_failure 重新规划。
+- 离线最小复现：相同文档内容下，正文 chunk_id 139 被拒绝、标准 [来源:139] 写法通过；数字校验仅移除标准引用记法，未修改源码或期望。
+- 终态 failed，末次检查点仅 planner_unexpected_error，不能断言底层异常是预算耗尽；待办为引用标识与经营数值区分的最小修复，仍需严格验证实际引用有效及无来源业务数字被拒绝。
