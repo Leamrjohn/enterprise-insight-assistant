@@ -1,6 +1,6 @@
 """Run from repository root: python backend/scripts/evaluation/run_smoke_tests.py.
 
-Uses the existing worker's dependencies; credentials live only in memory.
+Pending reviews stay non-successful; continue without approval or cancellation.
 One round per invocation; approved continuation uses --resume --run-id ID.
 --self-test checks classification without Docker, database writes or model calls.
 """
@@ -160,8 +160,8 @@ def run_container(payload):
                            "violations": violations, "error_type": task.get("error_type"), "cost_limit_hit": cost_limit_hit}
                 results.append(row)
                 emit("result", **row)
-                if uncertain or task.get("status") == "awaiting_review":
-                    emit("stop", reason="human_review_required" if task.get("status") == "awaiting_review" else "transport_or_cancellation_uncertain")
+                if uncertain:
+                    emit("stop", reason="transport_or_cancellation_uncertain")
                     return
             elapsed = time.monotonic() - round_start
             tokens = sum(r["tokens"] or 0 for r in results)

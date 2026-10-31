@@ -145,23 +145,28 @@ def test_one_invocation_submits_only_one_round(smoke_runtime, start_round):
     assert events[-1] == {"event": "done"}
 
 
-def test_pending_review_stops_without_waiting_cancelling_or_submitting_more(
-    monkeypatch, smoke_runtime
+@pytest.mark.parametrize("review_task_id", [1, 7])
+def test_pending_review_continues_without_waiting_cancelling_or_approving(
+    monkeypatch, smoke_runtime, review_task_id
 ):
     from app.modules.evaluation import observation
 
     payload, events, submissions, client = smoke_runtime
     original = prepare._request_json
-    terminal_observation = MagicMock(
-        side_effect=ValueError("task is not in an evaluable terminal state")
-    )
+
+    def observe(*args, task_id, **kwargs):
+        if task_id == review_task_id:
+            raise ValueError("task is not in an evaluable terminal state")
+        return object()
+
+    terminal_observation = MagicMock(side_effect=observe)
     monkeypatch.setattr(
         observation, "observation_from_persisted_task", terminal_observation
     )
 
     def request(*args, **kwargs):
         result = original(*args, **kwargs)
-        if args[1] == "GET" and "/tasks/" in args[2]:
+        if args[1] == "GET" and args[2].endswith(f"/tasks/{review_task_id}"):
             result.update(status="awaiting_review", stage="awaiting_review")
         return result
 
@@ -170,11 +175,20 @@ def test_pending_review_stops_without_waiting_cancelling_or_submitting_more(
     monkeypatch.setattr(smoke.time, "sleep", sleep)
     client.post = MagicMock()
     smoke.run_container(payload)
-    assert submissions == [smoke.IDS[0]]
+    assert submissions == list(smoke.IDS)
     sleep.assert_not_called()
     client.post.assert_not_called()
-    terminal_observation.assert_not_called()
-    result = next(e for e in events if e["event"] == "result")
+    assert terminal_observation.call_count == 7
+    assert all(
+        call.kwargs["task_id"] != review_task_id
+        for call in terminal_observation.call_args_list
+    )
+    results = [e for e in events if e["event"] == "result"]
+    assert len(results) == 8
+    result = results[review_task_id - 1]
     assert result["status"] == "awaiting_review"
     assert result["category"] == "失败"
-    assert events[-1] == {"event": "stop", "reason": "human_review_required"}
+    assert result["violations"] == []
+    assert all(r["category"] == "成功" for r in results if r is not result)
+    assert not any(e["event"] == "stop" for e in events)
+    assert events[-1] == {"event": "done"}
