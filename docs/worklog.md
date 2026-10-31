@@ -193,3 +193,8 @@
 - 两行修改停止条件和原因：普通非成功结果记 unexpected_result 后返回；待复核继续，传输不确定保持原停止原因，预期 partial/澄清仍继续；不改评分期望或发布门禁。
 - 脚本及身份测试 26 passed，覆盖结果错误/失败/取消、成功 partial/澄清、待复核、超时取消后不再提交；分类自检 5 条通过，Ruff 检查/格式通过，脚本仍 300 行。
 - 未运行付费冒烟或全量测试，未改变任务 185/188 状态；185 上游失败根因及同版本三轮基线仍待处理。
+## 2026-10-31 — 任务 185 上游失败只读定位
+- 检查点 sequence=6 显示 sql_semantic_unsupported，2 次生成/2 次语义复核、sql_attempts=0；复核理由为 EAST 与华东映射未验证，未发现 SQL 工具调用记录。
+- sql_generation 从 FILTER_VALUE_DEFINITIONS 提供 customers.region_code 的 EAST=华东；semantic_review_service._catalog_payload 仅发送 tables/joins。离线断言证实生成提示含 EAST、复核目录载荷缺失映射，退出 0。
+- Data 复核拒绝→Reviewer partial→Smart Router 以 data_repairable_error 重新规划→第 8 次调用后预算耗尽；另发现修复提示只带通用 sql_semantic_error，未传具体缺失条件，不在本工单顺手修改。
+- 建议仅给 SQL 语义复核输入补充按当前快照字段过滤的已有受控筛选定义并加隔离回归测试；涉及 SQL 复核输入，待用户确认后修改，不放宽决策/AST/权限或调预算；本轮无模型调用。
