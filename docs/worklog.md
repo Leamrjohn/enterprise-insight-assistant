@@ -228,3 +228,8 @@
 - 先复现预算异常未抛出；新增测试验证异常对象保持、普通异常仍分类，以及真实 Worker 函数配合模拟依赖进入 partial/model_budget_exhausted 且不重试/发布。
 - 初次 Worker 模拟缺少 attempt.task_id，补齐夹具后相关测试 74 passed，2.60 秒；Python 网络连接禁用，Ruff 检查/格式通过，业务变更仅 3 行。
 - 未部署、未访问数据库或调用真实模型；模拟调用替代了图执行，不是完整 HTTP/Celery 验证，也不能据此确认任务 188 当时的原始异常。
+## 2026-10-31 — 引用与 Planner 修复部署验收
+- 用户授权部署但不调用模型；部署前只读确认活动分析任务为 0，两个 Worker 均响应且活动任务为 0，保留用户 AGENTS.md 改动与未跟踪回顾文档。
+- 仅构建并更新 api、worker、report-worker，命令退出 0；未迁移或重建数据库/数据卷，构建和更新日志保存在 artifacts/smoke/planner-citation-deploy-*.log。
+- collect_runtime_identity 校验三个容器源码与工作区一致、模型参数一致；身份保存同前缀 identity.json，status.ps1 退出 0，13 服务运行，API readiness=True。
+- 未提交分析任务或调用模型；此结果只证明部署源码和环境就绪，日期文件名误判、真实业务重测及完整三轮基线仍未解决。
