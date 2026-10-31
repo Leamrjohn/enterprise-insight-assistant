@@ -4,6 +4,7 @@ import re
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
 
 from app.modules.analysis.metrics.facts import render_evidence_purpose
+from app.modules.reporting.citation_patterns import CITATION_PATTERN
 
 _NUMBER_PATTERN = re.compile(r"-?\d+(?:\.\d+)?%?")
 
@@ -68,8 +69,7 @@ def validate_numbers(
     knowledge_evidences: list[dict] | None = None,
 ) -> tuple[bool, list[str]]:
     """Validate values against controlled SQL rows or cited retrieved text."""
-    answer_without_citations = re.sub(
-        r"\[(?:来源|引用)[：:\s]*\d+\]",
+    answer_without_citations = CITATION_PATTERN.sub(
         "",
         _without_trusted_evidence_labels(answer, data_result),
     )
