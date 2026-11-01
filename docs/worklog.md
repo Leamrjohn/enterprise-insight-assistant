@@ -315,3 +315,8 @@
 - 根因：mark_analysis_task_event_worker_claimed 只更新 broker_accepted，API 慢时 Worker 先认领导致空更新，之后事件被标 broker_accepted 永不推进。修复：认领可从 pending/publishing/broker_accepted 推进；重投递遇到不可认领任务时关闭未认领事件。
 - 先写 2 个失败用例复现，修复后 outbox 6 项、单元/脚本 911 passed/4 skipped、集成 90 passed；部署 api/worker/report-worker/beat，源码哈希一致、readiness ok；部署后约 90 秒 12 条事件自愈为 worker_claimed（141→153），发布器每轮发布 0 条。
 - 未用真实模型触发新任务验证竞态窗口；未改表结构或手工改库；API 发消息请求 p90 约 1.35s 的慢因未查，列为待办。
+
+## 2026-11-01 — 2.5.1 组件评测台只读调查
+- 盘点评测模块与 42 份素材：80 条用例/56 个问题，61 条有期望路线、80 条有结果指纹、38 条有文档范围，chunk 级标注 0 条；模型调用记录不存输出，不能回放历史冒烟。
+- 缺口表与拆分写入 docs/design/stage2_5_evaluation_survey.md：2.5.2 检索、2.5.3 报告校验（均免费）、2.5.4 录制回放网关、2.5.5 路由与 SQL（录制需付费授权，约 100～140 次调用）。
+- 只读，无代码改动、无模型调用；留出集仅 8 条，统计力有限。

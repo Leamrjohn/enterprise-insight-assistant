@@ -29,3 +29,4 @@
 - 2026-11-01：2.3 日志加 task_id/execution_attempt_id/component，消息与堆栈全文脱敏、控制台 JSON；908 项单元/脚本测试通过，未部署、未跑集成测试。
 - 2026-11-01：2.3 已部署到 api/worker/report-worker/beat，容器内日志 JSON 且脱敏、带 task_id；修复 Worker 未接入项目日志配置；Outbox 卡 broker_accepted 与 uvicorn 访问日志列为待办。
 - 2026-11-01：修复 Outbox 认领竞态与卡住事件自愈，部署后 12 条 broker_accepted 全部收敛、重复发布停止；911 单元/90 集成通过；API 发消息慢请求原因待查。
+- 2026-11-01：2.5.1 完成只读调查，评测缺口与 2.5.2～2.5.5 拆分已记录；下一步 2.5.2 检索评测（免费）。

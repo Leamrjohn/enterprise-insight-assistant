@@ -51,6 +51,8 @@
 ### 2.5.1 只读调查
 - 盘点 `backend/app/modules/evaluation/`（已有 retrieval、business、workflow、thresholds）和 `backend/tests/fixtures/evaluation/`（42 份素材），列出四类评测分别能复用什么。
 
+调查结果与拆分（2.5.2～2.5.5，先免费后付费）见 [stage2_5_evaluation_survey.md](../design/stage2_5_evaluation_survey.md)。
+
 ### 2.5.2 检索评测
 - 复用 `evaluate_retrieval`，补充 MRR、Recall@k（k=3、5、10）；固定嵌入模型和语料，测出基线。
 
