@@ -9,7 +9,11 @@ from typing import Any
 
 from app.core.celery_app import celery_app
 from app.core.exceptions import RetryableModelError
-from app.core.logging import request_id_context
+from app.core.logging import (
+    execution_attempt_id_context,
+    request_id_context,
+    task_id_context,
+)
 from app.core.settings import get_settings
 from app.db.clock import database_now
 from app.db.session import SessionLocal, set_tenant_scope
@@ -513,6 +517,8 @@ def process_analysis_task(self, task_id: int):
     db = SessionLocal()
     execution: ClaimedExecution | None = None
     request_id_token = None
+    task_id_token = None
+    attempt_id_token = None
     try:
         execution = _claim_task(
             db,
@@ -524,6 +530,8 @@ def process_analysis_task(self, task_id: int):
             logger.info("Task %s was already claimed, terminal, or missing", task_id)
             return
         record = execution.task
+        task_id_token = task_id_context.set(record.id)
+        attempt_id_token = execution_attempt_id_context.set(execution.attempt.id)
         if record.request_id:
             request_id_token = request_id_context.set(record.request_id)
         # Tasks created before company scope was introduced may still contain
@@ -824,4 +832,8 @@ def process_analysis_task(self, task_id: int):
     finally:
         if request_id_token is not None:
             request_id_context.reset(request_id_token)
+        if attempt_id_token is not None:
+            execution_attempt_id_context.reset(attempt_id_token)
+        if task_id_token is not None:
+            task_id_context.reset(task_id_token)
         db.close()

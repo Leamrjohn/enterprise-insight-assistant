@@ -3,13 +3,13 @@
 from __future__ import annotations
 
 import argparse
-import re
 from collections import defaultdict
 from datetime import UTC, datetime
 from decimal import Decimal
 from html import escape
 from pathlib import Path
 
+from app.core.redaction import SENSITIVE_PATTERN
 from app.db.session import SessionLocal, set_tenant_scope
 from app.modules.workflow.audit.events_models import WorkflowEvent
 from app.modules.workflow.audit.model_call import ModelCallRecord
@@ -31,14 +31,7 @@ _SAFE_CLARIFICATION_SLOTS = frozenset(
     }
 )
 
-_SENSITIVE_METADATA = re.compile(
-    r"\bsk-[A-Za-z0-9_-]+"
-    r"|[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}"
-    r"|(?<!\d)(?:\+?86[ -]?)?1[3-9](?:[ -]?\d){9}(?!\d)"
-    r"|\b(?:api[_-]?key|access[_-]?token|password|secret)\s*[:=]\s*\S+"
-    r"|\bBearer\s+\S+",
-    re.IGNORECASE,
-)
+_SENSITIVE_METADATA = SENSITIVE_PATTERN
 
 
 def _timestamp(value: datetime | None) -> str:

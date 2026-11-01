@@ -297,3 +297,9 @@
 - 对照源码复核 00～03：治理、可靠性、SQL 覆盖充分；缺组件评测台、模型选工具、提示词工程、跨模块联动。
 - 新增 docs/roadmap/04_agent_capability_track.md（阶段 2.5、4.5、7.5，7.2/7.3 细则，联动矩阵）；00 总览加指引、阶段行和保留顺序调整。
 - 仅改文档，无代码、无模型调用；分工改为 Claude 执行讲解。下一步：收尾 2.3，再进入 2.5。
+
+## 2026-11-01 — 2.3 日志关联编号与全文脱敏
+- 先补 3 个失败用例复现：日志只有 request_id；sk-/邮箱/手机号/命名凭据/Bearer 在消息和异常堆栈中原样输出；控制台是未脱敏纯文本。
+- 新增 app/core/redaction.py 作为日志与 trace 共用规则；JsonFormatter 增加 component、task_id、execution_attempt_id，并对所有字符串字段逐段脱敏；控制台改为同一 JSON 格式；Worker 认领后设置、结束时复原编号。
+- backend 目录 pytest tests/unit tests/scripts -q：908 passed/4 skipped；Ruff 通过；仅为测试替身补 id 字段，未改断言。
+- 未跑真实数据库集成测试和容器内日志检查，未部署；Outbox 发布与模型网关自身日志字段未逐一核对。

@@ -46,7 +46,7 @@ def test_worker_handles_planner_budget_without_retry_or_publish(monkeypatch):
     )
     execution = SimpleNamespace(
         task=record,
-        attempt=SimpleNamespace(task_id=1),
+        attempt=SimpleNamespace(id=1, task_id=1),
         resume_next_node=None,
         resume_state=None,
     )
