@@ -7,6 +7,35 @@ from app.modules.workflow.models import AnalysisTask
 from scripts.evaluation.render_task_trace import load_trace, render_trace_html
 
 
+@pytest.mark.parametrize(
+    "sensitive",
+    [
+        "sk-test-secret123456",
+        "person@example.com",
+        "13800138000",
+        "+86 138-0013-8000",
+        "api_key=private-value",
+        "Authorization: Bearer private-token",
+    ],
+)
+def test_trace_redacts_sensitive_metadata(sensitive):
+    task = SimpleNamespace(
+        id=12,
+        company_id=4,
+        status="failed",
+        stage=sensitive,
+        created_at=None,
+        completed_at=None,
+        duration_ms=20,
+    )
+    html = render_trace_html(
+        task=task, attempts=[], events=[], model_calls=[], tool_calls=[]
+    )
+    assert sensitive not in html
+    assert "[REDACTED]" in html
+    assert "failed" in html
+
+
 def test_trace_html_excludes_payloads_and_escapes_audit_metadata() -> None:
     now = datetime(2026, 10, 9, tzinfo=UTC)
     task = SimpleNamespace(

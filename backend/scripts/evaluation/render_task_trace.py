@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import re
 from datetime import UTC, datetime
 from html import escape
 from pathlib import Path
@@ -28,13 +29,28 @@ _SAFE_CLARIFICATION_SLOTS = frozenset(
     }
 )
 
+_SENSITIVE_METADATA = re.compile(
+    r"\bsk-[A-Za-z0-9_-]+"
+    r"|[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}"
+    r"|(?<!\d)(?:\+?86[ -]?)?1[3-9](?:[ -]?\d){9}(?!\d)"
+    r"|\b(?:api[_-]?key|access[_-]?token|password|secret)\s*[:=]\s*\S+"
+    r"|\bBearer\s+\S+",
+    re.IGNORECASE,
+)
+
 
 def _timestamp(value: datetime | None) -> str:
     return value.isoformat() if value is not None else "-"
 
 
 def _text(value: object) -> str:
-    return escape(str(value)) if value is not None else "-"
+    if value is None:
+        return "-"
+    text = str(value)
+    # Drop the whole cell so credential suffixes cannot survive partial masking.
+    if _SENSITIVE_METADATA.search(text):
+        return "[REDACTED]"
+    return escape(text)
 
 
 def _row(cells: list[object]) -> str:

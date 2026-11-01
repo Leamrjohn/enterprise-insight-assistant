@@ -280,3 +280,9 @@
 - 复用 render_task_trace 调查，缺口表见 docs/design/stage2_observability_gap.md；未改代码或直接扩大载荷输出。
 - 离线渲染测试在 backend 目录 1 passed/1 deselected（根目录首次导入失败）；只读真实 205 导出 19 事件/8 模型/2 工具，错误公司范围被拒绝。
 - 脱敏完整性、逐步骤汇总和用户追踪验收未证明；外部留出题及学习验收仍待确认，无真实模型调用。
+
+## 2026-11-01 — 2.2 trace 元数据敏感格式隐藏
+- 离线复现 render_trace_html 只转义 HTML、元数据中 sk- 密钥原样出现；先新增回归，修复前 1 failed。
+- 在现有统一单元格渲染入口识别 sk-、邮箱、中国手机号（含 +86/空格/连字符）、命名凭据与 Bearer 格式，命中时隐藏整格；不扩大载荷展示、不修改租户查询。
+- backend 目录运行 pytest tests/scripts/test_render_task_trace.py -k 'not loader' -x -q：7 passed/1 deselected；Ruff check 通过并格式化测试，无模型调用或运行库写入。
+- 未运行数据库加载测试（加载器未修改）；模式覆盖不是通用个人信息识别，全链日志脱敏、安全摘要及费用汇总仍待处理。
