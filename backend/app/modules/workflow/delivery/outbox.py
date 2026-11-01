@@ -233,15 +233,20 @@ def return_analysis_task_event_to_pending(
     return True
 
 
+_UNCLAIMED_EVENT_STATUSES = ("pending", "publishing", "broker_accepted")
+
+
 def mark_analysis_task_event_worker_claimed(
     db: Session, *, task_id: int, execution_id: str
 ) -> bool:
+    # A fast Worker can claim before the publisher records broker acceptance,
+    # so the effective claim settles the event from any unclaimed status.
     now = database_now(db)
     updated = db.scalar(
         update(AnalysisTaskOutboxEvent)
         .where(
             AnalysisTaskOutboxEvent.task_id == task_id,
-            AnalysisTaskOutboxEvent.status == "broker_accepted",
+            AnalysisTaskOutboxEvent.status.in_(_UNCLAIMED_EVENT_STATUSES),
         )
         .values(
             status="worker_claimed",
@@ -250,6 +255,35 @@ def mark_analysis_task_event_worker_claimed(
             publish_lease_expires_at=None,
             last_error=None,
         )
+        .returning(AnalysisTaskOutboxEvent.id)
+    )
+    return updated is not None
+
+
+def settle_redelivered_analysis_task_events(
+    db: Session, *, task_id: int, execution_id: str | None
+) -> bool:
+    """Close unclaimed events of a task that a redelivery found unclaimable.
+
+    Every event creator queues its task in the same transaction, so an unclaimed
+    event on a task that is no longer queued/retrying is a stale duplicate.
+    """
+    if execution_id is None:
+        values = {"status": "cancelled", "last_error": "task_not_claimable"}
+    else:
+        values = {
+            "status": "worker_claimed",
+            "worker_execution_id": execution_id,
+            "worker_claimed_at": database_now(db),
+            "last_error": None,
+        }
+    updated = db.scalar(
+        update(AnalysisTaskOutboxEvent)
+        .where(
+            AnalysisTaskOutboxEvent.task_id == task_id,
+            AnalysisTaskOutboxEvent.status.in_(_UNCLAIMED_EVENT_STATUSES),
+        )
+        .values(publish_execution_id=None, publish_lease_expires_at=None, **values)
         .returning(AnalysisTaskOutboxEvent.id)
     )
     return updated is not None

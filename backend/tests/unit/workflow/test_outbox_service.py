@@ -175,3 +175,82 @@ def test_cancelled_unclaimed_event_is_not_republished(db_session, test_user) -> 
         event_id=event.id,
         enqueue=lambda _task_id: SimpleNamespace(id="must-not-enqueue"),
     )
+
+
+def test_worker_claim_before_broker_ack_still_settles_outbox_event(
+    db_session, test_user
+):
+    """A fast Worker may claim while the API has not yet recorded broker acceptance."""
+    task = AnalysisTask(
+        user_id=test_user.id,
+        question="worker faster than publisher",
+        status="queued",
+        stage="queued",
+    )
+    db_session.add(task)
+    db_session.flush()
+    event = create_analysis_task_event(db_session, task_id=task.id)
+    db_session.commit()
+    claimed = []
+
+    def enqueue_and_deliver(task_id: int):
+        claimed.append(
+            claim_execution(
+                db_session,
+                task_id=task_id,
+                celery_task_id="celery-race-id",
+                worker_id="race-worker",
+            )
+        )
+        return SimpleNamespace(id="celery-race-id")
+
+    publish_analysis_task_event(
+        db_session, event_id=event.id, enqueue=enqueue_and_deliver
+    )
+
+    db_session.refresh(event)
+    assert claimed[0] is not None
+    assert event.status == "worker_claimed"
+    assert event.worker_execution_id == claimed[0].attempt.execution_id
+    event.publish_lease_expires_at = datetime(2000, 1, 1, tzinfo=timezone.utc)
+    db_session.commit()
+    assert event.id not in pending_event_ids(db_session)
+
+
+def test_redelivery_to_unclaimable_task_closes_stale_outbox_event(
+    db_session, test_user
+):
+    """A stuck event must stop republishing once its task can no longer be claimed."""
+    task = AnalysisTask(
+        user_id=test_user.id,
+        question="stale broker_accepted event",
+        status="queued",
+        stage="queued",
+    )
+    db_session.add(task)
+    db_session.flush()
+    event = create_analysis_task_event(db_session, task_id=task.id)
+    db_session.commit()
+    execution = claim_execution(
+        db_session, task_id=task.id, celery_task_id="first", worker_id="w1"
+    )
+    assert execution is not None
+    # Reproduce the stuck production shape: claimed task, event left broker_accepted.
+    event.status = "broker_accepted"
+    event.worker_execution_id = None
+    event.publish_lease_expires_at = datetime(2000, 1, 1, tzinfo=timezone.utc)
+    task.status = "completed"
+    task.stage = "completed"
+    task.active_execution_id = None
+    db_session.commit()
+    assert pending_event_ids(db_session) == [event.id]
+
+    redelivered = claim_execution(
+        db_session, task_id=task.id, celery_task_id="again", worker_id="w2"
+    )
+
+    db_session.refresh(event)
+    assert redelivered is None
+    assert event.status == "worker_claimed"
+    assert event.worker_execution_id == execution.attempt.execution_id
+    assert pending_event_ids(db_session) == []

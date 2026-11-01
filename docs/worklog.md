@@ -309,3 +309,9 @@
 - 部署检查发现 Worker 侧从未调用 configure_logging（app.log 中 Worker 记录 0 条、API 6590 条），Celery 输出未脱敏纯文本；先补失败用例，再在 celery_app 接管 setup_logging 信号；909 单元/脚本、90 集成测试通过，容器内探针确认 JSON、脱敏与 task_id/execution_attempt_id 生效。
 - 待办：12 条 Outbox 事件卡在 broker_accepted 而任务已终态，每次租约到期被重复发布并刷新任务 updated_at（Worker 幂等跳过，无重复报告）；Worker 跳过终态任务时未推进事件状态，留阶段 3 处理。
 - 待办：uvicorn 访问日志仍为纯文本、未经 JsonFormatter；证据 artifacts/smoke/log-redaction-deploy-{build.log,up.log,identity.json}。
+
+## 2026-11-01 — Outbox 事件卡在 broker_accepted 的竞态修复
+- 只读定位：12 条卡住事件均为单事件单执行、任务已终态，事件 163 被重复发布 1634 次；正常事件 Worker 认领中位 32ms，卡住的 1.3–1.8s；任务 265/273/297 的 Worker 认领均早于 API 记录 broker_accepted 26–29ms。数据库日志无死锁。
+- 根因：mark_analysis_task_event_worker_claimed 只更新 broker_accepted，API 慢时 Worker 先认领导致空更新，之后事件被标 broker_accepted 永不推进。修复：认领可从 pending/publishing/broker_accepted 推进；重投递遇到不可认领任务时关闭未认领事件。
+- 先写 2 个失败用例复现，修复后 outbox 6 项、单元/脚本 911 passed/4 skipped、集成 90 passed；部署 api/worker/report-worker/beat，源码哈希一致、readiness ok；部署后约 90 秒 12 条事件自愈为 worker_claimed（141→153），发布器每轮发布 0 条。
+- 未用真实模型触发新任务验证竞态窗口；未改表结构或手工改库；API 发消息请求 p90 约 1.35s 的慢因未查，列为待办。

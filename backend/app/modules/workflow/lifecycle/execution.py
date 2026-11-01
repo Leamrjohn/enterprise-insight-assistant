@@ -253,6 +253,27 @@ def _retry_resume_state(
     return resume_state
 
 
+def _settle_redelivered_events(db: Session, *, task: AnalysisTask) -> None:
+    """Stop republishing events whose delivery reached an unclaimable task."""
+    from app.modules.workflow.delivery.outbox import (
+        settle_redelivered_analysis_task_events,
+    )
+
+    execution_id = task.active_execution_id or db.scalar(
+        db.query(TaskExecutionAttempt.execution_id)
+        .filter(TaskExecutionAttempt.task_id == task.id)
+        .order_by(TaskExecutionAttempt.id.desc())
+        .limit(1)
+        .statement
+    )
+    if settle_redelivered_analysis_task_events(
+        db, task_id=task.id, execution_id=execution_id
+    ):
+        db.commit()
+    else:
+        db.rollback()
+
+
 def claim_execution(
     db: Session, *, task_id: int, celery_task_id: str | None, worker_id: str | None
 ) -> ClaimedExecution | None:
@@ -305,6 +326,8 @@ def claim_execution(
                     details={"operation": "claim_execution"},
                 )
                 db.commit()
+        if task is not None:
+            _settle_redelivered_events(db, task=task)
         return None
     task = db.get(AnalysisTask, task_id)
     assert task is not None
