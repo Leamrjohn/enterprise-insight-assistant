@@ -250,3 +250,9 @@
 - DeepSeekGateway._log_failure 将异常类型写入正文，保留原 extra 信息；不修改重试、权限、费用或评分，不输出提示词和异常正文。
 - 普通控制台格式离线复现：新增测试修复前 1 failed；修复后两个网关测试文件 18 passed，Ruff 通过；仅模拟客户端及本地测试服务，无真实模型调用。
 - 未部署；历史未知费用和完整三轮基线仍缺证据。待办：再次真实测试须重新授权，不能直接续跑已中断轮次或把未知费用记零。
+
+## 2026-10-31 — 部署错误类型日志修复
+- 部署前只读确认无 queued/running 分析任务，两个 Worker 响应且 active=0；保留 4 个 awaiting_review，不自动审批。
+- 仅构建并更新 api、worker、report-worker，build/up 均退出 0；无迁移、无模型调用，代码基准 afd2938。
+- collect_runtime_identity 检查通过，13 服务 running，API readiness=True；证据 artifacts/smoke/log-type-deploy-{build.log,up.log,identity.json}。
+- 未验证真实模型错误日志或完整冒烟，198 历史费用仍未知；新版本付费重测需重新授权，旧中断轮次不续跑。
