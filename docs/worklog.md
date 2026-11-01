@@ -286,3 +286,9 @@
 - 在现有统一单元格渲染入口识别 sk-、邮箱、中国手机号（含 +86/空格/连字符）、命名凭据与 Bearer 格式，命中时隐藏整格；不扩大载荷展示、不修改租户查询。
 - backend 目录运行 pytest tests/scripts/test_render_task_trace.py -k 'not loader' -x -q：7 passed/1 deselected；Ruff check 通过并格式化测试，无模型调用或运行库写入。
 - 未运行数据库加载测试（加载器未修改）；模式覆盖不是通用个人信息识别，全链日志脱敏、安全摘要及费用汇总仍待处理。
+
+## 2026-11-01 — 2.4 trace 按模型节点汇总用量
+- 复用现有 trace，增加每个模型节点及任务总计的调用次数、累计调用耗时、已记录 token、未知费用条数与总费用；Decimal 精确求和，存在未结算/缺失费用即 unknown。
+- 新回归先失败；backend 目录 pytest tests/scripts/test_render_task_trace.py -k 'not loader' -x -q：12 passed/1 deselected，Ruff 通过；未改预算、评分或账本。
+- 真实库只读验证并导出：198 的 6 调用/4 节点总费用 unknown，205 的 8 调用/5 节点费用 $0.004379，结果均符合账本；文件 artifacts/smoke/task-{198,205}-trace-usage.html。
+- 模型累计耗时不是节点墙钟耗时，重试/多次调用均计入；尚缺工具安全摘要、全链日志脱敏和步骤墙钟基线，无付费调用或数据库写入。

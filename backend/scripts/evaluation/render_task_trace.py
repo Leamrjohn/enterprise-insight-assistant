@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import argparse
 import re
+from collections import defaultdict
 from datetime import UTC, datetime
+from decimal import Decimal
 from html import escape
 from pathlib import Path
 
@@ -64,6 +66,28 @@ def _safe_missing_fields(value: object) -> str:
     return ", ".join(fields) if fields else "-"
 
 
+def _model_usage_row(name: str, calls: list[ModelCallRecord]) -> str:
+    unknown = sum(
+        getattr(call, "billing_status", "unknown") != "settled" or call.cost is None
+        for call in calls
+    )
+    cost = (
+        "unknown"
+        if unknown
+        else format(sum((Decimal(str(call.cost)) for call in calls), Decimal(0)), ".6f")
+    )
+    return _row(
+        [
+            name,
+            len(calls),
+            sum(call.duration_ms for call in calls),
+            sum(call.prompt_tokens + call.completion_tokens for call in calls),
+            unknown,
+            cost,
+        ]
+    )
+
+
 def render_trace_html(
     *,
     task: AnalysisTask,
@@ -73,6 +97,13 @@ def render_trace_html(
     tool_calls: list[ToolCallRecord],
 ) -> str:
     """Render audit metadata only; task text and call payloads never enter HTML."""
+    calls_by_node: dict[str, list[ModelCallRecord]] = defaultdict(list)
+    for call in model_calls:
+        calls_by_node[call.node_name].append(call)
+    usage_rows = [
+        _model_usage_row(name, calls) for name, calls in sorted(calls_by_node.items())
+    ]
+    usage_rows.append(_model_usage_row("Total", model_calls))
     attempt_numbers = {attempt.id: index + 1 for index, attempt in enumerate(attempts)}
     summary_rows = [
         _row(["Task", task.id]),
@@ -179,6 +210,9 @@ def render_trace_html(
 </head><body><h1>Task trace {task.id}</h1>
 <p>Audit metadata only. This page intentionally excludes task text, prompts, SQL, tool arguments, tool results, report body, and event details.</p>
 <h2>Summary</h2><table>{"".join(summary_rows)}</table>
+<h2>Model usage by node</h2>
+<p>Recorded tokens only. Summed model-call duration includes repeated calls and is not task wall time. Any unsettled or missing charge makes total cost unknown.</p>
+<table><tr><th>Node</th><th>Calls</th><th>Summed call ms</th><th>Recorded tokens</th><th>Unknown charges</th><th>Total cost</th></tr>{"".join(usage_rows)}</table>
 <h2>Attempts</h2><table><tr><th>#</th><th>Status</th><th>Retry</th><th>Workflow version</th><th>Started</th><th>Finished</th></tr>{"".join(attempt_rows)}</table>
 <h2>Timeline</h2><table><tr><th>Time</th><th>Attempt</th><th>Kind</th><th>Name</th><th>Provider/node</th><th>Model/tool</th><th>Status</th><th>Error code</th><th>Duration ms</th><th>Usage</th></tr>{timeline}</table>
 </body></html>"""

@@ -36,6 +36,55 @@ def test_trace_redacts_sensitive_metadata(sensitive):
     assert "failed" in html
 
 
+@pytest.mark.parametrize(
+    ("charges", "expected_cost", "unknown_count"),
+    [
+        ([], "0.000000", 0),
+        ([("settled", "0.1"), ("settled", "0.2")], "0.300000", 0),
+        ([("settled", "0.1"), ("unknown", None)], "unknown", 1),
+        ([("reserved", "0.2")], "unknown", 1),
+        ([("settled", None)], "unknown", 1),
+    ],
+)
+def test_trace_usage_keeps_incomplete_billing_unknown(
+    charges, expected_cost, unknown_count
+):
+    task = SimpleNamespace(
+        id=12,
+        company_id=4,
+        status="completed",
+        stage="completed",
+        created_at=None,
+        completed_at=None,
+        duration_ms=10,
+    )
+    calls = [
+        SimpleNamespace(
+            created_at=None,
+            execution_attempt_id=None,
+            node_name="planner",
+            provider="test",
+            model_name="test",
+            result_category="success",
+            error_code=None,
+            duration_ms=7,
+            prompt_tokens=2,
+            completion_tokens=3,
+            billing_status=status,
+            cost=cost,
+        )
+        for status, cost in charges
+    ]
+    html = render_trace_html(
+        task=task, attempts=[], events=[], model_calls=calls, tool_calls=[]
+    )
+    assert "Model usage by node" in html
+    assert (
+        f"<td>Total</td><td>{len(calls)}</td><td>{7 * len(calls)}</td>"
+        f"<td>{5 * len(calls)}</td><td>{unknown_count}</td><td>{expected_cost}</td>"
+    ) in html
+
+
 def test_trace_html_excludes_payloads_and_escapes_audit_metadata() -> None:
     now = datetime(2026, 10, 9, tzinfo=UTC)
     task = SimpleNamespace(
