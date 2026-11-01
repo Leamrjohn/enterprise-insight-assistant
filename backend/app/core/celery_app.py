@@ -1,8 +1,17 @@
 from celery import Celery
+from celery.signals import setup_logging
 
+from app.core.logging import configure_logging
 from app.core.settings import get_settings
 
 settings = get_settings()
+
+
+@setup_logging.connect
+def _use_project_logging(**_kwargs) -> None:
+    """Replace Celery's plain-text root handler with redacted JSON logging."""
+    configure_logging(settings)
+
 
 celery_app = Celery(
     "agent_platform",

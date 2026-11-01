@@ -303,3 +303,9 @@
 - 新增 app/core/redaction.py 作为日志与 trace 共用规则；JsonFormatter 增加 component、task_id、execution_attempt_id，并对所有字符串字段逐段脱敏；控制台改为同一 JSON 格式；Worker 认领后设置、结束时复原编号。
 - backend 目录 pytest tests/unit tests/scripts -q：908 passed/4 skipped；Ruff 通过；仅为测试替身补 id 字段，未改断言。
 - 未跑真实数据库集成测试和容器内日志检查，未部署；Outbox 发布与模型网关自身日志字段未逐一核对。
+
+## 2026-11-01 — 2.3 部署与容器日志检查
+- 部署前无 queued/running/retrying 任务、两队列为 0；构建并更新 api、worker、report-worker、beat，build/up 退出 0，4 容器源码哈希与工作区一致，13 服务运行，/health/ready 全部 ok；无迁移、无模型调用。
+- 部署检查发现 Worker 侧从未调用 configure_logging（app.log 中 Worker 记录 0 条、API 6590 条），Celery 输出未脱敏纯文本；先补失败用例，再在 celery_app 接管 setup_logging 信号；909 单元/脚本、90 集成测试通过，容器内探针确认 JSON、脱敏与 task_id/execution_attempt_id 生效。
+- 待办：12 条 Outbox 事件卡在 broker_accepted 而任务已终态，每次租约到期被重复发布并刷新任务 updated_at（Worker 幂等跳过，无重复报告）；Worker 跳过终态任务时未推进事件状态，留阶段 3 处理。
+- 待办：uvicorn 访问日志仍为纯文本、未经 JsonFormatter；证据 artifacts/smoke/log-redaction-deploy-{build.log,up.log,identity.json}。

@@ -95,3 +95,21 @@ def test_console_formatter_is_redacted_json_line() -> None:
     assert "\n" not in line
     assert "sk-abc999" not in line
     assert json.loads(line)["level"] == "ERROR"
+
+
+def test_celery_worker_logging_uses_project_configuration(monkeypatch) -> None:
+    import app.core.celery_app as celery_module
+    from celery.signals import setup_logging
+
+    calls = []
+    monkeypatch.setattr(
+        celery_module, "configure_logging", lambda settings: calls.append(settings)
+    )
+
+    # Celery skips its own plain-text root handler only when a receiver exists.
+    responses = setup_logging.send(
+        sender=None, loglevel="INFO", logfile=None, format="", colorize=False
+    )
+
+    assert responses
+    assert calls == [celery_module.settings]
