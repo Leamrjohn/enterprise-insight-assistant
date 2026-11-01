@@ -1,5 +1,6 @@
 """测试 Model Gateway"""
 
+import logging
 import time
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -21,6 +22,23 @@ from openai import (
     OpenAI,
     RateLimitError,
 )
+
+
+def test_deepseek_failure_type_survives_plain_console_format(caplog):
+    gateway = object.__new__(DeepSeekGateway)
+    gateway.model_name = "test-model"
+    gateway.logger = logging.getLogger("test.deepseek.failure")
+    error = APITimeoutError(request=Request("POST", "https://example.invalid"))
+
+    with caplog.at_level(logging.ERROR, logger=gateway.logger.name):
+        gateway._log_failure(
+            prompt="private-prompt", create_at=time.perf_counter(), exc=error
+        )
+
+    rendered = logging.Formatter("%(levelname)s %(message)s").format(caplog.records[-1])
+    assert "APITimeoutError" in rendered
+    assert "private-prompt" not in rendered
+    assert "example.invalid" not in rendered
 
 
 def test_local_gateway_returns_string():

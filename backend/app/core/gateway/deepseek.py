@@ -261,7 +261,8 @@ class DeepSeekGateway(ModelGateway):
             duration_ms=round(duration_ms, 2),
         )
         self.logger.error(
-            "Model call failed",
+            "Model call failed (%s)",
+            type(exc).__name__,
             extra={
                 "model": record.model_name,
                 "error": record.error_message,
