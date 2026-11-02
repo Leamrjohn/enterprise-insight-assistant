@@ -225,3 +225,15 @@
 - 新增 `measure_context_baseline.py`、`run_memory_evaluation.py`、`run_tool_selection_evaluation.py`，并扩展 `run_retrieval_evaluation.py`；题集在 `tests/fixtures/evaluation_retrieval`、`evaluation_memory`、`evaluation_tools`。
 - 题目都在跑基线前提交。完整数字和发现见 `docs/design/p0_baseline.md`。
 - 过程中的问题：两次长 shell 命令解析失败（未执行），改用文件写入工具；记忆脚本少注册模型；工具评分漏了“拒绝”决定，把正确拒绝算成错误，修复后 93.75% 变为 97.9%，模型回复不变。
+
+## P1 RAG（2026-11-02）
+
+提交：1bdcb9b、eb32c95、4addac4、8737135、c2f1343、c891c25、16310d4。详细内容见 `summary/06_RAG修改.md`。
+
+过程中出的问题：
+
+1. 本机 pip 镜像 SSL 失败，改用官方 PyPI 临时安装 jieba，没有改 pip 配置。
+2. 过滤旧版本后 7 道陷阱题被误拒答，诊断后修复了平均分门槛。
+3. 两次提交被格式检查拦下，我没看输出，以为成功了。其中一次导致无答案题集在看完分数后才入库。
+4. 轮转日志 `app.log.1` 没被忽略，让冒烟脚本拒绝运行，加了忽略规则。
+5. 冒烟发现逐句检查让 2 道题超出模型调用上限，没有改上限，等用户决定。
