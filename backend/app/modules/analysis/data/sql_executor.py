@@ -65,10 +65,12 @@ def execute_registered_readonly_query(
         dbname=settings.business_database_name,
         user=settings.business_database_user,
         password=settings.business_database_password.get_secret_value(),
+        options="-c default_transaction_read_only=on",
     )
     cur = conn.cursor()
 
     try:
+        cur.execute("SET TRANSACTION READ ONLY")
         cur.execute(
             psycopg_sql.SQL("SET statement_timeout = {}").format(
                 psycopg_sql.Literal(timeout_ms)

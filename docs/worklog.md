@@ -392,5 +392,10 @@
 ## 2026-11-02 — 4.4 执行层对抗测试
 - 新增 tests/integration/analysis/test_sql_execution_layer.py（26 项）：绕过 AST 校验直连演示经营库，验证 CTE 写入/行锁/SELECT INTO/文件与大对象函数/dblink 被执行层拦截，超时生效且语句内 set_config 无法解除，账号无提权属性、0 写权限，读写事务下仍拒写，跨租户连不上；全程不提交。
 - 验证：新测试 26 passed（首次 1 失败为测试自身查询写法问题，已改）；集成 120 passed、1 skipped。
-- 待办：模板查询路径 execute_registered_readonly_query 以平台经营库超级用户 business_app 连接且未开只读事务（SQL 仅来自仓库登记的参数化模板，外部无法注入，但无纵深防御）；需用户决定加只读事务或换只读账号。
+- 待办（**已更正，见下一条**）：模板查询路径未开只读事务。原文“以超级用户 business_app 连接”是错误结论。
 - 待办：测试依赖环境变量 ACME_DEMO_DATABASE_PASSWORD，未设置时整模块跳过；阶段 9 CI 需注入。
+
+## 2026-11-02 — 4.4.1 模板查询路径加只读事务（并更正 4.4 的错误结论）
+- 更正：从真实路径查询，账号是 business_readonly（非超级用户、22 张表 0 写权限），不是 business_app；后者只是我排查时 psql 登录用的账号。结论曾告知用户并写入文档，已逐处更正。
+- sql_executor.py 两行：连接加 default_transaction_read_only=on，并 SET TRANSACTION READ ONLY；新增 3 项测试，修复前 2 项失败。
+- 验证：执行层 29 passed；集成 123 passed、1 skipped；单元/脚本 1049 passed、2 skipped；已部署 4 容器哈希一致，Worker 内 transaction_read_only=on，真实模板查询 success、返回 1 行。无模型调用。

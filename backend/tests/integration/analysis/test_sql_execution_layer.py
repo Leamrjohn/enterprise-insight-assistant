@@ -15,12 +15,14 @@ Needs the compose demo database (host port 5435/5436) and the
 from __future__ import annotations
 
 import os
+from types import SimpleNamespace
 
 import psycopg
 import pytest
 from app.modules.analysis.data import sql_executor
 from app.modules.organizations.models import BusinessDataSource
 from psycopg import errors
+from pydantic import SecretStr
 
 CREDENTIAL_ENV = "ACME_DEMO_DATABASE_PASSWORD"
 HOST = os.environ.get("BUSINESS_SECURITY_TEST_HOST", "localhost")
@@ -213,3 +215,45 @@ def test_connection_lands_on_the_acme_tenant(unvalidated):
 
     assert len(rows) == 1
     assert "acme" in rows[0][0].lower()
+
+
+@pytest.fixture
+def registered_query(monkeypatch):
+    """Point the template-query path at the demo database under the same contract."""
+    monkeypatch.setattr(
+        sql_executor,
+        "get_settings",
+        lambda: SimpleNamespace(
+            business_database_host=HOST,
+            business_database_port=ACME_PORT,
+            business_database_name="acme_business",
+            business_database_user=ROLE,
+            business_database_password=SecretStr(os.environ[CREDENTIAL_ENV]),
+        ),
+    )
+    return sql_executor.execute_registered_readonly_query
+
+
+def test_registered_query_runs_in_a_read_only_transaction(registered_query):
+    _, rows = registered_query("SELECT current_setting('transaction_read_only')", {})
+
+    assert rows == [("on",)]
+
+
+def test_registered_query_write_is_stopped_by_the_transaction_not_only_the_role(
+    registered_query,
+):
+    """ReadOnlySqlTransaction proves this layer works; a privilege error would not."""
+    with pytest.raises(errors.ReadOnlySqlTransaction):
+        registered_query(
+            f"WITH d AS (DELETE FROM {TABLE} WHERE false RETURNING 1) SELECT * FROM d",
+            {},
+        )
+
+
+def test_registered_query_still_binds_parameters_and_times_out(registered_query):
+    _, rows = registered_query("SELECT %(n)s::int + 1", {"n": 1})
+    assert rows == [(2,)]
+
+    with pytest.raises(errors.QueryCanceled):
+        registered_query("SELECT pg_sleep(3)", {}, timeout_ms=300)

@@ -193,5 +193,11 @@
 - 覆盖（26 项）：CTE 内 DELETE/UPDATE/INSERT、FOR UPDATE/SHARE、SELECT INTO 被只读事务或权限拒绝；pg_read_file/pg_ls_dir/lo_import 无权限；dblink 不存在；300ms 超时取消 pg_sleep(3)，语句内用 set_config 把超时改成 0 也无效；账号非超级用户、不能绕过行级安全、不属于任何文件/信号类内置角色、不能在 public 建表、所有业务表 0 写权限；即使显式开读写事务，INSERT/UPDATE/DELETE/TRUNCATE/建表/改表/COPY TO PROGRAM/改自身角色仍被拒；acme 凭据连不上 beta 库；连接落在 acme 租户。
 - 安全措施：所有写尝试都在事务里并回滚，从不提交；正常查询只读 count。
 - 一次失败：权限统计查询先对系统表执行了 has_table_privilege（PostgreSQL 不保证 WHERE 条件的执行顺序），报 `public.pg_statistic` 不存在。这是测试写法问题，改为按表 OID 判断后通过，未改任何断言期望。
-- 新发现：模板查询路径 `execute_registered_readonly_query` 用平台经营库的 `business_app` 连接，它是**超级用户**，且没有只读事务。SQL 只来自仓库里登记的参数化模板，外部输入进不来，但这一路径没有纵深防御。属于权限设计，记入待办由用户决定。
+- 新发现：模板查询路径 `execute_registered_readonly_query` 没有只读事务。（**更正**：当时还写了“以超级用户 `business_app` 连接”，这是错的，见 4.4.1。）
 - 验证：新测试 26 passed；集成 120 passed、1 skipped（原 94 + 新 26）。
+
+### 4.4.1 模板查询路径加只读事务（已部署）
+- 更正错误：4.4 报告“模板路径用超级用户 `business_app`”。依据是 `psql -U business_app` 查到的角色，那是排查时登录用的账号。动手前看到设置默认值是 `business_readonly` 才起疑，经真实路径查询：`business_readonly`、非超级用户、22 张表 0 写权限、只读事务为 off。所以这条路径本来有账号权限这一层，只缺只读事务，风险低于先前的说法。
+- 复现：新增 3 项测试（把路径指向 acme 演示库）；修复前 2 项失败：只读设置为 off，CTE 写入被权限拒绝而不是被只读事务拒绝。
+- 修改：`execute_registered_readonly_query` 与另一条路径一致，连接加 `default_transaction_read_only=on`，并执行 `SET TRANSACTION READ ONLY`。
+- 验证：执行层 29 passed；集成 123 passed、1 skipped；单元/脚本 1049 passed、2 skipped；4 个容器与工作区哈希一致，13 服务运行，readiness 200；Worker 内 transaction_read_only=on，真实模板查询成功返回 1 行。
