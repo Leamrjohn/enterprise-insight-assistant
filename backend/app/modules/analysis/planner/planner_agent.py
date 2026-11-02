@@ -7,6 +7,7 @@ from app.core.exceptions import (
     RetryableModelError,
     StructuredOutputError,
 )
+from app.db.errors import is_transient_database_error
 from app.modules.analysis.agent_protocol import Agent, AgentInput, AgentOutput
 from app.modules.analysis.planner.planning import PlanningService
 from app.modules.analysis.tool_protocol import Tool
@@ -75,7 +76,11 @@ class PlannerAgent(Agent):
                 error=f"无法生成 Planner 决策: {error}",
                 error_code="planner_invalid_output",
             )
-        except Exception:
+        except Exception as error:
+            # A platform-database outage is infrastructure, not a planning result:
+            # let the Worker roll back and apply its retry classification.
+            if is_transient_database_error(error):
+                raise
             logger.exception("Planner failed with an unexpected gateway error")
             return AgentOutput(
                 success=False,

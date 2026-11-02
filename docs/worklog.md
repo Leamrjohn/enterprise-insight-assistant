@@ -374,3 +374,8 @@
 - 8 项演练 + 基线共 9 个任务（299–307），新增 drill_client.py；费用最坏 $0.0306（上限 $0.10），结束后环境完全恢复。
 - 通过：杀 Worker 后租约接管、Redis 停止时入库补投、运行中 Redis 中断、超时→重试→预算截停、双 Worker 重复投递只 1 执行且无异常、运行中取消无迟到写入。
 - 未达理想：运行中重启 PostgreSQL 导致直接 failed（PendingRollbackError）不重试；观察：预算耗尽无报告却标 partial。均已列为后续工单，详见 docs/design/stage3_5_game_day_plan.md。
+
+## 2026-11-02 — 3.6 数据库短暂中断的重试分类
+- 新增 app/db/errors.py（沿异常链找连接类根因）；Worker 重试分类与 Planner 兜底捕获使用它；11 项测试（两轮修改前分别 4、2 项失败）。
+- 首次修复后停库复测仍被吞：真实被捕获的是网关异常分支里产生的 PendingRollbackError；改为沿 __cause__/__context__ 判断后复测通过（错误传到 Worker，停库期间由租约恢复接管完成）。
+- 单元/脚本 947 passed、集成 94 passed；已部署；演练总费用最坏 $0.0422。待办：Knowledge 工具独立会话的数据库错误、SQL 工具对经营库中断的语义未处理。

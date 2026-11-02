@@ -60,3 +60,9 @@
 ## 演练发现的后续工单
 1. **3.6 数据库短暂中断的重试分类**：OperationalError / 连接失效及其引发的 PendingRollbackError 应视为可重试；需先区分“由连接中断引起”与“由其他数据库错误引起”，并写复现测试。
 2. **预算耗尽的状态语义**：一份报告都没有时标 `partial` 容易误导，应评估是否改为 failed 或在 partial 中强制给出限制说明（涉及状态语义，需用户决定）。
+
+## 3.6 修复后复测（2026-11-02）
+- 4b（docker restart，任务 308）：completed、1 个执行——重启期间任务恰好没碰数据库，**不能证明**新逻辑生效。
+- 4c（停库 8 秒，任务 309，只修了 Planner）：日志仍“Planner failed with an unexpected gateway error”“failed without retry”；靠租约恢复才完成。定位到真正被捕获的是 PendingRollbackError（网关在异常分支里用同一个坏会话登记调用），原 OperationalError 只在它的 `__context__` 里。
+- 4d（沿异常链判断后，任务 310）：错误一路传到 Worker 并被判为可重试；停库期间写 retrying 失败，数据库恢复后租约接管完成，1 份报告。不再出现“永久失败”。
+- 复测费用：308–310 共最坏 $0.0116；演练总计最坏 $0.0422（上限 $0.10）。

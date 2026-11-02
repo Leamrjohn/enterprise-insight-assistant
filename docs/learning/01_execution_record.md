@@ -151,3 +151,10 @@
 - 结果：基线 + 8 项，7 项达到期望；数据库重启导致任务直接 failed 不重试（另立 3.6）；超时演练第一次无效，因为超时在 API 受理时冻结进任务，改为 API 与 Worker 同时覆盖后生效。
 - 费用：37 次调用，最坏 $0.0306（已结算 $0.020452 + 未知按预留 $0.010142），上限 $0.10。
 - 恢复：13 服务、1 Worker、readiness ok、无进行中任务与未认领 Outbox、超时恢复 30 秒。
+
+### 3.6 数据库短暂中断的重试分类
+- 新增 `backend/app/db/errors.py`：`is_transient_database_error` 沿异常链（最多 8 层）找根因——OperationalError、InterfaceError、连接失效视为短暂；IntegrityError、ProgrammingError、根因不明的 PendingRollbackError 不算。
+- `workflow/tasks.py` 的 `_is_retryable_exception` 先调用它；`planner_agent.py` 的兜底捕获遇到短暂数据库错误改为向上抛。
+- 测试 `tests/unit/workflow/test_transient_database_errors.py` 共 11 项：第一版 8 项（撤掉修改 4 项失败）；复测发现真实链路是“OperationalError → PendingRollbackError”，补 3 项（修改前 2 项失败）。
+- 验证：单元/脚本 947 passed、集成 94 passed；部署后演练 4d 通过。
+- 教训：第一次修复只看了“应该抛什么异常”，没看“实际抛的是什么异常”；复测把差异暴露出来。

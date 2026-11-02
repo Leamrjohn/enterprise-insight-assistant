@@ -17,6 +17,7 @@ from app.core.logging import (
 )
 from app.core.settings import get_settings
 from app.db.clock import database_now
+from app.db.errors import is_transient_database_error
 from app.db.session import SessionLocal, set_tenant_scope
 from app.modules.conversations.models import (  # noqa: F401
     Conversation,
@@ -177,6 +178,8 @@ _PERMANENT_OS_ERRORS = (
 
 
 def _is_retryable_exception(exc: Exception) -> bool:
+    if is_transient_database_error(exc):
+        return True
     if isinstance(exc, _PERMANENT_OS_ERRORS):
         return False
     if isinstance(exc, OSError) and exc.errno == errno.ENOSPC:
