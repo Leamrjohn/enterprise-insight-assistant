@@ -15,6 +15,7 @@ htmlcov/
 *.sqlite3
 *.egg-info/
 *.log
+*.log.[0-9]*
 storage/
 .test-storage/
 .test-logs/
