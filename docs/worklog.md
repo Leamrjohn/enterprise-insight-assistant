@@ -399,3 +399,9 @@
 - 更正：从真实路径查询，账号是 business_readonly（非超级用户、22 张表 0 写权限），不是 business_app；后者只是我排查时 psql 登录用的账号。结论曾告知用户并写入文档，已逐处更正。
 - sql_executor.py 两行：连接加 default_transaction_read_only=on，并 SET TRANSACTION READ ONLY；新增 3 项测试，修复前 2 项失败。
 - 验证：执行层 29 passed；集成 123 passed、1 skipped；单元/脚本 1049 passed、2 skipped；已部署 4 容器哈希一致，Worker 内 transaction_read_only=on，真实模板查询 success、返回 1 行。无模型调用。
+
+## 2026-11-02 — 2.5.6 SQL 结果组件评测
+- 新增 19 题人工标准答案（录制前提交 8fe425b，状态：待用户审核）、sql_results.py 评分、run_sql_result_evaluation.py（record/replay/check）；17 项单元测试。
+- 结果（模型调用 52 次，约 $0.0345，上限 $0.10）：通过 13/19=68.4%（开发集 11/15，留出集 2/4）；放行的错误数字 0。回放 3 次与录制一致、0 次模型调用。
+- 未通过 6 题全是拒绝：4 题 SQL 实际正确但被拦（过度拦截），2 题 SQL 确实错（未回款漏算回款、月份写法报错）被正确拦下。根因方向：指标注册表只登记 2 个指标，提示词的语义目录却列 4 个，未登记的问题过不了契约。
+- 更正：调查报告的“80 条结果指纹”多数只是场景名占位，真实校验值只覆盖 9 个问题、3 种结果。待办：演示数据全为 delivered、无一单多客诉、无一票多次回款，漏筛选和连接放大类错误在结果上测不出；固定计划不是真实 Planner 输出。

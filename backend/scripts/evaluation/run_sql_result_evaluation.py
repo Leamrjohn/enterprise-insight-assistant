@@ -149,11 +149,42 @@ def evaluate_case(case: dict, *, gateway: ModelGateway, source, catalog) -> dict
         "case_id": case["case_id"],
         "split": case["split"],
         "verdict": verdict,
+        "blocked_sql_check": _check_blocked_sql(
+            case, evidence, source=source, catalog=catalog
+        ),
         "error_code": output.error_code,
         "attempts": output.attempts,
         "sql": evidence.get("sql"),
         "rows": evidence.get("rows"),
     }
+
+
+def _check_blocked_sql(case: dict, evidence: dict, *, source, catalog) -> str | None:
+    """Diagnostic only: would SQL that a gate stopped have given the right answer?
+
+    It tells "the model wrote wrong SQL" from "a gate refused right SQL" and never
+    changes the verdict.  The SQL still goes through validation and read-only
+    execution.
+    """
+    from app.modules.analysis.data.sql_executor import execute_readonly_sql
+
+    sql = evidence.get("sql")
+    if not sql or evidence.get("rows") is not None or "reference_sql" not in case:
+        return None
+    try:
+        _, rows = execute_readonly_sql(
+            sql, set(catalog.tables), catalog=catalog, data_source=source
+        )
+    except Exception as exc:  # noqa: BLE001 - the error type is the finding here
+        return "execution_error_" + type(exc).__name__
+    return score_result(
+        expect="rows",
+        agent_success=True,
+        actual_rows=rows,
+        reference_rows=reference_rows(case, source=source, catalog=catalog),
+        ordered=case.get("ordered", False),
+        compare_text=case.get("compare_text", False),
+    )
 
 
 def _agent_input(**kwargs):
