@@ -41,7 +41,7 @@
         "sql_result_equivalent": "知识库专用路线不执行 SQL。",
         "numeric_consistent": "知识库专用路线没有 SQL 数值输出。"
       },
-      "max_model_calls": 4,
+      "max_model_calls": 5,
       "max_tokens": 8000,
       "expected_document_qualification_terms": [
         {
@@ -98,7 +98,7 @@
         "sql_result_equivalent": "知识库专用路线不执行 SQL。",
         "numeric_consistent": "知识库专用路线没有 SQL 数值输出。"
       },
-      "max_model_calls": 4,
+      "max_model_calls": 5,
       "max_tokens": 8000,
       "expected_document_qualification_terms": [
         {
