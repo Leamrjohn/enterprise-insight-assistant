@@ -1,6 +1,6 @@
 {
   "version": "planner-routes/v1",
-  "status": "pending_user_review",
+  "status": "confirmed",
   "caveat": "标注者已看过一次模型输出；放宽只按规则编号执行，原标签始终保留在 acceptable 首位。",
   "rubric": {
     "R1": "analyze：需要经营数据、内部文档或两者取证。",
@@ -546,5 +546,6 @@
         "R2"
       ]
     }
-  ]
+  ],
+  "confirmed": "2026-11-01 用户确认规则 A1–A3、E1"
 }
