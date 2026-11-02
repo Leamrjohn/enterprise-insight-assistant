@@ -245,6 +245,7 @@ class SemanticReviewService:
         data_result: dict[str, Any],
         knowledge_result: dict[str, Any],
         report: dict[str, Any],
+        memories_used: list[dict[str, Any]] | None = None,
     ) -> EvidenceSemanticReview:
         system_prompt = (
             "你是企业经营报告的证据语义复核器。只返回 JSON，不生成新事实、数字、"
@@ -272,8 +273,16 @@ class SemanticReviewService:
                 "data_result": data_result,
                 "knowledge_result": knowledge_result,
                 "deterministic_report": report,
+                **({"memories_used": memories_used} if memories_used else {}),
             },
         )
+        if memories_used:
+            system_prompt += (
+                "memories_used 是规划时参考过的历史记忆，不是证据。如果本次 data_result "
+                "或 knowledge_result 明确与某条记忆矛盾或显示它已过期，把它写进 "
+                'contradicted_memories：[{"memory_id":1,"reason":"..."}]；'
+                "这只是请人工审核，不影响本次判断，也不要因为记忆而改变 verdict。"
+            )
         raw_output = self._chat(system_prompt=system_prompt, payload=payload)
         return self._parse_with_repair(
             EvidenceSemanticReview,

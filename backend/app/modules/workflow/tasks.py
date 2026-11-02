@@ -601,7 +601,11 @@ def process_analysis_task(self, task_id: int):
             ),
         )
         planner_memory, planner_memory_manifest = select_planner_memories(
-            db, company_id=record.company_id, user_id=record.user_id
+            db,
+            company_id=record.company_id,
+            user_id=record.user_id,
+            question=record.question,
+            record_use=True,
         )
         context_snapshot = record.context_snapshot or {}
         append_workflow_event(

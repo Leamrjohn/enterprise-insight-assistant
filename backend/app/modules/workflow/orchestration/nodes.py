@@ -1,5 +1,6 @@
 """LangGraph 工作流节点 —— 每个节点封装一个 Agent 调用"""
 
+import logging
 from typing import Any
 
 from app.core.exceptions import (
@@ -8,6 +9,7 @@ from app.core.exceptions import (
     StructuredOutputError,
 )
 from app.core.settings import get_settings
+from app.db.session import SessionLocal, set_tenant_scope
 from app.modules.analysis.agent_protocol import AgentInput
 from app.modules.analysis.catalog.snapshot_catalog import SnapshotCatalog
 from app.modules.analysis.data.data_agent import DataAgent
@@ -45,6 +47,9 @@ _CLARIFICATION_SLOT_LABELS = {
     "product": "产品",
     "object": "分析对象",
 }
+
+
+logger = logging.getLogger(__name__)
 
 
 def _render_clarification(plan: dict) -> str:
@@ -700,6 +705,30 @@ def data_node(state: WorkflowState) -> dict:
     )
 
 
+def _flag_contradicted_memories(state: WorkflowState, review_result: dict) -> None:
+    """Pause memories the model doubts; a failure here must not cost the report."""
+    review = review_result.get("semantic_review") if review_result else None
+    flags = (review or {}).get("contradicted_memories")
+    company_id = state.get("company_id")
+    if not flags or company_id is None:
+        return
+    from app.modules.memory.service import flag_memories_from_model
+
+    allowed_ids = {m["memory_id"] for m in state.get("planner_memory") or []}
+    db = SessionLocal()
+    try:
+        set_tenant_scope(db, company_id)
+        flag_memories_from_model(
+            db, company_id=company_id, flags=flags, allowed_ids=allowed_ids
+        )
+        db.commit()
+    except Exception:
+        db.rollback()
+        logger.exception("Could not flag contradicted memories")
+    finally:
+        db.close()
+
+
 def reviewer_node(state: WorkflowState) -> dict:
     """
     Reviewer 节点：检查一致性，输出最终回答。
@@ -720,6 +749,8 @@ def reviewer_node(state: WorkflowState) -> dict:
         reviewer_context["retry_context"] = state["retry_context"]
     if state.get("semantic_review_enabled"):
         reviewer_context["semantic_review_enabled"] = True
+    if state.get("planner_memory"):
+        reviewer_context["planner_memory"] = state["planner_memory"]
     with model_node_scope("reviewer"):
         result = agent.run(
             AgentInput(
@@ -733,6 +764,7 @@ def reviewer_node(state: WorkflowState) -> dict:
         report = (
             review_result.get("report") if isinstance(review_result, dict) else None
         )
+        _flag_contradicted_memories(state, review_result)
         if isinstance(review_result.get("answer_validation"), dict) and not all(
             value is not False
             for key, value in review_result["answer_validation"].items()

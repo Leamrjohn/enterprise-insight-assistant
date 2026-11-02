@@ -158,6 +158,7 @@ EVIDENCE_REVIEW = ContextManifest(
             compress=cap_chunk_text,
         ),
         "deterministic_report": Section(fields=_REPORT_FIELDS),
+        "memories_used": Section(),
         "plan": Section(fields=_PLAN_FIELDS),
         "question": Section(),
     },

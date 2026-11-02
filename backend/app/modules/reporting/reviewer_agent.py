@@ -279,6 +279,7 @@ class ReviewerAgent(Agent):
                     data_result=data_result,
                     knowledge_result=knowledge_result,
                     report=report.model_dump(mode="json"),
+                    memories_used=input.context.get("planner_memory"),
                 )
             except (
                 PermanentModelError,

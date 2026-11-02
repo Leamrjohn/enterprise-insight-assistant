@@ -18,11 +18,19 @@ class DocumentQualificationReview(BaseModel):
     citation_chunk_ids: list[int] = Field(min_length=1, max_length=8)
 
 
+class ContradictedMemory(BaseModel):
+    memory_id: int
+    reason: str = Field(default="", max_length=500)
+
+
 class EvidenceSemanticReview(BaseModel):
     verdict: Literal["supported", "partial", "unsupported"]
     reason: str = Field(min_length=1, max_length=500)
     limitations: list[str] = Field(default_factory=list, max_length=8)
     supported_document_chunk_ids: list[int] = Field(default_factory=list, max_length=8)
     document_qualifications: list[DocumentQualificationReview] = Field(
+        default_factory=list, max_length=8
+    )
+    contradicted_memories: list[ContradictedMemory] = Field(
         default_factory=list, max_length=8
     )

@@ -1,4 +1,5 @@
 from celery import Celery
+from celery.schedules import crontab
 from celery.signals import setup_logging
 
 from app.core.logging import configure_logging
@@ -36,6 +37,7 @@ celery_app.conf.update(
         "app.modules.workflow.outbox_tasks",
         "app.modules.input_artifacts.tasks",
         "app.modules.input_artifacts.outbox_tasks",
+        "app.modules.memory.tasks",
     ],
     beat_schedule={
         "publish-pending-analysis-task-events": {
@@ -45,6 +47,11 @@ celery_app.conf.update(
         "recover-expired-analysis-executions": {
             "task": "app.modules.workflow.outbox_tasks.recover_expired_analysis_executions",
             "schedule": 10.0,
+        },
+        "cleanup-expired-memories": {
+            "task": "app.modules.memory.tasks.cleanup_expired_memories",
+            # A clock time: an interval would restart whenever beat restarts.
+            "schedule": crontab(hour=19, minute=0),
         },
         "publish-pending-artifact-processing-events": {
             "task": "app.modules.input_artifacts.outbox_tasks.publish_pending_artifact_processing_events",

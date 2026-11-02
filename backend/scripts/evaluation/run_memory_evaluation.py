@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import json
 import sys
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 from app.db.session import engine, set_tenant_scope
@@ -82,11 +82,15 @@ def _add_memory(
         source_task_id=task.id,
         memory_source_id=source.id,
         memory_type="validated_report_facts",
-        content={"confirmed_facts": [{"text": item["fact"]}]},
-        # Flagged, superseded and business validity have no column yet, so the
-        # baseline stores them as ordinary memories.
+        content={"confirmed_facts": [{"statement": item["fact"]}]},
         expires_at=created + timedelta(days=30),
         revoked=item["status"] == "revoked",
+        status=item["status"] if item["status"] != "expired" else "active",
+        business_valid_until=(
+            date.fromisoformat(item["business_valid_until"])
+            if item.get("business_valid_until")
+            else None
+        ),
         created_at=created,
     )
     db.add(memory)
@@ -126,7 +130,10 @@ def main() -> None:
         rows = []
         for case in fixture["cases"]:
             payloads, _ = select_planner_memories(
-                db, company_id=company.id, user_id=owner.id
+                db,
+                company_id=company.id,
+                user_id=owner.id,
+                question=case["question"],
             )
             selected = {keys_by_id[p["memory_id"]] for p in payloads}
             score = score_memory_case(
