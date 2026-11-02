@@ -68,10 +68,48 @@
 - 产出 `docs/design/stage2_5_evaluation_survey.md`。
 - 更正：调查时漏看了已有的慢测试 `tests/unit/evaluation/test_full_corpus_retrieval_evaluation.py`（按文档生成模板问题、单文档相关），在 2.5.2 中发现并复用其建索引方式。
 
-### 2.5.2 检索评测（进行中，结果见本节更新）
+### 2.5.2 检索评测（提交 0a087fd）
 - 新增排名指标 `RankedRetrievalCase`、`evaluate_ranked_retrieval`（文档级 Hit@k、Recall@k、MRR，同一文档多个 chunk 只计一次），先写测试后实现，3 项通过。
 - 新增 `backend/scripts/evaluation/run_retrieval_evaluation.py`：在 `agent_platform_test` 的一个事务里把 153 篇语料按两种切块建索引，用 19 个真实夹具问题（开发 15、留出 4）评测三种检索策略，结束时回滚，不留数据；只用本地嵌入与重排模型。
-- 运行方式：evaluation 容器挂载当前代码、语料与本地模型缓存。
+- 运行过程中的两次失败：
+  1. 首跑 CPU 只有 4.7%，数据库连接“事务中空闲”，最后一条语句是向量检索——判断卡在重排模型联网检查，停止容器（事务回滚，无残留）。
+  2. 改用离线模式后，嵌入模型配置的是短名 `paraphrase-multilingual-MiniLM-L12-v2`，离线时无法解析成 `sentence-transformers/...` 而失败。
+  3. 最终：保持在线，但用环境变量 `RERANKER_MODEL` 指向本地快照目录，成功。
+- 运行命令（仓库根目录，Git Bash）：
+  `docker compose --profile evaluation run --rm --no-deps -e RERANKER_MODEL=/app/storage/huggingface/hub/models--BAAI--bge-reranker-base/snapshots/<快照> -v <backend>:/app -v <data>:/data evaluation python -m scripts.evaluation.run_retrieval_evaluation`
+- 基线（建索引 218 秒）：
+
+| 策略 | 候选 Hit@10 | 最终 Hit@3 | 最终 Recall@3 | MRR | 留出 Hit@3 | 耗时 |
+|---|---|---|---|---|---|---|
+| 段落 + 向量 + 重排（现行） | 0.842 | 0.789 | 0.719 | 0.789 | 0.75 | 67s |
+| 段落 + 向量，不重排 | 0.842 | 0.789 | 0.719 | 0.789 | 0.75 | 0.6s |
+| 段落 + 滑窗 + 重排 | 0.684 | 0.632 | 0.561 | 0.632 | 0.50 | 57s |
+
+- 读代码定位“双切块更差”的原因：单策略路径按 `_hybrid_score`（向量 + 字符二元组重叠）排序；多策略合并后只按向量分重排，丢掉了重叠加权。记为阶段 6 待处理。
+- 结果文件：`evaluation-runs/retrieval/20261101-baseline-run1.json`（git 忽略）。
+
+### 3.1 任务状态机只读调查
+- 迁移表集中在 `workflow/lifecycle/task_state.py`；终态只能从 running 进入，终态不可再迁移（除 awaiting_review → queued/partial）。
+- 围栏：`finish_execution` / `transition_execution` 的更新条件是 `active_execution_id == 本次执行编号 AND status == 'running'`；租约恢复用 `SELECT ... FOR UPDATE`。
+- 已有测试：迟到结果在租约恢复后不能发布、开始前取消被跳过、终态重投被跳过。
+
+### 3.2 不变量测试与审计事件序号竞态（提交 6e3452a）
+- 新增 `tests/integration/workflow/test_reliability_invariants.py`：
+  - 运行中取消后，Worker 的迟到终态写入返回 False，任务保持 cancelled（直接通过）。
+  - 4 个线程用独立数据库连接同时认领同一任务，只允许 1 个成功、只产生 1 条执行记录（首跑失败）。
+- 失败原因：`append_workflow_event` 用“当前最大序号 + 1”，多个被拒的投递同时给获胜执行追加 `execution_claim_rejected`，触发唯一约束，落败 Worker 抛异常而不是返回“已认领”。
+- 修复：在保存点（savepoint）里插入，冲突时只回滚这一条并重试，最多 5 次；没有用行锁（见决策 D10）。
+- 验证：撤掉修复 3/3 失败，加上修复 3/3 通过；单元/脚本 919 passed、集成 92 passed。
+
+### 3.3 重试分类与退避抖动（提交 124cbf1）
+- 发现：两处 `countdown=2 ** (retries + 1)` 无抖动；所有 `OSError` 都可重试，包括 PermissionError、FileNotFoundError。
+- 修改：`_retry_countdown`（基数 × [0.5, 1.5] 随机系数）；`_PERMANENT_OS_ERRORS` 排除 4 类永久系统错误。
+- 新增 `tests/unit/workflow/test_retry_policy.py` 12 项；单元/脚本 931 passed、集成 92 passed。
+
+### 3.4 超时与步数预算（提交 af73445）
+- 盘点已有：LLM 30s 超时、SQL statement_timeout、RAG 数据库超时、单任务模型预算、路由外部重试上限 2、图步数上限 20。
+- 新增 `tests/integration/workflow/test_step_budget.py`：路由死循环被步数上限截断；Worker 遇步数耗尽进入 failed 且不调用重试。2 项直接通过。
+- 未做：任务级墙钟截止时间（见决策 D12）。
 
 ### 2.5.3 报告校验拦截评测（提交 77a01f7）
 - 新增 `backend/app/modules/evaluation/report_gate.py`：11 种报告篡改 + 4 种数字篡改；1 份合法报告 + 3 条合法数字表述作对照。

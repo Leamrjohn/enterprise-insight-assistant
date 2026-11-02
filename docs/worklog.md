@@ -352,3 +352,6 @@
 - 盘点：已有 LLM 30s 超时、SQL statement_timeout、RAG 数据库超时、单任务模型预算（次数/token/费用）、路由外部重试上限 2、图步数上限 MAX_GRAPH_STEPS=20；步数上限此前无测试。
 - 新增 test_step_budget.py：路由死循环被步数上限截断（GraphRecursionError）；Worker 遇到步数耗尽进入 failed 且不重试。2 项直接通过（证明现有保护有效，补回归）。
 - 未做：任务级墙钟截止时间（目前由步数 × 单步超时 + 租约间接限定），记为可选改进；未做真实超限演练。
+
+## 2026-11-01 — 阶段 3（3.2–3.3）部署
+- 部署前无进行中任务；构建并更新 api/worker/report-worker/beat，退出 0；events.py、tasks.py、outbox.py 在 4 个容器中哈希一致；readiness 全部 ok。无迁移、无模型调用。
