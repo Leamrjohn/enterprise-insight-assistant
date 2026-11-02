@@ -158,3 +158,19 @@
 - 测试 `tests/unit/workflow/test_transient_database_errors.py` 共 11 项：第一版 8 项（撤掉修改 4 项失败）；复测发现真实链路是“OperationalError → PendingRollbackError”，补 3 项（修改前 2 项失败）。
 - 验证：单元/脚本 947 passed、集成 94 passed；部署后演练 4d 通过。
 - 教训：第一次修复只看了“应该抛什么异常”，没看“实际抛的是什么异常”；复测把差异暴露出来。
+
+## 5. 阶段 4：工具层与 SQL 防线（2026-11-02，用户授权自主推进）
+
+- 阶段 3 验收：本地标签 `stage-3-done`（阶段 2 出口验收与标签尚未做）。
+
+### 4.1 只读调查（`docs/design/stage4_tool_sql_survey.md`）
+- 工具运行时：白名单、schema 校验、每次重新鉴权、范围校验、服务端注入超时、调用预算、调用前后审计均具备。缺口：多余参数被静默丢弃；所有拒绝返回同一句话。
+- 计划要求对照的教学版 `tool_layer.py` 在仓库中不存在。
+- 执行层只读核对：分析账号 `acme_readonly` 非超级用户、不能绕过行级安全、0 个写权限、不能执行 `pg_read_file`/`lo_import`；连接与事务均只读，带语句超时。
+
+### 4.3/4.4 AST 层加固（提交 65927c8，已部署）
+- 先离线探测：用真实业务表名后，CTE 内 DELETE、FOR UPDATE、pg_sleep、pg_read_file、set_config、lo_import 等都能通过 AST。（第一次探测用了不存在的表名 `orders`，被表检查拦下，结论无效——换真实表名重测。）
+- 收集历史上模型真实生成的 45 条不同 SQL 作为误拦回归样本（只用到 sum/count/round/coalesce/nullif/cast/case/日期格式化）。
+- 新增 `tests/unit/analysis/test_sql_adversarial.py`：54 条攻击 + 45 条历史 SQL；修改前 27 条攻击通过，修改后 100 项全过。
+- 修改 `sql_validator.py`：遍历整棵语法树，拒绝写入/结构修改节点、行锁、`pg_`/`lo_`/`dblink`/`txid_` 前缀及 set_config/current_setting/query_to_xml 等函数。
+- 验证：单元/脚本 1047 passed、集成 94 passed；部署后真实任务 311 completed（$0.00332）。
