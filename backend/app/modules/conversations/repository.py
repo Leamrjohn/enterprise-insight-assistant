@@ -109,6 +109,28 @@ def touch_conversation(db: Session, *, conversation_id: int) -> None:
     )
 
 
+def get_older_user_messages(
+    db: Session,
+    *,
+    conversation_id: int,
+    before_message_id: int,
+    limit: int = 50,
+) -> list[ConversationMessage]:
+    messages = (
+        db.query(ConversationMessage)
+        .filter(
+            ConversationMessage.conversation_id == conversation_id,
+            ConversationMessage.id < before_message_id,
+            ConversationMessage.role == "user",
+            ConversationMessage.content.is_not(None),
+        )
+        .order_by(ConversationMessage.id.desc())
+        .limit(limit)
+        .all()
+    )
+    return list(reversed(messages))
+
+
 def get_recent_context_messages(
     db: Session,
     *,

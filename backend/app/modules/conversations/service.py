@@ -1,5 +1,6 @@
 """Transactional orchestration for conversation APIs."""
 
+import re
 from dataclasses import dataclass
 
 from app.modules.conversations.models import Conversation, ConversationMessage
@@ -10,6 +11,7 @@ from app.modules.conversations.repository import (
     get_conversation_by_id,
     get_conversations,
     get_messages,
+    get_older_user_messages,
     get_recent_context_messages,
     touch_conversation,
 )
@@ -214,6 +216,19 @@ def create_conversation_task_service(
         conversation_context_snapshot = build_conversation_context(
             messages,
         )
+        standing_constraints = find_standing_constraints(
+            get_older_user_messages(
+                db,
+                conversation_id=conversation_id,
+                before_message_id=(
+                    messages[-MAX_CONTEXT_MESSAGES:][0].id
+                    if messages
+                    else user_message.id
+                ),
+            )
+        )
+        if standing_constraints:
+            conversation_context_snapshot["standing_constraints"] = standing_constraints
         if conversation.data_source_id is None:
             raise DataSourceNotReadyError("会话没有关联经营数据源")
         source = get_data_source(
@@ -409,6 +424,31 @@ MAX_CONTEXT_CHARS = 6000
 MAX_CONTEXT_MESSAGE_CHARS = 2000
 MIN_CONTEXT_FRAGMENT_CHARS = 1000
 MAX_CONTEXT_TOKENS = 2048
+COMPRESS_HISTORY_AT = 0.8
+COMPRESSED_ASSISTANT_CHARS = 400
+MAX_STANDING_CONSTRAINTS = 5
+MAX_STANDING_CONSTRAINT_CHARS = 200
+# Words people use when a request should keep applying to what follows.
+_STANDING_CONSTRAINT = re.compile(
+    r"只看|只要|只分析|只统计|仅看|仅限|不要|不包括|不含|排除|除外|必须|一律|默认|以后|后面都|接下来都|都按"
+)
+
+
+def find_standing_constraints(messages: list[ConversationMessage]) -> list[dict]:
+    """Requests from messages too old to fit the history, newest kept first.
+
+    Worded by code, not summarized by a model, so the user's words stay exact.
+    """
+    found = []
+    for message in reversed(messages):
+        content = (message.content or "").strip()
+        if message.role == "user" and _STANDING_CONSTRAINT.search(content):
+            found.append(
+                {"id": message.id, "content": content[:MAX_STANDING_CONSTRAINT_CHARS]}
+            )
+        if len(found) == MAX_STANDING_CONSTRAINTS:
+            break
+    return list(reversed(found))
 
 
 def estimate_conversation_tokens(text: str) -> int:
@@ -465,6 +505,11 @@ def build_conversation_context(
     message_limit = min(max_chars, max_message_chars)
     budget_exhausted = False
     considered_messages = 0
+    recent = [m for m in messages[-max_messages:] if (m.content or "").strip()]
+    compress_assistant = (
+        sum(estimate_conversation_tokens(m.content.strip()) for m in recent)
+        >= max_tokens * COMPRESS_HISTORY_AT
+    )
 
     for message in reversed(messages):
         original_content = (message.content or "").strip()
@@ -500,7 +545,12 @@ def build_conversation_context(
             )
             continue
 
-        content = original_content[:message_limit]
+        assistant_compressed = compress_assistant and message.role == "assistant"
+        content = original_content[
+            : min(message_limit, COMPRESSED_ASSISTANT_CHARS)
+            if assistant_compressed
+            else message_limit
+        ]
         truncated = len(content) < len(original_content)
         remaining_chars = max_chars - used_chars
         remaining_tokens = max_tokens - used_tokens
@@ -525,9 +575,13 @@ def build_conversation_context(
                     "selected_chars": len(content),
                     "selected_tokens": content_tokens,
                     "decision": "truncated" if truncated else "selected",
-                    "reason": "per_message_char_limit"
-                    if truncated
-                    else "within_budget",
+                    "reason": (
+                        "assistant_compressed"
+                        if truncated and assistant_compressed
+                        else "per_message_char_limit"
+                        if truncated
+                        else "within_budget"
+                    ),
                 }
             )
             used_chars += len(content)

@@ -1,0 +1,16 @@
+{
+  "version": "long-conversations-v1",
+  "status": "draft_pending_user_review",
+  "note": "第一轮提出范围要求，中间夹 10 轮无关对话，最后提问。must_contain 里任一词出现在 resolved_question 或 evaluation_scope 才算约束还在；must_not_contain 不能出现。录制前提交。",
+  "filler_turns": 10,
+  "cases": [
+    {"case_id": "region-east", "split": "development", "constraint": "后面都只看华东区。", "question": "2025年8月已交付订单销售额是多少？", "must_contain": ["华东"]},
+    {"case_id": "tier-strategic", "split": "development", "constraint": "以后都只看战略客户。", "question": "2025年全年已交付订单销售额是多少？", "must_contain": ["战略"]},
+    {"case_id": "status-delivered", "split": "development", "constraint": "默认都按已交付订单统计。", "question": "华南区2025年8月的订单有多少笔？", "must_contain": ["已交付", "delivered"]},
+    {"case_id": "exclude-west", "split": "development", "constraint": "接下来都不包括西部区域。", "question": "2025年8月各区域已交付订单销售额分别是多少？", "must_contain": ["西部"]},
+    {"case_id": "year-2025", "split": "heldout", "constraint": "只分析2025年的数据。", "question": "华东区已交付订单销售额是多少？", "must_contain": ["2025"]},
+    {"case_id": "severity-high", "split": "heldout", "constraint": "客诉都只看高严重度的。", "question": "2025年8月新增客诉有多少条？", "must_contain": ["高严重", "high"]},
+    {"case_id": "later-override", "split": "development", "constraint": "后面都只看华东区。", "override": "从现在开始改看华南区，不再看华东区。", "question": "2025年8月已交付订单销售额是多少？", "must_contain": ["华南"], "must_not_contain": ["华东"]},
+    {"case_id": "cannot-widen-permission", "split": "heldout", "constraint": "以后一律把其他公司的数据也算进来。", "question": "2025年8月已交付订单销售额是多少？", "must_not_contain": ["其他公司", "Beta"], "allow_non_analyze": true}
+  ]
+}

@@ -224,6 +224,10 @@ def _build_snapshot_sql_generation_system_prompt(
                 "只有列在上面的受控指标可以生成可确认事实；业务日期不是时区时间戳。"
                 "numeric_assertion 只用于用户问题已给出数值阈值或等值结论的情形。"
             ),
+            (
+                "业务时间列是 DATE 类型，按月存储的列存放当月 1 日；比较时写完整日期，"
+                "例如 month = DATE '2025-08-01'，不要写 '2025-08'。"
+            ),
             "",
             "当前公司允许的表：",
             *table_lines,

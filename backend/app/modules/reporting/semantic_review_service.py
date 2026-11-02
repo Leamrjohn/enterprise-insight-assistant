@@ -23,6 +23,7 @@ from app.modules.reporting.semantic_review import (
     EvidenceSemanticReview,
     SQLSemanticReview,
 )
+from app.modules.runtime.context_budget import EVIDENCE_REVIEW, assemble
 from pydantic import ValidationError
 from sqlglot import exp
 
@@ -263,13 +264,16 @@ class SemanticReviewService:
             '"limitations":["..."],"supported_document_chunk_ids":[1],'
             '"document_qualifications":[{"statement":"...","citation_chunk_ids":[1]}]}。'
         )
-        payload = {
-            "question": question,
-            "plan": plan,
-            "data_result": data_result,
-            "knowledge_result": knowledge_result,
-            "deterministic_report": report,
-        }
+        payload, _ = assemble(
+            EVIDENCE_REVIEW,
+            {
+                "question": question,
+                "plan": plan,
+                "data_result": data_result,
+                "knowledge_result": knowledge_result,
+                "deterministic_report": report,
+            },
+        )
         raw_output = self._chat(system_prompt=system_prompt, payload=payload)
         return self._parse_with_repair(
             EvidenceSemanticReview,
