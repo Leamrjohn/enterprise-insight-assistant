@@ -51,7 +51,7 @@ celery_app.conf.update(
         "cleanup-expired-memories": {
             "task": "app.modules.memory.tasks.cleanup_expired_memories",
             # A clock time: an interval would restart whenever beat restarts.
-            "schedule": crontab(hour=19, minute=0),
+            "schedule": crontab(hour=3, minute=0),
         },
         "publish-pending-artifact-processing-events": {
             "task": "app.modules.input_artifacts.outbox_tasks.publish_pending_artifact_processing_events",
