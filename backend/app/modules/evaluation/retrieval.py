@@ -122,3 +122,52 @@ def evaluate_ranked_retrieval(
             )
         ],
     }
+
+
+def answer_hit_rates(rows: list[dict]) -> dict:
+    """Share of questions whose answer text appears in a final retrieved chunk."""
+
+    def rate(subset: list[dict]) -> float | None:
+        return sum(r["found"] for r in subset) / len(subset) if subset else None
+
+    return {
+        "cases": len(rows),
+        "rate": rate(rows),
+        "by_split": {
+            split: rate([r for r in rows if r["split"] == split])
+            for split in sorted({r["split"] for r in rows})
+        },
+        "misses": [r["case_id"] for r in rows if not r["found"]],
+    }
+
+
+def score_version_traps(rows: list[dict]) -> dict:
+    """How often retrieval hands the model a version that does not apply."""
+
+    def summary(subset: list[dict]) -> dict | None:
+        if not subset:
+            return None
+        return {
+            "cases": len(subset),
+            "right_version_first": sum(
+                bool(r["ranked"]) and r["ranked"][0] == r["fresh"] for r in subset
+            ),
+            "wrong_version_retrieved": sum(r["stale"] in r["ranked"] for r in subset),
+            "wrong_version_above_right": sum(
+                r["stale"] in r["ranked"]
+                and (
+                    r["fresh"] not in r["ranked"]
+                    or r["ranked"].index(r["stale"]) < r["ranked"].index(r["fresh"])
+                )
+                for r in subset
+            ),
+            "answer_found": sum(r["answer_found"] for r in subset),
+        }
+
+    return {
+        "overall": summary(rows),
+        "by_kind": {
+            kind: summary([r for r in rows if r["kind"] == kind])
+            for kind in sorted({r["kind"] for r in rows})
+        },
+    }
