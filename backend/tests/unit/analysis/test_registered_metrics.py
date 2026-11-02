@@ -133,3 +133,21 @@ def test_unregistered_metric_is_still_refused():
         _contract("made_up/v1", "expense_entries.expense_date"),
     ).status
     assert status == "irrelevant"
+
+
+@pytest.mark.parametrize("default", ["0", "0.0"])
+def test_sum_metric_must_not_turn_no_data_into_a_number(default):
+    """COALESCE(SUM(x), 0) would report "0" where the honest answer is "no data"."""
+    status = assess_metric_query(
+        f"SELECT COALESCE(SUM(o.total_amount), {default}) FROM sales_orders o"
+        " WHERE o.status = 'delivered' AND o.order_date >= DATE '2025-08-01'",
+        _contract("revenue/v1", "sales_orders.order_date"),
+    ).status
+    assert status == "insufficient"
+
+
+def test_coalesce_on_the_formula_of_a_sum_metric_is_also_refused():
+    assert (
+        _gross_profit("COALESCE(SUM(i.line_amount - i.unit_cost * i.quantity), 0)")
+        == "insufficient"
+    )

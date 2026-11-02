@@ -219,6 +219,9 @@ def _has_required_aggregate(
 ) -> bool:
     aggregate_type = exp.Sum if definition.aggregate_function == "SUM" else exp.Count
     for aggregate in statement.find_all(aggregate_type):
+        # A defaulted sum would report 0 where the honest answer is "no data".
+        if aggregate.find_ancestor(exp.Coalesce) is not None:
+            continue
         argument = aggregate.this
         if definition.aggregate_expressions:
             if (

@@ -23,7 +23,8 @@ _REPAIR_GUIDANCE = {
     "sql_semantic_error": "上一次 SQL 的聚合、字段或关联语义不正确。",
     "metric_contract_insufficient": (
         "上一次候选没有满足登记指标的聚合、固定筛选或血缘列要求。"
-        "必须严格采用指标口径中的聚合、固定筛选和业务时间列。"
+        "必须严格采用指标口径中的聚合、固定筛选和业务时间列，"
+        "且不得用 COALESCE 把空聚合改写成 0。"
     ),
     "metric_contract_irrelevant": "上一次候选引用了未登记或不可验证的指标。",
     "metric_contract_incomplete": (
