@@ -163,3 +163,20 @@ trap-travel-current  [0.998, 0.003, 0.000]  平均 0.33 → 拒答（错）
 **受影响范围：** 按上限推算，只有上限为 4 的两道题超预算（`knowledge-quality-batch-evidence`、`knowledge-receivable-risk-boundary`）。`knowledge-margin-two-factors` 上限 5，混合题上限 8，推算不超。开启检查时后 4 题没有实际跑过，所以这只是推算。
 
 **没有修改预算上限：** 这是评测期望值，要由用户决定。
+
+## 放宽预算后的冒烟（用户决定）
+
+用户决定把 `knowledge-quality-batch-evidence` 和 `knowledge-receivable-risk-boundary` 的模型调用上限从 4 放宽到 5，只改冒烟实际使用的 `business_knowledge_development_v1_7.json`，答案要求和 token 上限都没变。
+
+运行 `20261102T125901-e70dcd0b`，逐句检查开启，1 轮：
+
+| 指标 | 基线（20261101，第 1 轮） | 本次 |
+|---|---|---|
+| 成功 / 待复核 | 7 / 1 | 7 / 1 |
+| 违规项 | 0 | 0 |
+| token | 57,112 | 61,710（+8%） |
+| 费用 | $0.021542 | $0.023196 |
+
+**前面的推算得到了确认：** 8 道题都跑完了，只有这 2 道题需要放宽。
+
+**局限：** 只跑了 1 轮。逐句检查的句数和删句数写进了日志字段，但在 worker 的 JSON 日志里没搜到，所以线上暂时看不到它删了多少句，已记入待办。
