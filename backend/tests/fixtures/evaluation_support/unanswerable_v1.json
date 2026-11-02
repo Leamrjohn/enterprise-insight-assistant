@@ -1,0 +1,17 @@
+{
+  "version": "unanswerable-v1",
+  "status": "draft_pending_user_review",
+  "note": "语料里没有答案的问题，系统应拒答或不给出带引用的结论。在看任何分数之前提交。题目是编写时按语料范围判断的，没有逐篇核对。",
+  "cases": [
+    {"case_id": "none-stock-option", "split": "development", "question": "公司员工股票期权的行权价是多少？"},
+    {"case_id": "none-office-lease", "split": "development", "question": "总部办公楼的年租金是多少？"},
+    {"case_id": "none-ceo-bonus", "split": "development", "question": "首席执行官去年的奖金是多少？"},
+    {"case_id": "none-patent", "split": "development", "question": "公司一共拥有多少项发明专利？"},
+    {"case_id": "none-maternity", "split": "development", "question": "员工产假可以休多少天？"},
+    {"case_id": "none-ipo", "split": "heldout", "question": "公司计划在哪个交易所上市？"},
+    {"case_id": "none-canteen", "split": "heldout", "question": "员工食堂的午餐补贴是多少钱？"},
+    {"case_id": "none-carbon", "split": "heldout", "question": "公司去年的碳排放总量是多少吨？"},
+    {"case_id": "none-customer-999", "split": "heldout", "question": "华东医疗器械客户999的未收余额是多少？"},
+    {"case_id": "none-japan", "split": "heldout", "question": "日本区域的销售负责人是谁？"}
+  ]
+}
