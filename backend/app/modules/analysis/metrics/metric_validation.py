@@ -76,17 +76,14 @@ def assess_metric_query(
             {
                 _canonical_column(column, aliases)
                 for column in statement.find_all(exp.Column)
-                if column.table
+                if column.table or len(aliases) == 1
             }
         )
     )
     if not _has_required_aggregate(statement, aliases, definition):
         return MetricQueryAssessment(
             status="insufficient",
-            reason=(
-                "候选 SQL 未按指标定义聚合："
-                f"{definition.aggregate_function}({definition.aggregate_source_column})"
-            ),
+            reason=f"候选 SQL 未按指标定义聚合：{definition.aggregate_display}",
             definition=definition,
             lineage_columns=lineage_columns,
         )
@@ -180,7 +177,20 @@ def _next_month(month: str) -> str:
 
 
 def _canonical_column(column: exp.Column, aliases: dict[str, str]) -> str:
+    # With one table in the query an unqualified column can only belong to it.
+    if not column.table and len(aliases) == 1:
+        return f"{next(iter(aliases.values()))}.{column.name}"
     return f"{aliases.get(column.table, column.table)}.{column.name}"
+
+
+def _canonical_expression(argument: exp.Expression, aliases: dict[str, str]) -> str:
+    def qualify(node: exp.Expression) -> exp.Expression:
+        if isinstance(node, exp.Column):
+            table, name = _canonical_column(node, aliases).split(".", 1)
+            return exp.column(name, table=table)
+        return node
+
+    return argument.unnest().copy().transform(qualify).sql(dialect="postgres")
 
 
 def _has_required_equality(
@@ -210,6 +220,13 @@ def _has_required_aggregate(
     aggregate_type = exp.Sum if definition.aggregate_function == "SUM" else exp.Count
     for aggregate in statement.find_all(aggregate_type):
         argument = aggregate.this
+        if definition.aggregate_expressions:
+            if (
+                _canonical_expression(argument, aliases)
+                in definition.aggregate_expressions
+            ):
+                return True
+            continue
         if isinstance(argument, exp.Column) and (
             _canonical_column(argument, aliases) == definition.aggregate_source_column
         ):

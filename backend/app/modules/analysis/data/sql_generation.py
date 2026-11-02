@@ -179,7 +179,7 @@ def _build_snapshot_sql_generation_system_prompt(catalog: SnapshotCatalog) -> st
             ),
             (
                 "每个会展示给用户的 SELECT 表达式都必须用中文业务别名，例如 "
-                'COUNT(*) AS "订单数量"、SUM(amount) AS "销售额"；不要把英文原始字段名作为输出列名。'
+                'COUNT(t.id) AS "订单数量"、SUM(t.amount) AS "销售额"；不要把英文原始字段名作为输出列名。'
             ),
             "purpose 也必须是面向业务用户的简短中文说明，不得包含表名、字段名、SQL 或其他技术实现细节。",
             "禁止多条 SQL、Schema 或数据库前缀，以及任何写入或修改操作。",
@@ -194,6 +194,7 @@ def _build_snapshot_sql_generation_system_prompt(catalog: SnapshotCatalog) -> st
             "",
             "可验证指标契约：",
             *metric_contract_lines,
+            "metric_definition_ref 必须是与问题口径一致的那个指标；没有一致的指标时不得借用其他指标。",
             (
                 "只有列在上面的受控指标可以生成可确认事实；业务日期不是时区时间戳。"
                 "numeric_assertion 只用于用户问题已给出数值阈值或等值结论的情形。"
@@ -225,7 +226,7 @@ def _metric_contract_lines(catalog: SnapshotCatalog | None) -> list[str]:
         )
         details = [
             f"单位 {definition.unit}",
-            f"聚合 {definition.aggregate_function}({definition.aggregate_source_column})",
+            f"聚合 {definition.aggregate_display}",
             f"业务时间列 {definition.time_column}",
         ]
         if mandatory_filters:

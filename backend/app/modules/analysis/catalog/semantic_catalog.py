@@ -152,10 +152,16 @@ METRIC_DEFINITIONS = {
     ),
     "gross_profit": (
         "毛利 = SUM(sales_order_items.line_amount "
-        "- sales_order_items.unit_cost * sales_order_items.quantity)。"
+        "- sales_order_items.unit_cost * sales_order_items.quantity)，"
+        "且 sales_orders.status = 'delivered'。"
     ),
     "open_receivable": ("未回款余额 = 发票金额减去该发票已关联的回款金额。"),
     "ticket_count": "客诉数量 = COUNT(service_tickets.id)。",
+    "delivered_order_count": (
+        "已交付订单数 = COUNT(sales_orders.id)，且 sales_orders.status = 'delivered'。"
+    ),
+    "expense_amount": "费用金额 = SUM(expense_entries.amount)。",
+    "revenue_target": "收入目标 = SUM(monthly_budgets.revenue_target)。",
 }
 FILTER_VALUE_DEFINITIONS = {
     "customers.region_code": {
