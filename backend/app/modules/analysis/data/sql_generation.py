@@ -3,6 +3,10 @@ import json
 from app.core.exceptions import StructuredOutputError
 from app.core.gateway.base import ModelGateway
 from app.core.gateway.factory import get_model_gateway
+from app.modules.analysis.catalog.schema_selection import (
+    narrow_catalog,
+    select_tables,
+)
 from app.modules.analysis.catalog.semantic_catalog import (
     BUSINESS_JOINS,
     BUSINESS_TABLES,
@@ -59,11 +63,18 @@ def _evaluation_scope_instruction(evaluation_scope: dict[str, object] | None) ->
     )
 
 
+def hidden_table_names(catalog: SnapshotCatalog, shown: set[str]) -> list[str]:
+    """Allowed tables whose columns are left out of this prompt."""
+    return sorted(set(catalog.tables) - shown) if shown else []
+
+
 def build_sql_generation_system_prompt(
     catalog: SnapshotCatalog | None = None,
+    *,
+    shown_tables: set[str] | None = None,
 ) -> str:
     if catalog is not None:
-        return _build_snapshot_sql_generation_system_prompt(catalog)
+        return _build_snapshot_sql_generation_system_prompt(catalog, shown_tables)
 
     table_lines = [
         (
@@ -144,16 +155,29 @@ def build_sql_generation_system_prompt(
     )
 
 
-def _build_snapshot_sql_generation_system_prompt(catalog: SnapshotCatalog) -> str:
+def _build_snapshot_sql_generation_system_prompt(
+    catalog: SnapshotCatalog, shown_tables: set[str] | None = None
+) -> str:
+    # Metric contracts always come from the full catalog so that they, and the
+    # rules above them, stay one identical prompt prefix for every question.
+    contract_lines = metric_contract_lines(catalog)
+    hidden_tables = hidden_table_names(catalog, shown_tables or set())
+    visible = narrow_catalog(catalog, shown_tables or set()) or catalog
     table_lines = [
         f"- {table_name}: 字段: {', '.join(sorted(columns))}"
-        for table_name, columns in sorted(catalog.tables.items())
+        for table_name, columns in sorted(visible.tables.items())
     ]
+    if visible is catalog:
+        hidden_tables = []
+    if hidden_tables:
+        table_lines.append(
+            "- 其他可用表（这里未列字段，不要猜测字段名；确实需要时在 purpose 说明）："
+            + ", ".join(hidden_tables)
+        )
     join_lines = [
         f"- {left_table}.{left_column} = {right_table}.{right_column}"
-        for left_table, left_column, right_table, right_column in sorted(catalog.joins)
+        for left_table, left_column, right_table, right_column in sorted(visible.joins)
     ]
-    contract_lines = metric_contract_lines(catalog)
     filter_value_lines = [
         (
             f"- {field}: "
@@ -162,7 +186,7 @@ def _build_snapshot_sql_generation_system_prompt(catalog: SnapshotCatalog) -> st
             )
         )
         for field, values in sorted(FILTER_VALUE_DEFINITIONS.items())
-        if _catalog_contains_column(catalog, field)
+        if _catalog_contains_column(visible, field)
     ]
     return "\n".join(
         [
@@ -256,6 +280,18 @@ class SQLGenerationService:
         self._gateway = gateway or get_model_gateway()
         self._catalog = catalog
 
+    def _tables_for(
+        self,
+        question: str,
+        required_concepts: list[str] | None,
+        evaluation_scope: dict[str, object] | None,
+    ) -> set[str] | None:
+        if self._catalog is None:
+            return None
+        entities = (evaluation_scope or {}).get("entities") or []
+        texts = [question, *(required_concepts or []), *map(str, entities)]
+        return select_tables(self._catalog, texts) or None
+
     def generate(
         self,
         question: str,
@@ -290,6 +326,7 @@ class SQLGenerationService:
                     '"result_kind":"aggregate","empty_result_policy":"no_matching_records",'
                     '"metric_definition_ref":"...","time_scope_column":"..."}}。'
                 ),
+                # A failed attempt may have failed for lack of a table: show them all.
                 system_prompt=build_sql_generation_system_prompt(self._catalog),
                 json_mode=True,
             )
@@ -305,7 +342,12 @@ class SQLGenerationService:
                     f"{concepts_instruction}"
                     f"{scope_instruction}"
                 ),
-                system_prompt=build_sql_generation_system_prompt(self._catalog),
+                system_prompt=build_sql_generation_system_prompt(
+                    self._catalog,
+                    shown_tables=self._tables_for(
+                        question, required_concepts, evaluation_scope
+                    ),
+                ),
                 json_mode=True,
             )
         try:

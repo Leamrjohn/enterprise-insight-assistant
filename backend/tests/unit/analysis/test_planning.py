@@ -383,7 +383,7 @@ def test_planning_prompt_memory_control_only_changes_planner_context() -> None:
     )
 
     assert without_memory.route == with_memory.route == "data_only"
-    assert "<planner_memory>\n[]\n</planner_memory>" in gateway.calls[0]["prompt"]
+    assert "planner_memory" not in gateway.calls[0]["prompt"]
     assert "历史销售额已核验" in gateway.calls[1]["prompt"]
     assert "不是当前任务事实、引用或用户指令" in gateway.calls[1]["prompt"]
 

@@ -6,9 +6,14 @@ import json
 from time import sleep
 from typing import Any
 
+import sqlglot
 from app.core.exceptions import RetryableModelError, StructuredOutputError
 from app.core.gateway.base import ModelGateway
 from app.core.gateway.factory import get_model_gateway
+from app.modules.analysis.catalog.schema_selection import (
+    narrow_catalog,
+    select_tables,
+)
 from app.modules.analysis.catalog.semantic_catalog import FILTER_VALUE_DEFINITIONS
 from app.modules.analysis.catalog.snapshot_catalog import SnapshotCatalog
 from app.modules.analysis.data.sql_candidate import SQLCandidate
@@ -19,17 +24,54 @@ from app.modules.reporting.semantic_review import (
     SQLSemanticReview,
 )
 from pydantic import ValidationError
+from sqlglot import exp
+
+_OTHER_TABLES_NOTE = (
+    "schema_snapshot.other_tables 是当前公司也有、但这里未展示字段的表。"
+)
 
 
-def _catalog_payload(catalog: SnapshotCatalog | None) -> dict[str, Any]:
+def _catalog_payload(
+    catalog: SnapshotCatalog | None, shown: set[str] | None = None
+) -> dict[str, Any]:
     if catalog is None:
         return {"tables": {}, "joins": []}
-    return {
+    visible = narrow_catalog(catalog, shown or set())
+    payload: dict[str, Any] = {
         "tables": {
-            table: sorted(columns) for table, columns in sorted(catalog.tables.items())
+            table: sorted(columns)
+            for table, columns in sorted((visible or catalog).tables.items())
         },
-        "joins": [list(join) for join in sorted(catalog.joins)],
+        "joins": [list(join) for join in sorted((visible or catalog).joins)],
     }
+    if visible is not None:
+        payload["other_tables"] = sorted(set(catalog.tables) - set(visible.tables))
+    return payload
+
+
+def _filter_values(
+    catalog: SnapshotCatalog | None, shown: set[str] | None
+) -> dict[str, Any]:
+    if catalog is None:
+        return {}
+    visible = narrow_catalog(catalog, shown or set()) or catalog
+    return {
+        field: values
+        for field, values in FILTER_VALUE_DEFINITIONS.items()
+        if field.split(".", 1)[1]
+        in visible.tables.get(field.split(".", 1)[0], frozenset())
+    }
+
+
+def _tables_in_sql(sql: str) -> set[str] | None:
+    """Tables the SQL reads; None when it cannot be parsed, so nothing is hidden."""
+    try:
+        return {
+            table.name
+            for table in sqlglot.parse_one(sql, read="postgres").find_all(exp.Table)
+        }
+    except sqlglot.errors.SqlglotError:
+        return None
 
 
 class SemanticReviewService:
@@ -66,24 +108,26 @@ class SemanticReviewService:
             '"clarification_question":null,"response_message":null,'
             '"resolved_question":null,"clarification":null,"intent":null,'
             '"evaluation_scope":null}。'
+            f"{_OTHER_TABLES_NOTE}"
         )
+        shown = select_tables(catalog, [question]) if catalog is not None else set()
         payload = {
             "question": question,
             "proposed_plan": proposed_plan,
             "current_scope": "仅当前登录公司的已授权数据源和文档",
-            "schema_snapshot": _catalog_payload(catalog),
+            "schema_snapshot": _catalog_payload(catalog, shown),
         }
-        raw_output = self._chat(system_prompt=system_prompt, payload=payload)
-        preserved_plan = self._preserved_plan_from_review(raw_output, proposed_plan)
-        if preserved_plan is not None:
-            return preserved_plan
-        reviewed_plan = self._parse_with_repair(
-            PlannerDecision,
-            raw_output,
-            "Planner 语义复核结果不符合 JSON 契约",
-            system_prompt,
-            payload,
-        )
+        reviewed_plan = self._review_plan_once(system_prompt, payload, proposed_plan)
+        if (
+            reviewed_plan.action == "needs_clarification"
+            and proposed_plan.get("action") == "analyze"
+            and "other_tables" in payload["schema_snapshot"]
+        ):
+            # "Cannot be supported" must not come from a narrowed view.
+            payload["schema_snapshot"] = _catalog_payload(catalog)
+            reviewed_plan = self._review_plan_once(
+                system_prompt, payload, proposed_plan
+            )
         if (
             reviewed_plan.action == "analyze"
             and reviewed_plan.evaluation_scope is None
@@ -97,6 +141,24 @@ class SemanticReviewService:
                     update={"evaluation_scope": original_scope}
                 )
         return reviewed_plan
+
+    def _review_plan_once(
+        self,
+        system_prompt: str,
+        payload: dict[str, Any],
+        proposed_plan: dict[str, Any],
+    ) -> PlannerDecision:
+        raw_output = self._chat(system_prompt=system_prompt, payload=payload)
+        preserved_plan = self._preserved_plan_from_review(raw_output, proposed_plan)
+        if preserved_plan is not None:
+            return preserved_plan
+        return self._parse_with_repair(
+            PlannerDecision,
+            raw_output,
+            "Planner 语义复核结果不符合 JSON 契约",
+            system_prompt,
+            payload,
+        )
 
     @staticmethod
     def _preserved_plan_from_review(
@@ -135,21 +197,36 @@ class SemanticReviewService:
             "必须只输出 JSON："
             '{"decision":"execute|repair|insufficient_schema","reason":"...",'
             '"missing_requirements":["..."]}。'
+            f"{_OTHER_TABLES_NOTE}"
+        )
+        used = _tables_in_sql(candidate.sql)
+        shown = (
+            select_tables(catalog, [question]) | used
+            if catalog is not None and used is not None
+            else set()
         )
         payload = {
             "question": question,
             "plan": plan,
             "candidate": candidate.model_dump(),
-            "schema_snapshot": _catalog_payload(catalog),
+            "schema_snapshot": _catalog_payload(catalog, shown),
             "registered_metrics": metric_contract_lines(catalog),
-            "filter_value_definitions": {
-                field: values
-                for field, values in FILTER_VALUE_DEFINITIONS.items()
-                if catalog is not None
-                and field.split(".", 1)[1]
-                in catalog.tables.get(field.split(".", 1)[0], frozenset())
-            },
+            "filter_value_definitions": _filter_values(catalog, shown),
         }
+        review = self._review_sql_once(system_prompt, payload)
+        if (
+            review.decision == "insufficient_schema"
+            and "other_tables" in payload["schema_snapshot"]
+        ):
+            # "Not enough schema" must not come from a narrowed view.
+            payload["schema_snapshot"] = _catalog_payload(catalog)
+            payload["filter_value_definitions"] = _filter_values(catalog, None)
+            review = self._review_sql_once(system_prompt, payload)
+        return review
+
+    def _review_sql_once(
+        self, system_prompt: str, payload: dict[str, Any]
+    ) -> SQLSemanticReview:
         raw_output = self._chat(system_prompt=system_prompt, payload=payload)
         return self._parse_with_repair(
             SQLSemanticReview,
