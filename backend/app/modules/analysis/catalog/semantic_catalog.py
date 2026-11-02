@@ -178,6 +178,12 @@ FILTER_VALUE_DEFINITIONS = {
     "sales_orders.status": {
         "delivered": "已交付订单；销售额指标必须使用该状态。",
     },
+    "expense_entries.category": {
+        "人力与行政": "人力与行政费用。",
+        "市场活动": "市场活动费用。",
+        "物流仓储": "物流仓储费用。",
+        "销售差旅": "销售差旅费用。",
+    },
     "service_tickets.category": {
         "产品质量": "产品质量类售后工单。",
     },

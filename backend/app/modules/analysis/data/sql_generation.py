@@ -92,7 +92,7 @@ def build_sql_generation_system_prompt(
         f"- {name}: {definition}"
         for name, definition in sorted(SEMANTIC_METRIC_DEFINITIONS.items())
     ]
-    metric_contract_lines = _metric_contract_lines(None)
+    contract_lines = metric_contract_lines(None)
     filter_value_lines = [
         (
             f"- {field}: "
@@ -129,7 +129,7 @@ def build_sql_generation_system_prompt(
             *metric_lines,
             "",
             "可验证指标契约：",
-            *metric_contract_lines,
+            *contract_lines,
             (
                 "指标查询必须在 query_contract 中声明 metric_definition_ref 和 "
                 "time_scope_column；只能使用上列登记指标，业务日期不是时区时间戳。"
@@ -152,7 +152,7 @@ def _build_snapshot_sql_generation_system_prompt(catalog: SnapshotCatalog) -> st
         f"- {left_table}.{left_column} = {right_table}.{right_column}"
         for left_table, left_column, right_table, right_column in sorted(catalog.joins)
     ]
-    metric_contract_lines = _metric_contract_lines(catalog)
+    contract_lines = metric_contract_lines(catalog)
     filter_value_lines = [
         (
             f"- {field}: "
@@ -193,7 +193,7 @@ def _build_snapshot_sql_generation_system_prompt(catalog: SnapshotCatalog) -> st
             ),
             "",
             "可验证指标契约：",
-            *metric_contract_lines,
+            *contract_lines,
             "metric_definition_ref 必须是与问题口径一致的那个指标；没有一致的指标时不得借用其他指标。",
             (
                 "只有列在上面的受控指标可以生成可确认事实；业务日期不是时区时间戳。"
@@ -212,7 +212,7 @@ def _build_snapshot_sql_generation_system_prompt(catalog: SnapshotCatalog) -> st
     )
 
 
-def _metric_contract_lines(catalog: SnapshotCatalog | None) -> list[str]:
+def metric_contract_lines(catalog: SnapshotCatalog | None) -> list[str]:
     lines = []
     for definition in METRIC_DEFINITIONS.values():
         if catalog is not None and not all(

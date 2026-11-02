@@ -12,6 +12,7 @@ from app.core.gateway.factory import get_model_gateway
 from app.modules.analysis.catalog.semantic_catalog import FILTER_VALUE_DEFINITIONS
 from app.modules.analysis.catalog.snapshot_catalog import SnapshotCatalog
 from app.modules.analysis.data.sql_candidate import SQLCandidate
+from app.modules.analysis.data.sql_generation import metric_contract_lines
 from app.modules.analysis.planner.planner_decision import PlannerDecision
 from app.modules.reporting.semantic_review import (
     EvidenceSemanticReview,
@@ -124,7 +125,8 @@ class SemanticReviewService:
             "你是受控 SQL 的执行前语义复核器。只返回 JSON。判断候选 SQL 是否真正"
             "回答用户问题和 Planner 计划。你不能授权表、字段、关联或权限；这些由后续"
             "SQLTool 决定。若快照缺少所需指标、枚举含义、比较期或关键条件，返回"
-            "insufficient_schema，绝不允许用无关表或近似指标替代。若快照足够但 SQL "
+            "insufficient_schema，绝不允许用无关表或近似指标替代。registered_metrics 是"
+            "已审定的指标口径，符合口径的 SQL 不得再以缺少定义为由拒绝。若快照足够但 SQL "
             "遗漏可修复条件，返回 repair；只有关键业务条件、指标与范围都被表达时返回 execute。"
             "当 Planner route=hybrid 时，候选 SQL 只需完整验证经营数据可支持的子问题；"
             "原因归因所需的文档证据由知识节点处理，不得仅因 SQL 不能单独证明原因而拒绝"
@@ -139,6 +141,7 @@ class SemanticReviewService:
             "plan": plan,
             "candidate": candidate.model_dump(),
             "schema_snapshot": _catalog_payload(catalog),
+            "registered_metrics": metric_contract_lines(catalog),
             "filter_value_definitions": {
                 field: values
                 for field, values in FILTER_VALUE_DEFINITIONS.items()
