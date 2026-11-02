@@ -1,0 +1,61 @@
+import pytest
+from app.modules.evaluation.retrieval import (
+    RankedRetrievalCase,
+    evaluate_ranked_retrieval,
+)
+
+
+def test_ranked_metrics_count_documents_once_and_score_multi_document_scope() -> None:
+    metrics = evaluate_ranked_retrieval(
+        [
+            # Duplicate chunks of document 7 count once; relevant docs at ranks 2 and 3.
+            RankedRetrievalCase("a", "development", frozenset({1, 2}), [7, 7, 1, 2]),
+            RankedRetrievalCase("b", "development", frozenset({5}), [5, 9]),
+            RankedRetrievalCase("c", "heldout", frozenset({4}), [8, 9]),
+        ],
+        ks=(1, 3),
+    )
+
+    overall = metrics["overall"]
+    assert overall["cases"] == 3
+    assert overall["hit_at_1"] == pytest.approx(1 / 3)
+    assert overall["hit_at_3"] == pytest.approx(2 / 3)
+    # a: both scope docs in top 3 -> 1.0; b: 1.0; c: 0.0
+    assert overall["recall_at_3"] == pytest.approx(2 / 3)
+    # a: first relevant at document rank 2 -> 0.5; b: 1.0; c: 0
+    assert overall["mrr"] == pytest.approx(0.5)
+    assert metrics["by_split"]["heldout"]["hit_at_3"] == 0.0
+    assert metrics["misses_at_max_k"] == ["c"]
+
+
+def test_ranked_metrics_reject_empty_inputs() -> None:
+    with pytest.raises(ValueError):
+        evaluate_ranked_retrieval([], ks=(3,))
+    with pytest.raises(ValueError):
+        evaluate_ranked_retrieval(
+            [RankedRetrievalCase("a", "development", frozenset(), [1])], ks=(3,)
+        )
+
+
+def test_fixture_questions_have_unique_scopes_inside_the_corpus() -> None:
+    import json
+
+    from scripts.evaluation.run_retrieval_evaluation import (
+        CORPUS_ROOT,
+        FIXTURE_ROOT,
+        load_scoped_questions,
+    )
+
+    questions = load_scoped_questions(FIXTURE_ROOT)
+    corpus = {
+        artifact["path"]
+        for artifact in json.loads(
+            (CORPUS_ROOT / "manifest.json").read_text(encoding="utf-8")
+        )["artifacts"]
+    }
+
+    assert questions
+    assert len({(q["question"], tuple(q["scope"])) for q in questions}) == len(
+        questions
+    )
+    assert all(set(q["scope"]) <= corpus for q in questions)

@@ -61,3 +61,64 @@ def evaluate_retrieval(
         ),
         refusal_accuracy=refusal_correct / len(cases),
     )
+
+
+@dataclass(frozen=True)
+class RankedRetrievalCase:
+    """One question with document-level relevance and the ranked document ids returned."""
+
+    case_id: str
+    split: str
+    relevant_document_ids: frozenset[int]
+    ranked_document_ids: list[int]
+
+
+def _dedupe(ids: list[int]) -> list[int]:
+    # Several chunks of one document must not inflate its rank or recall.
+    return list(dict.fromkeys(ids))
+
+
+def _aggregate(cases: list[RankedRetrievalCase], ks: tuple[int, ...]) -> dict:
+    totals: dict[str, float] = {f"hit_at_{k}": 0.0 for k in ks}
+    totals.update({f"recall_at_{k}": 0.0 for k in ks})
+    totals["mrr"] = 0.0
+    for case in cases:
+        ranked = _dedupe(case.ranked_document_ids)
+        relevant = case.relevant_document_ids
+        for k in ks:
+            found = relevant.intersection(ranked[:k])
+            totals[f"hit_at_{k}"] += 1.0 if found else 0.0
+            totals[f"recall_at_{k}"] += len(found) / len(relevant)
+        first = next(
+            (rank for rank, doc in enumerate(ranked, start=1) if doc in relevant),
+            None,
+        )
+        totals["mrr"] += 1.0 / first if first else 0.0
+    count = len(cases)
+    return {"cases": count, **{name: value / count for name, value in totals.items()}}
+
+
+def evaluate_ranked_retrieval(
+    cases: list[RankedRetrievalCase], *, ks: tuple[int, ...]
+) -> dict:
+    """Hit@k, Recall@k and MRR at document level, overall and per split."""
+    if not cases or not ks:
+        raise ValueError("ranked retrieval evaluation requires cases and k values")
+    if any(not case.relevant_document_ids for case in cases):
+        raise ValueError("every ranked retrieval case needs relevant documents")
+    max_k = max(ks)
+    splits = sorted({case.split for case in cases})
+    return {
+        "overall": _aggregate(cases, ks),
+        "by_split": {
+            split: _aggregate([c for c in cases if c.split == split], ks)
+            for split in splits
+        },
+        "misses_at_max_k": [
+            case.case_id
+            for case in cases
+            if not case.relevant_document_ids.intersection(
+                _dedupe(case.ranked_document_ids)[:max_k]
+            )
+        ],
+    }
