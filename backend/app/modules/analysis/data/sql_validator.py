@@ -20,6 +20,7 @@ def validate_sql(
     belongs to the current company's frozen schema snapshot.
     """
     statement = _parse_single_select(sql)
+    _validate_no_side_effects(statement)
     _validate_tables(statement, allowed_tables, catalog)
 
 
@@ -41,6 +42,59 @@ def _parse_single_select(sql: str) -> exp.Select:
         raise ValueError("仅允许SELECT语句")  # noqa: TRY004
 
     return statement
+
+
+# A top-level SELECT can still carry writes (data-modifying CTEs, SELECT INTO),
+# row locks, or server-side functions with side effects.  The read-only role
+# and transaction would stop most of them; this layer must not rely on that.
+_WRITE_NODE_NAMES = (
+    "Insert",
+    "Update",
+    "Delete",
+    "Merge",
+    "Create",
+    "Drop",
+    "Alter",
+    "AlterTable",
+    "Command",
+    "Into",
+)
+_WRITE_NODES = tuple(
+    getattr(exp, name) for name in _WRITE_NODE_NAMES if hasattr(exp, name)
+)
+_DENIED_FUNCTION_PREFIXES = ("pg_", "lo_", "dblink", "txid_")
+_DENIED_FUNCTIONS = frozenset(
+    {
+        "set_config",
+        "current_setting",
+        "query_to_xml",
+        "query_to_xml_and_xmlschema",
+        "table_to_xml",
+        "cursor_to_xml",
+    }
+)
+
+
+def _function_names(node: exp.Func) -> set[str]:
+    names = {node.sql_name().lower()}
+    if isinstance(node, exp.Anonymous):
+        names.add(str(node.name).lower())
+    return names
+
+
+def _validate_no_side_effects(statement: exp.Select) -> None:
+    # ValueError is this module's rejection contract for unsafe SQL text.
+    for node in statement.walk():
+        if isinstance(node, _WRITE_NODES):
+            raise ValueError("查询中不允许包含写入或结构修改语句")  # noqa: TRY004
+        if isinstance(node, exp.Lock):
+            raise ValueError("查询中不允许加锁（FOR UPDATE / FOR SHARE）")  # noqa: TRY004
+        if isinstance(node, exp.Func):
+            for name in _function_names(node):
+                if name in _DENIED_FUNCTIONS or name.startswith(
+                    _DENIED_FUNCTION_PREFIXES
+                ):
+                    raise ValueError(f"函数 {name} 不允许在业务查询中使用")
 
 
 def _validate_tables(
