@@ -186,3 +186,12 @@
 - 每个拒绝码对应一句“该怎么改”的说明（`DENY_MESSAGES`），未知码回落到原通用句；新增 2 项测试检查运行时用到的每个拒绝码都有专属说明。
 - 尝试过“多余参数直接拒绝”：3 个已有测试（如 `test_tool_runtime_injects_frozen_sql_timeout_after_dropping_user_value`）明确规定“丢弃多余参数后继续”。两种做法安全性相同（服务端控制参数总在校验后注入），原设计有意为之且有测试，所以撤回，不改已有期望。
 - 验证：runtime 测试 72 passed，单元/脚本 1049 passed。
+
+### 4.4 执行层对抗测试（仅新增测试，无应用代码改动）
+- 目的：4.3 证明了 AST 层曾经漏掉一半攻击，靠的是执行层兜底；但执行层当时只做过人工只读核对，没有自动化测试。这一步把“执行层能单独挡住攻击”变成可重复的测试。
+- 做法：新增 `tests/integration/analysis/test_sql_execution_layer.py`，用 monkeypatch 把 `validate_sql` 换成空函数（故意关掉 AST 层），再用真实执行器 `execute_readonly_sql` 以 `acme_readonly` 身份连演示经营库（宿主机端口 5435）。
+- 覆盖（26 项）：CTE 内 DELETE/UPDATE/INSERT、FOR UPDATE/SHARE、SELECT INTO 被只读事务或权限拒绝；pg_read_file/pg_ls_dir/lo_import 无权限；dblink 不存在；300ms 超时取消 pg_sleep(3)，语句内用 set_config 把超时改成 0 也无效；账号非超级用户、不能绕过行级安全、不属于任何文件/信号类内置角色、不能在 public 建表、所有业务表 0 写权限；即使显式开读写事务，INSERT/UPDATE/DELETE/TRUNCATE/建表/改表/COPY TO PROGRAM/改自身角色仍被拒；acme 凭据连不上 beta 库；连接落在 acme 租户。
+- 安全措施：所有写尝试都在事务里并回滚，从不提交；正常查询只读 count。
+- 一次失败：权限统计查询先对系统表执行了 has_table_privilege（PostgreSQL 不保证 WHERE 条件的执行顺序），报 `public.pg_statistic` 不存在。这是测试写法问题，改为按表 OID 判断后通过，未改任何断言期望。
+- 新发现：模板查询路径 `execute_registered_readonly_query` 用平台经营库的 `business_app` 连接，它是**超级用户**，且没有只读事务。SQL 只来自仓库里登记的参数化模板，外部输入进不来，但这一路径没有纵深防御。属于权限设计，记入待办由用户决定。
+- 验证：新测试 26 passed；集成 120 passed、1 skipped（原 94 + 新 26）。

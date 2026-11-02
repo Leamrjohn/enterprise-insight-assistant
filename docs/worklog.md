@@ -388,3 +388,9 @@
 ## 2026-11-02 — 4.2 工具拒绝说明
 - 新增 DENY_MESSAGES/deny_message：10 个拒绝码各有修正说明，未知码回落通用句；2 项测试。
 - 撤回“拒绝多余参数”：与 3 个已有测试约定的“丢弃后继续”冲突，安全性相同，保留原设计（决策 D21）。单元/脚本 1049 passed、集成 94 passed。
+
+## 2026-11-02 — 4.4 执行层对抗测试
+- 新增 tests/integration/analysis/test_sql_execution_layer.py（26 项）：绕过 AST 校验直连演示经营库，验证 CTE 写入/行锁/SELECT INTO/文件与大对象函数/dblink 被执行层拦截，超时生效且语句内 set_config 无法解除，账号无提权属性、0 写权限，读写事务下仍拒写，跨租户连不上；全程不提交。
+- 验证：新测试 26 passed（首次 1 失败为测试自身查询写法问题，已改）；集成 120 passed、1 skipped。
+- 待办：模板查询路径 execute_registered_readonly_query 以平台经营库超级用户 business_app 连接且未开只读事务（SQL 仅来自仓库登记的参数化模板，外部无法注入，但无纵深防御）；需用户决定加只读事务或换只读账号。
+- 待办：测试依赖环境变量 ACME_DEMO_DATABASE_PASSWORD，未设置时整模块跳过；阶段 9 CI 需注入。

@@ -23,5 +23,5 @@
 | 1 契约 | 只允许单条 SELECT | 具备 |
 | 2 AST | 表白名单（公司快照 + 工具白名单），禁止 schema 前缀 | **27/54 种攻击可通过**：CTE 内 DELETE/UPDATE/INSERT、FOR UPDATE/SHARE、pg_sleep/pg_read_file/lo_import/set_config/dblink 等函数 → 已补（见 4.3） |
 | 3 范围 | 经营库行级安全 + 公司快照 | 本次未改 |
-| 4 执行 | 只读连接参数 + `SET TRANSACTION READ ONLY` + `statement_timeout` + 行数上限；分析账号 `acme_readonly` 非超级用户、不能绕过 RLS、0 个写权限、不能执行 pg_read_file/lo_import | 只读查询核对，**能兜住 AST 漏掉的攻击** |
+| 4 执行 | 只读连接参数 + `SET TRANSACTION READ ONLY` + `statement_timeout` + 行数上限；分析账号 `acme_readonly` 非超级用户、不能绕过 RLS、0 个写权限、不能执行 pg_read_file/lo_import | 4.4 已自动化：`tests/integration/analysis/test_sql_execution_layer.py` 26 项，绕过 AST 后仍全部拦截；**模板查询路径以超级用户 business_app 连接且无只读事务**（待决定） |
 | 5 审计 | 工具调用记录与事件 | SQL 原文不入审计（只在任务结果中） |
