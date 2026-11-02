@@ -4,6 +4,7 @@
 
 - 分工：Codex 执行；用户决策并验收；Claude 审查 Codex 的汇报并讲解。（2026-11-01 起改为 Claude 执行并讲解，见 04 第 2 节。）
 - 补充计划 [04_agent_capability_track.md](04_agent_capability_track.md) 新增阶段 2.5、4.5、7.5，以及跨模块联动矩阵；与本文冲突时以 04 为准。
+- 补充计划 [05_memory_context_rag_tools.md](05_memory_context_rag_tools.md)：记忆、上下文、RAG、模型调用工具；原阶段 6、7、4.5 并入，冲突时以 05 为准。
 - 每次只做一个工单（编号如 3.2）。给 Codex 的指令固定为：
   “先读 AGENTS.md，再读 docs/roadmap/00_overview.md 的第 1～3 节，以及 docs/roadmap/0X_xxx.md 中的工单 N.M，按其执行。不要阅读其他阶段。”
 - 每个阶段的第一个工单一律是“只读调查”：先核对项目里已经有什么、哪些已被验证，已有且验证通过的不重做。本计划是在没读源码的前提下写的，具体细节以调查结果为准。
