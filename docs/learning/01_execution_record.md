@@ -86,7 +86,8 @@
 | 段落 + 滑窗 + 重排 | 0.684 | 0.632 | 0.561 | 0.632 | 0.50 | 57s |
 
 - 读代码定位“双切块更差”的原因：单策略路径按 `_hybrid_score`（向量 + 字符二元组重叠）排序；多策略合并后只按向量分重排，丢掉了重叠加权。记为阶段 6 待处理。
-- 结果文件：`evaluation-runs/retrieval/20261101-baseline-run1.json`（git 忽略）。
+- 可复现性：第二次运行（run2）三种策略的全部指标与 run1 完全一致，只有耗时略有差异。
+- 结果文件：`evaluation-runs/retrieval/20261101-baseline-run{1,2}.json`（git 忽略）。
 
 ### 3.1 任务状态机只读调查
 - 迁移表集中在 `workflow/lifecycle/task_state.py`；终态只能从 running 进入，终态不可再迁移（除 awaiting_review → queued/partial）。
