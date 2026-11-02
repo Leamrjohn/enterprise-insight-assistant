@@ -34,7 +34,11 @@ from app.modules.evaluation.support_check import (
 from app.modules.identity.models import User
 from app.modules.knowledge.agent import KnowledgeAgent
 from app.modules.knowledge.rag.embeddings_local import LocalEmbeddingProvider
-from app.modules.knowledge.rag.engine import build_prompt, check_sufficiency
+from app.modules.knowledge.rag.engine import (
+    build_prompt,
+    check_sufficiency,
+    keep_relevant,
+)
 from app.modules.knowledge.rag.policy import HYBRID_RETRIEVAL_POLICY
 from app.modules.knowledge.rag.reranker import (
     LocalCrossEncoderReranker,
@@ -63,6 +67,7 @@ FIXTURE = (
     / "evaluation_support"
     / "support_cases_v1.json"
 )
+UNANSWERABLE = FIXTURE.with_name("unanswerable_v1.json")
 EXPECTED_DATABASE = "agent_platform_test"
 
 
@@ -132,8 +137,14 @@ class _InTransactionRag(Tool):
             validity=ValidityWindow.from_parameter(input.parameters["validity_window"]),
             keyword_tokenizer=policy.keyword_tokenizer,
         )
-        evidences = rerank_evidences(
-            question, evidences, self._reranker, top_k=self._settings.rag_rerank_top_k
+        evidences = keep_relevant(
+            rerank_evidences(
+                question,
+                evidences,
+                self._reranker,
+                top_k=self._settings.rag_rerank_top_k,
+            ),
+            self._settings.rag_rerank_min_score,
         )
         if not check_sufficiency(
             evidences,
@@ -214,7 +225,7 @@ def _case_row(case_id, answer, output, replies, stale_id=None) -> dict:
     }
 
 
-def evaluate_end_to_end(gateway: ModelGateway) -> list[dict]:
+def evaluate_end_to_end(gateway: ModelGateway) -> tuple[list[dict], list[dict]]:
     settings = get_settings()
     traps = json.loads(TRAP_FIXTURE.read_text(encoding="utf-8"))
     connection = engine.connect()
@@ -265,7 +276,25 @@ def evaluate_end_to_end(gateway: ModelGateway) -> list[dict]:
             )
             rows.append(_case_row(case_id, answer, output, capture.replies, stale_id))
             print(f"{case_id}: {output.error_code}", file=sys.stderr, flush=True)
-        return rows
+        unanswerable = []
+        for case in json.loads(UNANSWERABLE.read_text(encoding="utf-8"))["cases"]:
+            capture.replies = []
+            output = agent.run(
+                AgentInput(
+                    question=case["question"],
+                    user_id=user.id,
+                    context={"company_id": company.id},
+                )
+            )
+            unanswerable.append(
+                {
+                    "case_id": case["case_id"],
+                    "cited": bool(output.evidence),
+                    "error_code": output.error_code,
+                    "answer": output.answer,
+                }
+            )
+        return rows, unanswerable
     finally:
         db.close()
         transaction.rollback()
@@ -295,10 +324,10 @@ def main() -> None:
         gateway = RecordReplayGateway(args.cassette_dir, mode="record", inner=guard)
 
     fixture = json.loads(FIXTURE.read_text(encoding="utf-8"))
-    stopped, sentences, end_to_end = None, [], []
+    stopped, sentences, end_to_end, unanswerable = None, [], [], []
     try:
         sentences = evaluate_sentences(gateway, fixture["cases"])
-        end_to_end = evaluate_end_to_end(gateway)
+        end_to_end, unanswerable = evaluate_end_to_end(gateway)
     except BudgetGuardExceeded as exc:
         stopped = str(exc)
     report = {
@@ -308,11 +337,20 @@ def main() -> None:
         "estimated_cost_usd": str(guard.estimated_cost) if guard else "0",
         "sentences": summarize_support_cases(sentences) if sentences else None,
         "end_to_end": summarize_end_to_end(end_to_end) if end_to_end else None,
+        "unanswerable": {
+            "cases": len(unanswerable),
+            "answered_with_citation": [r for r in unanswerable if r["cited"]],
+        },
     }
     if args.report:
         args.report.write_text(
             json.dumps(
-                {**report, "sentence_rows": sentences, "end_to_end_rows": end_to_end},
+                {
+                    **report,
+                    "sentence_rows": sentences,
+                    "end_to_end_rows": end_to_end,
+                    "unanswerable_rows": unanswerable,
+                },
                 ensure_ascii=False,
                 indent=2,
             ),

@@ -4,6 +4,7 @@ from app.modules.knowledge.rag.engine import (
     EvidenceRef,
     build_prompt,
     check_sufficiency,
+    keep_relevant,
 )
 
 
@@ -86,3 +87,18 @@ def test_build_prompt_allows_only_selected_evidence():
     assert allowed_chunk_ids == {1}
     assert "FIRST_EVIDENCE" in user_prompt
     assert "SECOND_EVIDENCE" not in user_prompt
+
+
+def test_keep_relevant_keeps_one_good_chunk_among_unrelated_ones():
+    """分数两极分化：一条好片段不能被无关片段的平均分拖垮"""
+    good = EvidenceRef(chunk_id=1, document_id=1, content="a", rerank_score=0.99)
+    noise = EvidenceRef(chunk_id=2, document_id=1, content="b", rerank_score=0.02)
+    kept = keep_relevant([good, noise], 0.5)
+    assert kept == [good]
+    assert check_sufficiency(kept, min_avg_score=0.5) is True
+
+
+def test_keep_relevant_with_nothing_relevant_is_insufficient():
+    noise = EvidenceRef(chunk_id=2, document_id=1, content="b", rerank_score=0.02)
+    assert keep_relevant([noise], 0.5) == []
+    assert check_sufficiency([], min_avg_score=0.5) is False

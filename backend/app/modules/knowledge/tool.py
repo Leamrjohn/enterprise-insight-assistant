@@ -9,7 +9,11 @@ from app.modules.knowledge.rag.embeddings_local import (
     LOCAL_EMBEDDING_MODEL_NAME,
     LocalEmbeddingProvider,
 )
-from app.modules.knowledge.rag.engine import build_prompt, check_sufficiency
+from app.modules.knowledge.rag.engine import (
+    build_prompt,
+    check_sufficiency,
+    keep_relevant,
+)
 from app.modules.knowledge.rag.policy import (
     HYBRID_RETRIEVAL_POLICY,
     RetrievalPolicy,
@@ -174,6 +178,7 @@ class RAGTool(Tool):
                         "question_characters": len(question),
                     },
                 )
+                evidences = keep_relevant(evidences, settings.rag_rerank_min_score)
             else:
                 evidences = evidences[: settings.rag_rerank_top_k]
             if not check_sufficiency(

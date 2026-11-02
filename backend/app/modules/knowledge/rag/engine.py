@@ -108,6 +108,15 @@ def build_prompt(
     return system_prompt, user_prompt, {e.chunk_id for e in selected}
 
 
+def keep_relevant(evidences: list[EvidenceRef], min_score: float) -> list[EvidenceRef]:
+    """Drop chunks the reranker considers irrelevant.
+
+    Its scores are close to 0 or 1, so one good chunk among unrelated ones is a
+    normal result; averaging them would refuse a question that has its answer.
+    """
+    return [e for e in evidences if (e.rerank_score or 0.0) >= min_score]
+
+
 def check_sufficiency(
     evidences: list[EvidenceRef],
     question: str = "",
