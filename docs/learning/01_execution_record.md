@@ -174,3 +174,8 @@
 - 新增 `tests/unit/analysis/test_sql_adversarial.py`：54 条攻击 + 45 条历史 SQL；修改前 27 条攻击通过，修改后 100 项全过。
 - 修改 `sql_validator.py`：遍历整棵语法树，拒绝写入/结构修改节点、行锁、`pg_`/`lo_`/`dblink`/`txid_` 前缀及 set_config/current_setting/query_to_xml 等函数。
 - 验证：单元/脚本 1047 passed、集成 94 passed；部署后真实任务 311 completed（$0.00332）。
+
+### 4.2 工具拒绝说明（已部署）
+- 每个拒绝码对应一句“该怎么改”的说明（`DENY_MESSAGES`），未知码回落到原通用句；新增 2 项测试检查运行时用到的每个拒绝码都有专属说明。
+- 尝试过“多余参数直接拒绝”：3 个已有测试（如 `test_tool_runtime_injects_frozen_sql_timeout_after_dropping_user_value`）明确规定“丢弃多余参数后继续”。两种做法安全性相同（服务端控制参数总在校验后注入），原设计有意为之且有测试，所以撤回，不改已有期望。
+- 验证：runtime 测试 72 passed，单元/脚本 1049 passed。

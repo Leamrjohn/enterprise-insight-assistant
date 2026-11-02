@@ -32,6 +32,26 @@ TOOL_ALLOWED_ROLES = {
 }
 
 
+# Each denial tells the caller what to change; codes stay the machine contract.
+DENY_MESSAGES = {
+    "tool_not_allowlisted": "该工具不在本任务允许的工具列表中，请改用允许的工具。",
+    "tool_schema_unregistered": "该工具没有登记参数契约，暂不可调用。",
+    "tool_input_schema_invalid": "工具参数不符合契约：缺少必填项、类型错误或包含未定义参数。",
+    "tool_budget_exhausted": "本任务的工具调用次数已用完，请基于已有结果作答或说明限制。",
+    "tool_company_scope_missing": "调用缺少公司范围，请使用当前任务的公司。",
+    "tool_company_scope_denied": "只能查询当前任务所属公司的数据。",
+    "tool_current_authorization_denied": "当前用户已无权访问该公司数据。",
+    "tool_document_scope_denied": "只能检索本任务冻结的文档范围。",
+    "tool_document_current_authorization_denied": "部分文档已不再对当前用户可见。",
+    "tool_task_missing": "任务记录不存在，无法继续调用工具。",
+}
+_GENERIC_DENY_MESSAGE = "工具调用不在已授权范围内。"
+
+
+def deny_message(code: str) -> str:
+    return DENY_MESSAGES.get(code, _GENERIC_DENY_MESSAGE)
+
+
 @dataclass(frozen=True)
 class ToolRuntimeContext:
     task_id: int
@@ -146,9 +166,7 @@ class ToolRuntime:
             )
         )
         self._db.commit()
-        return ToolOutput(
-            success=False, error="工具调用不在已授权范围内。", error_code=code
-        )
+        return ToolOutput(success=False, error=deny_message(code), error_code=code)
 
     def _validate_scope(
         self, tool: Tool, input: ToolInput, policy: ToolPolicy
