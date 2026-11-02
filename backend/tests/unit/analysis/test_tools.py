@@ -89,7 +89,7 @@ def test_rag_tool_uses_reranked_evidence_for_prompt(monkeypatch):
         ],
     )
 
-    result = RAGTool(reranker=FakeReranker([0.12, 0.91])).execute(
+    result = RAGTool(reranker=FakeReranker([0.6, 0.91])).execute(
         ToolInput(parameters={"question": "客户合同为何影响销售", "company_id": 1})
     )
 

@@ -550,6 +550,9 @@ def test_knowledge_node_preserves_insufficient_evidence_error_code(monkeypatch) 
     }
 
     class FakeKnowledgeAgent:
+        def __init__(self, **_kwargs):
+            pass
+
         def run(self, input):
             assert input.context["retry_context"] == retry_context
             return AgentOutput(
@@ -728,6 +731,9 @@ def test_data_checkpoint_keeps_the_prior_planner_contract(monkeypatch) -> None:
 
 def test_knowledge_node_keeps_answer_and_citations(monkeypatch) -> None:
     class FakeKnowledgeAgent:
+        def __init__(self, **_kwargs):
+            pass
+
         def run(self, input):
             assert input.question == "华东区销售额为什么下降？"
             assert input.user_id == 1
