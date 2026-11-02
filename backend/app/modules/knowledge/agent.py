@@ -1,17 +1,23 @@
 """Knowledge Agent —— 基于文档知识回答问题的 Agent"""
 
+import logging
+
 from app.core.exceptions import StructuredOutputError
 from app.core.gateway.base import ModelGateway
 from app.core.gateway.factory import get_model_gateway
 from app.modules.analysis.agent_protocol import Agent, AgentInput, AgentOutput
 from app.modules.analysis.tool_protocol import Tool, ToolInput
 from app.modules.knowledge.rag.result_parser import parse_analysis_result
+from app.modules.knowledge.rag.support import check_support
 from app.modules.knowledge.rag.validity import (
+    ValidityWindow,
     business_today,
     resolve_validity_window,
 )
 from app.modules.knowledge.schemas import RetrievalBrief
 from app.modules.knowledge.tool import RAGTool
+
+logger = logging.getLogger(__name__)
 
 
 class KnowledgeAgent(Agent):
@@ -21,9 +27,11 @@ class KnowledgeAgent(Agent):
         self,
         rag_tool: Tool | None = None,
         gateway: ModelGateway | None = None,
+        support_check: bool = False,
     ) -> None:
         self._rag_tool = rag_tool or RAGTool()
         self._gateway = gateway
+        self._support_check = support_check
 
     @property
     def name(self) -> str:
@@ -143,11 +151,50 @@ class KnowledgeAgent(Agent):
         retrieved_evidences = {
             evidence["chunk_id"]: evidence for evidence in data["evidences"]
         }
+        answer = parsed_result.answer
+        cited_chunk_ids = [citation.chunk_id for citation in parsed_result.citations]
+        if self._support_check:
+            try:
+                outcome = check_support(
+                    gateway,
+                    question=input.question,
+                    answer=answer,
+                    evidences=data["evidences"],
+                    window=ValidityWindow.from_parameter(parameters["validity_window"]),
+                    confirmed_facts=brief.confirmed_fact_statements,
+                )
+            except StructuredOutputError:
+                return AgentOutput(
+                    success=True,
+                    answer="无法根据现有文档形成可引用的原因判断。",
+                    evidence=[],
+                    error_code="knowledge_invalid_output",
+                    attempts=attempts,
+                )
+            removed = sum(not sentence.kept for sentence in outcome.sentences)
+            logger.info(
+                "Knowledge support check finished",
+                extra={
+                    "sentences": len(outcome.sentences),
+                    "removed": removed,
+                },
+            )
+            if not outcome.cited_chunk_ids:
+                return AgentOutput(
+                    success=True,
+                    answer=outcome.answer or "现有文档没有能支持结论的内容。",
+                    evidence=[],
+                    error_code="knowledge_no_supported_claim",
+                    attempts=attempts,
+                )
+            answer = outcome.answer
+            cited_chunk_ids = outcome.cited_chunk_ids
+
         cited_evidences = []
-        for citation in parsed_result.citations:
-            evidence = retrieved_evidences[citation.chunk_id]
+        for chunk_id in cited_chunk_ids:
+            evidence = retrieved_evidences[chunk_id]
             cited_evidence = {
-                "chunk_id": citation.chunk_id,
+                "chunk_id": chunk_id,
                 "document_id": evidence["document_id"],
                 "content": evidence["content"],
                 "score": evidence["score"],
@@ -158,7 +205,7 @@ class KnowledgeAgent(Agent):
 
         return AgentOutput(
             success=True,
-            answer=parsed_result.answer,
+            answer=answer,
             evidence=cited_evidences,
             attempts=attempts,
         )

@@ -112,6 +112,7 @@ class Settings(BaseSettings):
     rag_rerank_top_k: int = 3
     rag_rerank_min_score: float = 0.5
     knowledge_evidence_transport: Literal["local", "mcp_stdio"] = "local"
+    knowledge_support_check_enabled: bool = True
 
     @model_validator(mode="after")
     def validate_database_password(self) -> Self:

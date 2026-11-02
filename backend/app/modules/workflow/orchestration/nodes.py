@@ -425,8 +425,11 @@ def knowledge_node(state: WorkflowState) -> dict:
         from app.modules.knowledge.mcp_adapter import McpEvidenceReadTool
 
         rag_tool = McpEvidenceReadTool.stdio()
+    support_check = get_settings().knowledge_support_check_enabled
     agent = (
-        KnowledgeAgent(rag_tool=runtime.wrap(rag_tool)) if runtime else KnowledgeAgent()
+        KnowledgeAgent(rag_tool=runtime.wrap(rag_tool), support_check=support_check)
+        if runtime
+        else KnowledgeAgent(support_check=support_check)
     )
     with model_node_scope("knowledge"):
         result = agent.run(
