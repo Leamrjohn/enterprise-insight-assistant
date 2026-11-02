@@ -218,3 +218,10 @@
 - 留出题：原 4 题已看过，新增 5 题在录制前提交。干净结果是第 2 轮的 4/5，随后我根据其中一题补了费用类别，后面的 5/5 不再算独立检验。
 - 端到端：任务 315 毛利 2259844.98 与标准答案一致；317 客诉 0 与标准答案一致；316 被 Planner 要求澄清，未走到 SQL，所以 COALESCE 校验没有经过完整任务验证。
 - 费用：4 轮录制约 $0.1531（基线已在 2.5.6 记录），单轮都低于 $0.10 上限，但合计超过；部署后真实任务 312–317 共 $0.0187。
+
+## 6. 记忆、上下文、RAG、工具计划（补充计划 05）
+
+### P0 评测基线（未改主流程）
+- 新增 `measure_context_baseline.py`、`run_memory_evaluation.py`、`run_tool_selection_evaluation.py`，并扩展 `run_retrieval_evaluation.py`；题集在 `tests/fixtures/evaluation_retrieval`、`evaluation_memory`、`evaluation_tools`。
+- 题目都在跑基线前提交。完整数字和发现见 `docs/design/p0_baseline.md`。
+- 过程中的问题：两次长 shell 命令解析失败（未执行），改用文件写入工具；记忆脚本少注册模型；工具评分漏了“拒绝”决定，把正确拒绝算成错误，修复后 93.75% 变为 97.9%，模型回复不变。
