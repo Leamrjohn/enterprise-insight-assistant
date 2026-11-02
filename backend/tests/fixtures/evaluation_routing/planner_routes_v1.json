@@ -1,0 +1,550 @@
+{
+  "version": "planner-routes/v1",
+  "status": "pending_user_review",
+  "caveat": "标注者已看过一次模型输出；放宽只按规则编号执行，原标签始终保留在 acceptable 首位。",
+  "rubric": {
+    "R1": "analyze：需要经营数据、内部文档或两者取证。",
+    "R2": "路线：只要数据→data_only；只要文档→knowledge_only；数字+文档（如数字变化的原因）→hybrid。",
+    "R3": "needs_clarification：需要分析但缺指标、时间范围、区域或对象。",
+    "R4": "direct_response：只用于问候、能力说明、使用方式。",
+    "A1": "路线需要数据且问题没有时间范围时，同时接受 needs_clarification（R3）。",
+    "A2": "对象是未指明的“某X”时，同时接受 needs_clarification（R3）。",
+    "A3": "针对具体指标的方法问题（空值、零分母）：规则在指标字典文档、数值在数据，同时接受 data_only 与 hybrid。",
+    "E1": "询问系统自身故障恢复方式的场景题，原标签描述的是端到端故障注入设置，不计入路由评分。"
+  },
+  "cases": [
+    {
+      "case_id": "clarification-missing-time-range",
+      "split": "development",
+      "question": "华东区销售额是多少？",
+      "original": "needs_clarification/None",
+      "included": true,
+      "acceptable": [
+        "needs_clarification/None"
+      ],
+      "rules": [
+        "R3"
+      ]
+    },
+    {
+      "case_id": "data-east-sales-comparison-repair-v1",
+      "split": "development",
+      "question": "比较华东区2025年7月与8月已交付订单销售额。",
+      "original": "analyze/data_only",
+      "included": true,
+      "acceptable": [
+        "analyze/data_only"
+      ],
+      "rules": [
+        "R1",
+        "R2"
+      ]
+    },
+    {
+      "case_id": "data-no-matching-region",
+      "split": "development",
+      "question": "不存在的测试区域在2025年8月销售额是多少？",
+      "original": "analyze/data_only",
+      "included": true,
+      "acceptable": [
+        "analyze/data_only"
+      ],
+      "rules": [
+        "R1",
+        "R2"
+      ]
+    },
+    {
+      "case_id": "data-known-region-empty-month",
+      "split": "development",
+      "question": "华东区2020年1月销售额是多少？",
+      "original": "analyze/data_only",
+      "included": true,
+      "acceptable": [
+        "analyze/data_only"
+      ],
+      "rules": [
+        "R1",
+        "R2"
+      ]
+    },
+    {
+      "case_id": "data-known-region-empty-month-v6",
+      "split": "development",
+      "question": "华东区2020年2月销售额是多少？",
+      "original": "analyze/data_only",
+      "included": true,
+      "acceptable": [
+        "analyze/data_only"
+      ],
+      "rules": [
+        "R1",
+        "R2"
+      ]
+    },
+    {
+      "case_id": "data-known-region-empty-month-v7",
+      "split": "development",
+      "question": "华东区2020年3月销售额是多少？",
+      "original": "analyze/data_only",
+      "included": true,
+      "acceptable": [
+        "analyze/data_only"
+      ],
+      "rules": [
+        "R1",
+        "R2"
+      ]
+    },
+    {
+      "case_id": "data-east-delivered-revenue-2025-08",
+      "split": "development",
+      "question": "区域名称为“华东”的2025年8月、状态为 delivered 的订单销售额是多少？",
+      "original": "analyze/data_only",
+      "included": true,
+      "acceptable": [
+        "analyze/data_only"
+      ],
+      "rules": [
+        "R1",
+        "R2"
+      ]
+    },
+    {
+      "case_id": "planner-east-route",
+      "split": "development",
+      "question": "为什么2025年8月华东区销售额下降？",
+      "original": "analyze/hybrid",
+      "included": true,
+      "acceptable": [
+        "analyze/hybrid"
+      ],
+      "rules": [
+        "R1",
+        "R2"
+      ]
+    },
+    {
+      "case_id": "planner-policy-knowledge-route",
+      "split": "development",
+      "question": "销售额下降能否直接证明唯一原因？",
+      "original": "analyze/knowledge_only",
+      "included": true,
+      "acceptable": [
+        "analyze/knowledge_only"
+      ],
+      "rules": [
+        "R1",
+        "R2"
+      ]
+    },
+    {
+      "case_id": "planner-heldout-clarification",
+      "split": "heldout",
+      "question": "帮我看看最近的经营情况。",
+      "original": "needs_clarification/None",
+      "included": true,
+      "acceptable": [
+        "needs_clarification/None"
+      ],
+      "rules": [
+        "R3"
+      ]
+    },
+    {
+      "case_id": "data-east-customer-drilldown",
+      "split": "development",
+      "question": "华东区2025年8月相对7月下降最多的客户是谁？",
+      "original": "analyze/data_only",
+      "included": true,
+      "acceptable": [
+        "analyze/data_only"
+      ],
+      "rules": [
+        "R1",
+        "R2"
+      ]
+    },
+    {
+      "case_id": "data-null-is-not-zero",
+      "split": "development",
+      "question": "华东区2025年8月销售额为空时能否计算环比？",
+      "original": "analyze/data_only",
+      "included": true,
+      "acceptable": [
+        "analyze/data_only",
+        "analyze/hybrid"
+      ],
+      "rules": [
+        "A3"
+      ]
+    },
+    {
+      "case_id": "data-zero-denominator",
+      "split": "development",
+      "question": "若华东区对比期销售额为0，应如何报告变化？",
+      "original": "analyze/data_only",
+      "included": true,
+      "acceptable": [
+        "analyze/data_only",
+        "analyze/hybrid",
+        "needs_clarification/None"
+      ],
+      "rules": [
+        "A3",
+        "A1"
+      ]
+    },
+    {
+      "case_id": "data-heldout-margin",
+      "split": "heldout",
+      "question": "比较传动控制品类2025年9月和10月毛利率。",
+      "original": "analyze/data_only",
+      "included": true,
+      "acceptable": [
+        "analyze/data_only"
+      ],
+      "rules": [
+        "R1",
+        "R2"
+      ]
+    },
+    {
+      "case_id": "knowledge-east-contract-evidence",
+      "split": "development",
+      "question": "有哪些资料支持CUST-0001暂停采购？",
+      "original": "analyze/knowledge_only",
+      "included": true,
+      "acceptable": [
+        "analyze/knowledge_only"
+      ],
+      "rules": [
+        "R1",
+        "R2"
+      ]
+    },
+    {
+      "case_id": "knowledge-quality-batch-evidence",
+      "split": "development",
+      "question": "哪些资料支持SUP-003传感器批次异常？",
+      "original": "analyze/knowledge_only",
+      "included": true,
+      "acceptable": [
+        "analyze/knowledge_only"
+      ],
+      "rules": [
+        "R1",
+        "R2"
+      ]
+    },
+    {
+      "case_id": "knowledge-margin-two-factors",
+      "split": "development",
+      "question": "传动控制毛利压力有哪些被资料支持的因素？",
+      "original": "analyze/knowledge_only",
+      "included": true,
+      "acceptable": [
+        "analyze/knowledge_only"
+      ],
+      "rules": [
+        "R1",
+        "R2"
+      ]
+    },
+    {
+      "case_id": "knowledge-receivable-risk-boundary",
+      "split": "development",
+      "question": "哪些资料支持CUST-0280回款风险上升？",
+      "original": "analyze/knowledge_only",
+      "included": true,
+      "acceptable": [
+        "analyze/knowledge_only"
+      ],
+      "rules": [
+        "R1",
+        "R2"
+      ]
+    },
+    {
+      "case_id": "knowledge-heldout-no-evidence",
+      "split": "heldout",
+      "question": "某新产品在2024年3月销量下降的原因有哪些资料支持？",
+      "original": "analyze/knowledge_only",
+      "included": true,
+      "acceptable": [
+        "analyze/knowledge_only",
+        "needs_clarification/None"
+      ],
+      "rules": [
+        "A2"
+      ]
+    },
+    {
+      "case_id": "reviewer-east-not-unique",
+      "split": "development",
+      "question": "华东销售下降的唯一原因是竞争报价吗？",
+      "original": "analyze/hybrid",
+      "included": true,
+      "acceptable": [
+        "analyze/hybrid",
+        "needs_clarification/None"
+      ],
+      "rules": [
+        "A1"
+      ]
+    },
+    {
+      "case_id": "reviewer-null-metric-no-cause",
+      "split": "development",
+      "question": "销售额为空时可以发布销售下降原因吗？",
+      "original": "analyze/hybrid",
+      "included": true,
+      "acceptable": [
+        "analyze/hybrid",
+        "analyze/data_only",
+        "needs_clarification/None"
+      ],
+      "rules": [
+        "A3",
+        "A1"
+      ]
+    },
+    {
+      "case_id": "reviewer-followup-action",
+      "split": "development",
+      "question": "CUST-0280回款风险应给出什么可验证后续动作？",
+      "original": "analyze/hybrid",
+      "included": true,
+      "acceptable": [
+        "analyze/hybrid",
+        "needs_clarification/None"
+      ],
+      "rules": [
+        "A1"
+      ]
+    },
+    {
+      "case_id": "reviewer-heldout-quality-boundary",
+      "split": "heldout",
+      "question": "能否把SUP-003批次异常认定为所有客户投诉的唯一原因？",
+      "original": "analyze/hybrid",
+      "included": true,
+      "acceptable": [
+        "analyze/hybrid",
+        "needs_clarification/None"
+      ],
+      "rules": [
+        "A1"
+      ]
+    },
+    {
+      "case_id": "insufficient-new-product-cause",
+      "split": "development",
+      "question": "某新产品在2024年3月销量下降的业务原因是什么？",
+      "original": "analyze/hybrid",
+      "included": true,
+      "acceptable": [
+        "analyze/hybrid",
+        "needs_clarification/None"
+      ],
+      "rules": [
+        "A2"
+      ]
+    },
+    {
+      "case_id": "insufficient-no-advertising-schema",
+      "split": "development",
+      "question": "本月广告点击率是多少？",
+      "original": "analyze/data_only",
+      "included": true,
+      "acceptable": [
+        "analyze/data_only"
+      ],
+      "rules": [
+        "R1",
+        "R2"
+      ]
+    },
+    {
+      "case_id": "insufficient-heldout-bad-debt",
+      "split": "heldout",
+      "question": "CUST-0280是否已经形成坏账？",
+      "original": "analyze/hybrid",
+      "included": true,
+      "acceptable": [
+        "analyze/hybrid",
+        "needs_clarification/None"
+      ],
+      "rules": [
+        "A1"
+      ]
+    },
+    {
+      "case_id": "collaboration-data-retry",
+      "split": "development",
+      "question": "华东销售分析中数据查询暂时失败后应如何恢复？",
+      "original": "analyze/hybrid",
+      "included": false,
+      "acceptable": [],
+      "rules": [
+        "E1"
+      ]
+    },
+    {
+      "case_id": "collaboration-knowledge-retry",
+      "split": "development",
+      "question": "知识检索暂时失败后应如何保留已验证的华东数据？",
+      "original": "analyze/hybrid",
+      "included": false,
+      "acceptable": [],
+      "rules": [
+        "E1"
+      ]
+    },
+    {
+      "case_id": "collaboration-reviewer-retry",
+      "split": "development",
+      "question": "审核节点暂时失败后应如何重新生成报告？",
+      "original": "analyze/hybrid",
+      "included": false,
+      "acceptable": [],
+      "rules": [
+        "E1"
+      ]
+    },
+    {
+      "case_id": "collaboration-plan-revision",
+      "split": "development",
+      "question": "当不存在的区域查询无结果时，如何要求澄清而不是编造原因？",
+      "original": "analyze/data_only",
+      "included": false,
+      "acceptable": [],
+      "rules": [
+        "E1"
+      ]
+    },
+    {
+      "case_id": "collaboration-heldout-dependency-invalidation",
+      "split": "heldout",
+      "question": "华东数据结果更新后，哪些下游结论必须重新审核？",
+      "original": "analyze/hybrid",
+      "included": false,
+      "acceptable": [],
+      "rules": [
+        "E1"
+      ]
+    },
+    {
+      "case_id": "hybrid-unknown-sku-comparison-cause",
+      "split": "development",
+      "question": "产品 SKU-UNKNOWN-2024 在2024年3月相较2024年2月销售额下降的业务原因是什么？若经营数据或资料无记录，请明确说明证据不足。",
+      "original": "analyze/hybrid",
+      "included": true,
+      "acceptable": [
+        "analyze/hybrid"
+      ],
+      "rules": [
+        "R1",
+        "R2"
+      ]
+    },
+    {
+      "case_id": "hybrid-east-delivered-revenue-causality-boundary",
+      "split": "development",
+      "question": "请给出华东区2025年8月状态为 delivered 的订单销售额；并根据资料说明 CUST-0001 合同到期与暂停采购的关系，且明确这些资料是否足以证明其是华东全部销售表现的唯一原因。",
+      "original": "analyze/hybrid",
+      "included": true,
+      "acceptable": [
+        "analyze/hybrid"
+      ],
+      "rules": [
+        "R1",
+        "R2"
+      ]
+    },
+    {
+      "case_id": "knowledge-quality-batch-prefixed-evidence",
+      "split": "development",
+      "question": "请列出资料支持SUP-003传感器批次异常的依据。",
+      "original": "analyze/knowledge_only",
+      "included": true,
+      "acceptable": [
+        "analyze/knowledge_only"
+      ],
+      "rules": [
+        "R1",
+        "R2"
+      ]
+    },
+    {
+      "case_id": "knowledge-empty-supplier-certification-evidence",
+      "split": "development",
+      "question": "请列出资料支持SUP-003传感器批次已完成质量认证的依据。",
+      "original": "analyze/knowledge_only",
+      "included": true,
+      "acceptable": [
+        "analyze/knowledge_only"
+      ],
+      "rules": [
+        "R1",
+        "R2"
+      ]
+    },
+    {
+      "case_id": "sales-decline-east-empty-region",
+      "split": "development",
+      "question": "2025年8月不存在的测试区域销售为什么下降？",
+      "original": "analyze/data_only",
+      "included": true,
+      "acceptable": [
+        "analyze/data_only"
+      ],
+      "rules": [
+        "R1",
+        "R2"
+      ]
+    },
+    {
+      "case_id": "sales-decline-east-null-metric",
+      "split": "development",
+      "question": "华东区2025年8月销售额为空时，是否能判断销售下降原因？",
+      "original": "analyze/hybrid",
+      "included": true,
+      "acceptable": [
+        "analyze/hybrid",
+        "analyze/data_only"
+      ],
+      "rules": [
+        "A3"
+      ]
+    },
+    {
+      "case_id": "sales-decline-east-zero-comparison",
+      "split": "development",
+      "question": "若华东区对比期销售额为0，如何解释2025年8月变化？",
+      "original": "analyze/data_only",
+      "included": true,
+      "acceptable": [
+        "analyze/data_only",
+        "analyze/hybrid"
+      ],
+      "rules": [
+        "A3"
+      ]
+    },
+    {
+      "case_id": "sales-decline-east-heldout-paraphrase",
+      "split": "heldout",
+      "question": "请分析华东在2025年8月相对上月的营收下滑，并给出可验证的后续动作。",
+      "original": "analyze/hybrid",
+      "included": true,
+      "acceptable": [
+        "analyze/hybrid"
+      ],
+      "rules": [
+        "R1",
+        "R2"
+      ]
+    }
+  ]
+}

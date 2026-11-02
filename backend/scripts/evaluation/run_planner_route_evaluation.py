@@ -113,6 +113,26 @@ def score(results: list[dict]) -> dict:
     }
 
 
+def score_with_routing_labels(results: list[dict], label_doc: dict) -> dict:
+    """Score against a routing-specific label set; excluded cases are not counted."""
+    labels = {case["case_id"]: case for case in label_doc["cases"]}
+    missing = [r["case_id"] for r in results if r["case_id"] not in labels]
+    if missing:
+        raise ValueError(f"routing labels missing for {missing}")
+    included = [r for r in results if labels[r["case_id"]]["included"]]
+    rows = [
+        {**r, "correct": r["actual"] in labels[r["case_id"]]["acceptable"]}
+        for r in included
+    ]
+    return {
+        "label_version": label_doc["version"],
+        "label_status": label_doc["status"],
+        "excluded": len(results) - len(included),
+        **score(rows),
+        "still_wrong": [r["case_id"] for r in rows if not r["correct"]],
+    }
+
+
 def evaluate(gateway: ModelGateway, cases: list[dict]) -> list[dict]:
     from app.modules.analysis.planner.planning import PlanningService
 
@@ -147,6 +167,9 @@ def main() -> None:
     parser.add_argument("--cassette-dir", type=Path, required=True)
     parser.add_argument("--max-calls", type=int, default=80)
     parser.add_argument("--max-cost", type=Decimal, default=Decimal("0.08"))
+    parser.add_argument(
+        "--labels", type=Path, help="optional routing-specific label set"
+    )
     args = parser.parse_args()
 
     guard: BudgetGuardGateway | None = None
@@ -180,6 +203,9 @@ def main() -> None:
         **score(results),
         "results": results,
     }
+    if args.labels is not None and results:
+        label_doc = json.loads(args.labels.read_text(encoding="utf-8"))
+        report["routing_labels"] = score_with_routing_labels(results, label_doc)
     print(json.dumps(report, ensure_ascii=False, indent=2))
 
 

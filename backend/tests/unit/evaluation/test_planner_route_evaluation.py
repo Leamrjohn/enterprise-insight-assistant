@@ -44,3 +44,49 @@ def test_route_cases_have_unique_questions_and_known_labels() -> None:
     cases = load_route_cases()
     assert len(cases) == len({c["question"] for c in cases})
     assert {c["expected"][0] for c in cases} <= {"analyze", "needs_clarification"}
+
+
+def test_routing_labels_accept_listed_alternatives_and_skip_excluded() -> None:
+    from scripts.evaluation.run_planner_route_evaluation import (
+        score_with_routing_labels,
+    )
+
+    results = [
+        {"case_id": "a", "split": "development", "expected": "x", "actual": "alt"},
+        {"case_id": "b", "split": "development", "expected": "y", "actual": "wrong"},
+        {"case_id": "c", "split": "heldout", "expected": "z", "actual": "other"},
+    ]
+    labels = {
+        "version": "v-test",
+        "status": "pending_user_review",
+        "cases": [
+            {"case_id": "a", "included": True, "acceptable": ["x", "alt"]},
+            {"case_id": "b", "included": True, "acceptable": ["y"]},
+            {"case_id": "c", "included": False, "acceptable": []},
+        ],
+    }
+
+    scored = score_with_routing_labels(results, labels)
+
+    assert scored["excluded"] == 1
+    assert scored["accuracy"] == 0.5
+    assert scored["still_wrong"] == ["b"]
+
+
+def test_routing_label_file_keeps_original_label_first_and_cites_rules() -> None:
+    import json
+    from pathlib import Path
+
+    from scripts.evaluation.run_planner_route_evaluation import load_route_cases
+
+    doc = json.loads(
+        Path("tests/fixtures/evaluation_routing/planner_routes_v1.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    by_id = {c["case_id"]: c for c in doc["cases"]}
+    assert set(by_id) == {c["case_id"] for c in load_route_cases()}
+    for case in doc["cases"]:
+        assert case["rules"] and set(case["rules"]) <= set(doc["rubric"])
+        if case["included"]:
+            assert case["acceptable"][0] == case["original"]
