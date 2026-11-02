@@ -11,7 +11,7 @@ from app.modules.knowledge.rag.embeddings_local import (
 )
 from app.modules.knowledge.rag.engine import build_prompt, check_sufficiency
 from app.modules.knowledge.rag.policy import (
-    BASELINE_RETRIEVAL_POLICY,
+    HYBRID_RETRIEVAL_POLICY,
     RetrievalPolicy,
 )
 from app.modules.knowledge.rag.reranker import (
@@ -35,7 +35,7 @@ class RAGTool(Tool):
     def __init__(
         self,
         reranker: Reranker | None = None,
-        retrieval_policy: RetrievalPolicy = BASELINE_RETRIEVAL_POLICY,
+        retrieval_policy: RetrievalPolicy = HYBRID_RETRIEVAL_POLICY,
     ) -> None:
         self._reranker = reranker
         self._retrieval_policy = retrieval_policy
@@ -108,6 +108,7 @@ class RAGTool(Tool):
                     document_ids=document_ids,
                     chunk_strategies=self._retrieval_policy.chunk_strategies,
                     validity=validity,
+                    keyword_tokenizer=self._retrieval_policy.keyword_tokenizer,
                 )
             except Exception:
                 record_model_call(

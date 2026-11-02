@@ -11,6 +11,7 @@ from sqlalchemy import (
     UniqueConstraint,
     func,
 )
+from sqlalchemy.dialects.postgresql import TSVECTOR
 from sqlalchemy.orm import Mapped, mapped_column
 
 
@@ -53,6 +54,7 @@ class DocumentChunk(Base):
         Integer, nullable=False, default=0, server_default="0"
     )
     embedding: Mapped[list[float] | None] = mapped_column(Vector(384), nullable=True)
+    search_vector: Mapped[str | None] = mapped_column(TSVECTOR, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False
     )

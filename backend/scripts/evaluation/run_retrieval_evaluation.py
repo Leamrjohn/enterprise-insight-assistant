@@ -22,6 +22,7 @@ from app.core.settings import get_settings
 from app.db.session import engine, set_tenant_scope
 from app.modules.documents.chunks import DocumentChunk
 from app.modules.documents.models import Documents
+from app.modules.documents.search_tokens import search_vector_expression
 from app.modules.documents.versioning import register_document_version
 from app.modules.evaluation.retrieval import (
     RankedRetrievalCase,
@@ -37,6 +38,7 @@ from app.modules.knowledge.rag.embeddings_local import (
 from app.modules.knowledge.rag.policy import (
     BASELINE_RETRIEVAL_POLICY,
     DUAL_CHUNK_RETRIEVAL_POLICY,
+    HYBRID_RETRIEVAL_POLICY,
     RetrievalPolicy,
 )
 from app.modules.knowledge.rag.reranker import (
@@ -54,6 +56,7 @@ from app.utils.document_chunk import (
     SLIDING_WINDOW_CHUNK_STRATEGY,
     chunk_text_for_strategy,
 )
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 BACKEND_ROOT = Path(__file__).resolve().parents[2]
@@ -73,6 +76,25 @@ POLICIES = (
         rerank_enabled=False,
     ),
     DUAL_CHUNK_RETRIEVAL_POLICY,
+    RetrievalPolicy(
+        policy_id="paragraph_jieba_rrf_no_rerank_v1",
+        chunk_strategies=(PARAGRAPH_CHUNK_STRATEGY,),
+        rerank_enabled=False,
+        keyword_tokenizer="jieba",
+    ),
+    RetrievalPolicy(
+        policy_id="paragraph_bigram_rrf_no_rerank_v1",
+        chunk_strategies=(PARAGRAPH_CHUNK_STRATEGY,),
+        rerank_enabled=False,
+        keyword_tokenizer="bigram",
+    ),
+    RetrievalPolicy(
+        policy_id="paragraph_bigram_rrf_rerank_v1",
+        chunk_strategies=(PARAGRAPH_CHUNK_STRATEGY,),
+        rerank_enabled=True,
+        keyword_tokenizer="bigram",
+    ),
+    HYBRID_RETRIEVAL_POLICY,
 )
 
 
@@ -190,6 +212,22 @@ def _index_corpus(
     return document_ids
 
 
+def _index_keywords(db: Session, company_id: int, tokenizer: str) -> None:
+    """Rebuild the keyword index with this policy's tokenizer."""
+    chunks = db.execute(
+        select(DocumentChunk.id, DocumentChunk.content).where(
+            DocumentChunk.company_id == company_id
+        )
+    ).all()
+    for chunk_id, content in chunks:
+        db.execute(
+            update(DocumentChunk)
+            .where(DocumentChunk.id == chunk_id)
+            .values(search_vector=search_vector_expression(content, tokenizer))
+        )
+    db.flush()
+
+
 def _evaluate_policy(
     db: Session,
     *,
@@ -204,6 +242,8 @@ def _evaluate_policy(
 ) -> dict:
     started = perf_counter()
     print(f"evaluating {policy.policy_id}", file=sys.stderr, flush=True)
+    if policy.keyword_tokenizer:
+        _index_keywords(db, company_id, policy.keyword_tokenizer)
     candidates: list[RankedRetrievalCase] = []
     finals: list[RankedRetrievalCase] = []
     answers: list[dict] = []
@@ -219,6 +259,7 @@ def _evaluate_policy(
             chunk_strategies=policy.chunk_strategies,
             # The same code path as production, not the fixture's label.
             validity=resolve_validity_window(question, business_today()),
+            keyword_tokenizer=policy.keyword_tokenizer,
         )
         if policy.rerank_enabled:
             final = rerank_evidences(question, evidences, reranker, top_k=final_k)

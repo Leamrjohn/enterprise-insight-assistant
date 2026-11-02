@@ -1,4 +1,5 @@
 from app.modules.documents.chunks import DocumentChunk
+from app.modules.documents.search_tokens import search_vector_expression
 from sqlalchemy.orm import Session
 
 
@@ -24,6 +25,7 @@ def add_chunk(
         content=content,
         token_count=token_count,
         embedding=embedding,
+        search_vector=search_vector_expression(content),
         page_number=page_number,
         paragraph_start=paragraph_start,
         paragraph_end=paragraph_end,

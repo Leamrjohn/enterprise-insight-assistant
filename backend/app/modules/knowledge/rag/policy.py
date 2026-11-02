@@ -13,6 +13,7 @@ class RetrievalPolicy:
     policy_id: str
     chunk_strategies: tuple[str, ...]
     rerank_enabled: bool
+    keyword_tokenizer: str | None = None  # None turns keyword recall off
 
     def __post_init__(self) -> None:
         if not self.policy_id or not self.chunk_strategies:
@@ -25,6 +26,13 @@ BASELINE_RETRIEVAL_POLICY = RetrievalPolicy(
     policy_id="paragraph_vector_rerank_v1",
     chunk_strategies=(PARAGRAPH_CHUNK_STRATEGY,),
     rerank_enabled=True,
+)
+
+HYBRID_RETRIEVAL_POLICY = RetrievalPolicy(
+    policy_id="paragraph_jieba_rrf_rerank_v1",
+    chunk_strategies=(PARAGRAPH_CHUNK_STRATEGY,),
+    rerank_enabled=True,
+    keyword_tokenizer="jieba",
 )
 
 DUAL_CHUNK_RETRIEVAL_POLICY = RetrievalPolicy(
