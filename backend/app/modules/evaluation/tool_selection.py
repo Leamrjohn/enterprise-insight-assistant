@@ -10,6 +10,8 @@ ROUTE_TOOLS = {
     "analyze/hybrid": frozenset({"sql_query", "rag_search"}),
     "needs_clarification/None": frozenset(),
     "direct_response/None": frozenset(),
+    "refuse/None": frozenset(),
+    "scope_exit/None": frozenset(),
 }
 
 

@@ -16,6 +16,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from app.db.session import engine, set_tenant_scope
+from app.main import app  # noqa: F401 - registers every model for the mapper
 from app.modules.evaluation.memory_selection import (
     score_memory_case,
     summarize_memory_cases,
