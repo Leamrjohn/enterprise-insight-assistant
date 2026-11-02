@@ -336,3 +336,8 @@
 - 3.2 新增 test_reliability_invariants.py：运行中取消后迟到写入被拒（H5，直接通过）；4 个 Worker 真实并发认领只产生 1 个执行（首跑失败）。
 - 并发用例暴露 append_workflow_event 序号“取最大值+1”竞态：多个被拒投递同时写 execution_claim_rejected 触发唯一约束，落败 Worker 抛异常而非返回已认领；改为保存点内冲突重试（不锁执行行，避免阻塞心跳）。
 - 验证：去掉修复 3/3 失败、加上修复 3/3 通过；单元/脚本 919 passed、集成 92 passed；未部署。
+
+## 2026-11-01 — 3.3 重试分类与退避抖动
+- 发现：重试间隔固定 2/4/8 秒无抖动（多任务同时被限流会同时重试）；所有 OSError 都算可重试，PermissionError/FileNotFoundError 等永久错误会被白白重试 3 次。
+- 新增 _retry_countdown（指数退避 × [0.5,1.5] 抖动）替换两处固定 countdown；_PERMANENT_OS_ERRORS 排除四类永久系统错误；新增 test_retry_policy.py 12 项（修改前导入失败）。
+- 验证：单元/脚本 931 passed/4 skipped、集成 92 passed；未部署，未做真实限流演练（属 3.5）。

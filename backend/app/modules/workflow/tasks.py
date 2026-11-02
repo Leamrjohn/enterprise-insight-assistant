@@ -2,6 +2,7 @@
 
 import errno
 import logging
+import random as _random
 import re
 from contextlib import contextmanager
 from threading import Event, Thread
@@ -166,13 +167,31 @@ class RetryableAnalysisTaskError(Exception):
     """A dependency failed transiently and the whole analysis can be retried."""
 
 
+# OS errors that repeat identically on retry: retrying only delays the failure.
+_PERMANENT_OS_ERRORS = (
+    PermissionError,
+    FileNotFoundError,
+    IsADirectoryError,
+    NotADirectoryError,
+)
+
+
 def _is_retryable_exception(exc: Exception) -> bool:
+    if isinstance(exc, _PERMANENT_OS_ERRORS):
+        return False
     if isinstance(exc, OSError) and exc.errno == errno.ENOSPC:
         return False
     return isinstance(
         exc,
         (ConnectionError, TimeoutError, OSError, RetryableModelError),
     )
+
+
+def _retry_countdown(retries: int, *, random=None) -> float:
+    """Exponential backoff with jitter in [0.5x, 1.5x] so failures do not retry in lockstep."""
+    base = 2 ** (retries + 1)
+    fraction = (random or _random.random)()
+    return base * (0.5 + fraction)
 
 
 def _duration_ms(db, record: AnalysisTask) -> int | None:
@@ -731,7 +750,7 @@ def process_analysis_task(self, task_id: int):
             content=RETRYING_WORKER_MESSAGE,
         )
         db.commit()
-        raise self.retry(exc=exc, countdown=2 ** (self.request.retries + 1))
+        raise self.retry(exc=exc, countdown=_retry_countdown(self.request.retries))
     except ModelBudgetExceeded as exc:
         db.rollback()
         db.expire_all()
@@ -796,7 +815,7 @@ def process_analysis_task(self, task_id: int):
                 )
                 db.commit()
                 raise self.retry(
-                    exc=retry_error, countdown=2 ** (self.request.retries + 1)
+                    exc=retry_error, countdown=_retry_countdown(self.request.retries)
                 )
 
         db.rollback()
