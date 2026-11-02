@@ -1,11 +1,18 @@
+from datetime import date
+
 from app.core.exceptions import EmbeddingError, VectorSearchError
 from app.modules.documents.chunks import DocumentChunk
 from app.modules.documents.vector_repository import search_similar_chunks
 from app.modules.knowledge.rag.embeddings import EmbeddingProvider
 from app.modules.knowledge.rag.engine import EvidenceRef
+from app.modules.knowledge.rag.validity import ValidityWindow
 from app.utils.document_chunk import SUPPORTED_CHUNK_STRATEGIES
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+
+
+def _iso(value: date | None) -> str | None:
+    return value.isoformat() if value is not None else None
 
 
 def retrieve_evidence(
@@ -18,6 +25,7 @@ def retrieve_evidence(
     min_score: float = 0.3,
     document_ids: list[int] | None = None,
     chunk_strategies: tuple[str, ...] = ("paragraph_v1",),
+    validity: ValidityWindow | None = None,
 ) -> list[EvidenceRef]:
     """为指定公司内已冻结的文档范围检索证据。"""
     if not question.strip():
@@ -69,6 +77,7 @@ def retrieve_evidence(
                 min_score=min_score,
                 document_ids=document_ids,
                 chunk_strategy=strategy,
+                valid_between=(validity.start, validity.end) if validity else None,
             )
         ]
     except Exception as exc:
@@ -86,6 +95,9 @@ def retrieve_evidence(
             paragraph_end=row.get("paragraph_end"),
             chunk_strategy=row["chunk_strategy"],
             retrieval_strategies=(row["chunk_strategy"],),
+            effective_from=_iso(row.get("effective_from")),
+            effective_to=_iso(row.get("effective_to")),
+            applies_to=row.get("applies_to"),
         )
         for row in results
     ]

@@ -76,6 +76,19 @@ def test_mcp_evidence_read_preserves_the_local_tool_result() -> None:
     ]
 
 
+def test_mcp_evidence_read_forwards_the_validity_window() -> None:
+    reader = _Reader(ToolOutput(success=True, data={"status": "ready"}))
+    tool_input = _input()
+    tool_input.parameters["validity_window"] = ["2024-06-01", "2024-06-30"]
+
+    McpEvidenceReadTool(create_evidence_mcp_server(reader)).execute(tool_input)
+
+    assert reader.inputs[0].parameters["validity_window"] == [
+        "2024-06-01",
+        "2024-06-30",
+    ]
+
+
 def test_mcp_evidence_read_normalizes_reader_failure() -> None:
     reader = _Reader(
         ToolOutput(success=False, error="internal detail", error_code="reader_failed")
@@ -112,6 +125,7 @@ def test_mcp_evidence_read_rejects_malformed_server_result() -> None:
         question: str,
         runtime_database_timeout_ms: int = 10_000,
         runtime_request_context: dict | None = None,
+        validity_window: list[str] | None = None,
     ) -> str:
         del (
             company_id,
@@ -138,6 +152,7 @@ def test_mcp_evidence_read_rejects_resource_link_result() -> None:
         question: str,
         runtime_database_timeout_ms: int = 10_000,
         runtime_request_context: dict | None = None,
+        validity_window: list[str] | None = None,
     ) -> CallToolResult:
         del (
             company_id,
@@ -171,6 +186,7 @@ def test_mcp_evidence_read_rejects_input_required_extension() -> None:
         question: str,
         runtime_database_timeout_ms: int = 10_000,
         runtime_request_context: dict | None = None,
+        validity_window: list[str] | None = None,
     ) -> CallToolResult:
         del (
             company_id,
@@ -221,6 +237,7 @@ def test_mcp_evidence_read_rejects_context_receipt_mismatch() -> None:
         question: str,
         runtime_database_timeout_ms: int = 10_000,
         runtime_request_context: dict | None = None,
+        validity_window: list[str] | None = None,
     ) -> dict:
         del (
             company_id,

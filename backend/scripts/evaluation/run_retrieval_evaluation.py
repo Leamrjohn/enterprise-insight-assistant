@@ -14,6 +14,7 @@ import argparse
 import hashlib
 import json
 import sys
+from datetime import date
 from pathlib import Path
 from time import perf_counter
 
@@ -21,6 +22,7 @@ from app.core.settings import get_settings
 from app.db.session import engine, set_tenant_scope
 from app.modules.documents.chunks import DocumentChunk
 from app.modules.documents.models import Documents
+from app.modules.documents.versioning import register_document_version
 from app.modules.evaluation.retrieval import (
     RankedRetrievalCase,
     answer_hit_rates,
@@ -42,6 +44,10 @@ from app.modules.knowledge.rag.reranker import (
     rerank_evidences,
 )
 from app.modules.knowledge.rag.retrieval import retrieve_evidence
+from app.modules.knowledge.rag.validity import (
+    business_today,
+    resolve_validity_window,
+)
 from app.modules.organizations.models import Company
 from app.utils.document_chunk import (
     PARAGRAPH_CHUNK_STRATEGY,
@@ -105,7 +111,12 @@ def load_gold_questions(path: Path = GOLD_FIXTURE) -> list[dict]:
 
 
 def _index_corpus(
-    db: Session, *, company_id: int, user_id: int, trap_documents: list[dict]
+    db: Session,
+    *,
+    company_id: int,
+    user_id: int,
+    trap_documents: list[dict],
+    register_versions: bool = True,
 ) -> dict[str, int]:
     manifest = json.loads((CORPUS_ROOT / "manifest.json").read_text(encoding="utf-8"))
     sources = [
@@ -117,6 +128,7 @@ def _index_corpus(
     ]
     # Trap documents exist only in this rolled-back transaction.
     sources += [(f"trap:{doc['key']}", doc["content"]) for doc in trap_documents]
+    trap_by_path = {f"trap:{doc['key']}": doc for doc in trap_documents}
     document_ids: dict[str, int] = {}
     texts: list[str] = []
     metadata: list[tuple[int, str, int, str, int, int]] = []
@@ -135,6 +147,15 @@ def _index_corpus(
         db.add(document)
         db.flush()
         document_ids[relative_path] = document.id
+        if register_versions and relative_path in trap_by_path:
+            trap = trap_by_path[relative_path]
+            register_document_version(
+                db,
+                document=document,
+                version_group=trap["group"],
+                version_number=trap["version"],
+                effective_from=date.fromisoformat(trap["effective_from"]),
+            )
         for strategy in (PARAGRAPH_CHUNK_STRATEGY, SLIDING_WINDOW_CHUNK_STRATEGY):
             for index, chunk in enumerate(chunk_text_for_strategy(content, strategy)):
                 texts.append(chunk.content)
@@ -196,6 +217,8 @@ def _evaluate_policy(
             top_k=CANDIDATE_K,
             min_score=-1.0,
             chunk_strategies=policy.chunk_strategies,
+            # The same code path as production, not the fixture's label.
+            validity=resolve_validity_window(question, business_today()),
         )
         if policy.rerank_enabled:
             final = rerank_evidences(question, evidences, reranker, top_k=final_k)
@@ -260,7 +283,17 @@ def _evaluate_policy(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.parse_args()
+    parser.add_argument(
+        "--policies",
+        nargs="*",
+        help="policy ids to run; default all",
+    )
+    args = parser.parse_args()
+    selected = [
+        policy
+        for policy in POLICIES
+        if not args.policies or policy.policy_id in args.policies
+    ]
     if engine.url.database != EXPECTED_DATABASE:
         sys.exit(f"refusing to run outside {EXPECTED_DATABASE}")
     settings = get_settings()
@@ -313,7 +346,7 @@ def main() -> None:
                     reranker=reranker,
                     final_k=settings.rag_rerank_top_k,
                 )
-                for policy in POLICIES
+                for policy in selected
             ],
         }
     finally:

@@ -22,6 +22,9 @@ class EvidenceRef:
     paragraph_end: int | None = None
     chunk_strategy: str | None = None
     retrieval_strategies: tuple[str, ...] = ()
+    effective_from: str | None = None
+    effective_to: str | None = None
+    applies_to: str | None = None
 
 
 @dataclass
@@ -32,6 +35,17 @@ class RAGResult:
     evidence_used: list[EvidenceRef]
     is_sufficient: bool
     rejection_reason: str | None = None
+
+
+def _validity_attributes(evidence: EvidenceRef) -> str:
+    """Registered validity for the model; absent when nothing was registered."""
+    attributes = ""
+    if evidence.effective_from is not None:
+        attributes += f' valid_from="{evidence.effective_from}"'
+        attributes += f' valid_to="{evidence.effective_to or "至今"}"'
+    if evidence.applies_to:
+        attributes += f' applies_to="{evidence.applies_to}"'
+    return attributes
 
 
 def build_prompt(
@@ -70,7 +84,8 @@ def build_prompt(
             f'document="{evidence.document_name or "unknown"}" '
             f'type="{evidence.document_type or "unknown"}" '
             f'page="{evidence.page_number or "unknown"}" '
-            f'paragraphs="{evidence.paragraph_start or "unknown"}-{evidence.paragraph_end or "unknown"}">\n'
+            f'paragraphs="{evidence.paragraph_start or "unknown"}-{evidence.paragraph_end or "unknown"}"'
+            f"{_validity_attributes(evidence)}>\n"
             f"{evidence.content}\n</evidence>"
         )
         for evidence in selected

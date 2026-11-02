@@ -20,6 +20,7 @@ from app.modules.knowledge.rag.reranker import (
     rerank_evidences,
 )
 from app.modules.knowledge.rag.retrieval import retrieve_evidence
+from app.modules.knowledge.rag.validity import ValidityWindow, business_today
 from app.modules.runtime.model_governance import (
     record_model_call,
     reserve_local_resource_call,
@@ -53,6 +54,20 @@ class RAGTool(Tool):
         document_ids = input.parameters.get("document_ids")
         if not question or not company_id:
             return ToolOutput(success=False, error="缺少参数")
+        raw_window = input.parameters.get("validity_window")
+        try:
+            # Without an explicit window only documents valid today are eligible.
+            validity = (
+                ValidityWindow.from_parameter(raw_window)
+                if raw_window is not None
+                else ValidityWindow(business_today(), business_today())
+            )
+        except (TypeError, ValueError):
+            return ToolOutput(
+                success=False,
+                error="检索有效期范围不合法。",
+                error_code="rag_validity_window_invalid",
+            )
         database_timeout_ms = input.parameters.get(
             "_runtime_database_timeout_ms", DEFAULT_DATABASE_TIMEOUT_MS
         )
@@ -92,6 +107,7 @@ class RAGTool(Tool):
                     min_score=settings.rag_retrieval_min_score,
                     document_ids=document_ids,
                     chunk_strategies=self._retrieval_policy.chunk_strategies,
+                    validity=validity,
                 )
             except Exception:
                 record_model_call(
@@ -195,6 +211,9 @@ class RAGTool(Tool):
                             "rerank_score": evidence.rerank_score,
                             "chunk_strategy": evidence.chunk_strategy,
                             "retrieval_strategies": list(evidence.retrieval_strategies),
+                            "effective_from": evidence.effective_from,
+                            "effective_to": evidence.effective_to,
+                            "applies_to": evidence.applies_to,
                         }
                         for evidence in evidences
                     ],

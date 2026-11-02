@@ -343,7 +343,10 @@ def test_knowledge_agent_retries_the_same_question_and_scope_without_feedback_in
         )
     )
 
-    assert rag_tool.inputs[0].parameters == {
+    parameters = dict(rag_tool.inputs[0].parameters)
+    # The only addition is the document validity window computed by code.
+    assert len(parameters.pop("validity_window")) == 2
+    assert parameters == {
         "question": "销售为什么下降？",
         "company_id": 3,
         "document_ids": [5],

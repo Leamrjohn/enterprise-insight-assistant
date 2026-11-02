@@ -47,6 +47,7 @@ _MCP_INPUT_FIELDS = frozenset(
         "question",
         "runtime_database_timeout_ms",
         "runtime_request_context",
+        "validity_window",
     }
 )
 _MCP_REQUIRED_INPUT_FIELDS = frozenset({"company_id", "document_ids", "question"})
@@ -161,6 +162,7 @@ def create_evidence_mcp_server(reader: Tool) -> MCPServer:
         question: str,
         runtime_database_timeout_ms: int = 10_000,
         runtime_request_context: dict[str, Any] | None = None,
+        validity_window: list[str] | None = None,
     ) -> dict[str, Any]:
         if not _is_valid_runtime_context(
             runtime_request_context,
@@ -174,6 +176,11 @@ def create_evidence_mcp_server(reader: Tool) -> MCPServer:
                     "company_id": company_id,
                     "document_ids": document_ids,
                     "question": question,
+                    **(
+                        {"validity_window": validity_window}
+                        if validity_window is not None
+                        else {}
+                    ),
                     "_runtime_database_timeout_ms": runtime_database_timeout_ms,
                 }
             )
@@ -266,6 +273,7 @@ class McpEvidenceReadTool(Tool):
                     "company_id": company_id,
                     "document_ids": document_ids,
                     "question": parameters["question"],
+                    "validity_window": parameters.get("validity_window"),
                     "runtime_database_timeout_ms": parameters.get(
                         "_runtime_database_timeout_ms", 10_000
                     ),

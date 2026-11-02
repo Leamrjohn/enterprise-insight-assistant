@@ -6,6 +6,10 @@ from app.core.gateway.factory import get_model_gateway
 from app.modules.analysis.agent_protocol import Agent, AgentInput, AgentOutput
 from app.modules.analysis.tool_protocol import Tool, ToolInput
 from app.modules.knowledge.rag.result_parser import parse_analysis_result
+from app.modules.knowledge.rag.validity import (
+    business_today,
+    resolve_validity_window,
+)
 from app.modules.knowledge.schemas import RetrievalBrief
 from app.modules.knowledge.tool import RAGTool
 
@@ -59,7 +63,14 @@ class KnowledgeAgent(Agent):
                 and fact["statement"].strip()
             ],
         )
-        parameters = {"question": brief.render_query()}
+        parameters = {
+            "question": brief.render_query(),
+            # From the user's question only: dates in confirmed facts describe
+            # the data, not which rules apply.
+            "validity_window": resolve_validity_window(
+                input.question, business_today()
+            ).to_parameter(),
+        }
         company_id = input.context.get("company_id")
         if company_id is not None:
             parameters["company_id"] = company_id

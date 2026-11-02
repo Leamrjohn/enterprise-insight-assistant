@@ -5,6 +5,7 @@
 """
 
 import re
+from datetime import date
 
 from app.modules.documents.chunks import DocumentChunk
 from sqlalchemy import text
@@ -32,6 +33,7 @@ def search_similar_chunks(
     min_score: float = 0.5,
     document_ids: list[int] | None = None,
     chunk_strategy: str = "paragraph_v1",
+    valid_between: tuple[date, date] | None = None,
 ) -> list[dict]:
     """搜索与给定向量最相似的文档分块
 
@@ -41,6 +43,7 @@ def search_similar_chunks(
         company_id: 公司 ID（用于租户过滤）
         top_k: 返回前几条结果
         min_score: 最低相似度阈值
+        valid_between: 只保留在这段时间内有效的文档；未登记有效期的文档不过滤
 
     返回：
         [{chunk_id, document_id, content, page_number, score}, ...]
@@ -49,6 +52,12 @@ def search_similar_chunks(
 
     scope_filter = (
         "AND dc.document_id = ANY(:document_ids)" if document_ids is not None else ""
+    )
+    validity_filter = (
+        """AND (d.effective_from IS NULL OR d.effective_from <= :valid_end)
+            AND (d.effective_to IS NULL OR d.effective_to >= :valid_start)"""
+        if valid_between is not None
+        else ""
     )
     candidate_limit = min(max(top_k * 5, top_k), 50)
     sql = text(f"""
@@ -62,6 +71,9 @@ def search_similar_chunks(
             dc.chunk_strategy,
             d.name AS document_name,
             d.file_type AS document_type,
+            d.effective_from,
+            d.effective_to,
+            d.applies_to,
             1 - (dc.embedding <=> :embedding) AS score
         FROM document_chunks dc
         JOIN documents d ON d.id = dc.document_id
@@ -71,6 +83,7 @@ def search_similar_chunks(
             AND dc.chunk_strategy = :chunk_strategy
             AND 1 - (dc.embedding <=> :embedding) > :min_score
             {scope_filter}
+            {validity_filter}
         ORDER BY dc.embedding <=> :embedding
         LIMIT :candidate_limit
     """)
@@ -84,6 +97,8 @@ def search_similar_chunks(
             "candidate_limit": candidate_limit,
             "document_ids": document_ids,
             "chunk_strategy": chunk_strategy,
+            "valid_start": valid_between[0] if valid_between else None,
+            "valid_end": valid_between[1] if valid_between else None,
         },
     ).fetchall()
 
@@ -98,6 +113,9 @@ def search_similar_chunks(
             "chunk_strategy": row.chunk_strategy,
             "document_name": row.document_name,
             "document_type": row.document_type,
+            "effective_from": row.effective_from,
+            "effective_to": row.effective_to,
+            "applies_to": row.applies_to,
             "score": round(float(row.score), 4),
         }
         for row in rows
