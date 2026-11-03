@@ -181,14 +181,9 @@ class DataAgent(Agent):
                         ],
                     )
                 if isinstance(intent, dict):
-                    required = {
-                        _concept_key(item) for item in data_required_capabilities
-                    }
-                    declared = {
-                        _concept_key(item)
-                        for item in candidate.query_contract.required_concepts
-                    }
-                    missing = sorted(required - declared)
+                    missing, unexpected = self._contract_gaps(
+                        data_required_capabilities, candidate.query_contract
+                    )
                     if missing:
                         return AgentOutput(
                             success=False,
@@ -204,7 +199,6 @@ class DataAgent(Agent):
                                 }
                             ],
                         )
-                    unexpected = sorted(declared - required)
                     if unexpected:
                         return AgentOutput(
                             success=False,
@@ -327,40 +321,16 @@ class DataAgent(Agent):
                     rows=rows,
                     metric_status=metric_assessment.status,
                 )
-                metric_definition = metric_assessment.definition
-                evidence = {
-                    "sql": candidate.sql,
-                    "purpose": candidate.purpose,
-                    "query_contract": (
-                        candidate.query_contract.model_dump()
-                        if candidate.query_contract is not None
-                        else None
-                    ),
-                    "columns": columns,
-                    "rows": _make_json_safe(rows),
-                    "result_assessment": assessment.model_dump(),
-                    "claim_assessment": {
-                        "status": claim_assessment.status,
-                        "reason": claim_assessment.reason,
-                    },
-                    "metric_assessment": {
-                        "status": metric_assessment.status,
-                        "reason": metric_assessment.reason,
-                        "metric_definition_ref": (
-                            metric_definition.reference if metric_definition else None
-                        ),
-                        "unit": metric_definition.unit if metric_definition else None,
-                        "time_column": (
-                            metric_definition.time_column if metric_definition else None
-                        ),
-                        "time_semantics": (
-                            metric_definition.time_semantics
-                            if metric_definition
-                            else None
-                        ),
-                        "lineage_columns": list(metric_assessment.lineage_columns),
-                    },
-                }
+                evidence = self._build_evidence(
+                    sql=candidate.sql,
+                    purpose=candidate.purpose,
+                    contract=candidate.query_contract,
+                    columns=columns,
+                    rows=rows,
+                    assessment=assessment,
+                    claim_assessment=claim_assessment,
+                    metric_assessment=metric_assessment,
+                )
                 if assessment.status != "supported":
                     return AgentOutput(
                         success=False,
@@ -404,6 +374,66 @@ class DataAgent(Agent):
             error_code="data_attempt_budget_exhausted",
         )
 
+    @staticmethod
+    def _data_required_capabilities(intent: object) -> list[str]:
+        if not isinstance(intent, dict):
+            return []
+        return [
+            item
+            for item in intent.get("required_capabilities", [])
+            if isinstance(item, str) and item != "document_evidence"
+        ]
+
+    @staticmethod
+    def _contract_gaps(
+        required_capabilities: list[str], contract: QueryContract
+    ) -> tuple[list[str], list[str]]:
+        """Planned capabilities the contract misses, and ones it adds."""
+        required = {_concept_key(item) for item in required_capabilities}
+        declared = {_concept_key(item) for item in contract.required_concepts}
+        return sorted(required - declared), sorted(declared - required)
+
+    @staticmethod
+    def _build_evidence(
+        *,
+        sql: str,
+        purpose: str,
+        contract: QueryContract | None,
+        columns: list,
+        rows: list,
+        assessment,
+        claim_assessment,
+        metric_assessment,
+    ) -> dict:
+        metric_definition = metric_assessment.definition
+        return {
+            "sql": sql,
+            "purpose": purpose,
+            "query_contract": contract.model_dump() if contract is not None else None,
+            "columns": columns,
+            "rows": _make_json_safe(rows),
+            "result_assessment": assessment.model_dump(),
+            "claim_assessment": {
+                "status": claim_assessment.status,
+                "reason": claim_assessment.reason,
+            },
+            "metric_assessment": {
+                "status": metric_assessment.status,
+                "reason": metric_assessment.reason,
+                "metric_definition_ref": (
+                    metric_definition.reference if metric_definition else None
+                ),
+                "unit": metric_definition.unit if metric_definition else None,
+                "time_column": (
+                    metric_definition.time_column if metric_definition else None
+                ),
+                "time_semantics": (
+                    metric_definition.time_semantics if metric_definition else None
+                ),
+                "lineage_columns": list(metric_assessment.lineage_columns),
+            },
+        }
+
     def _replay_validated_sql(self, feedback: dict) -> AgentOutput:
         """Retry only a SQL statement that previously passed the SQL Tool boundary."""
         sql = feedback["previous_sql"]
@@ -442,34 +472,16 @@ class DataAgent(Agent):
                 rows=rows,
                 metric_status=metric_assessment.status,
             )
-            metric_definition = metric_assessment.definition
-            evidence = {
-                "sql": sql,
-                "purpose": purpose,
-                "query_contract": contract.model_dump() if contract else None,
-                "columns": columns,
-                "rows": _make_json_safe(rows),
-                "result_assessment": assessment.model_dump(),
-                "claim_assessment": {
-                    "status": claim_assessment.status,
-                    "reason": claim_assessment.reason,
-                },
-                "metric_assessment": {
-                    "status": metric_assessment.status,
-                    "reason": metric_assessment.reason,
-                    "metric_definition_ref": (
-                        metric_definition.reference if metric_definition else None
-                    ),
-                    "unit": metric_definition.unit if metric_definition else None,
-                    "time_column": (
-                        metric_definition.time_column if metric_definition else None
-                    ),
-                    "time_semantics": (
-                        metric_definition.time_semantics if metric_definition else None
-                    ),
-                    "lineage_columns": list(metric_assessment.lineage_columns),
-                },
-            }
+            evidence = self._build_evidence(
+                sql=sql,
+                purpose=purpose,
+                contract=contract,
+                columns=columns,
+                rows=rows,
+                assessment=assessment,
+                claim_assessment=claim_assessment,
+                metric_assessment=metric_assessment,
+            )
             if assessment.status == "supported":
                 return AgentOutput(success=True, attempts=attempts, evidence=[evidence])
             return AgentOutput(

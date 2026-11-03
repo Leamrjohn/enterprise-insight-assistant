@@ -38,6 +38,23 @@ _REPAIR_GUIDANCE = {
 }
 
 
+SQL_ALIAS_RULE = (
+    "每个会展示给用户的 SELECT 表达式都必须用中文业务别名，例如 "
+    'COUNT(t.id) AS "订单数量"、SUM(t.amount) AS "销售额"；不要把英文原始字段名作为输出列名。'
+)
+SQL_PURPOSE_RULE = "purpose 也必须是面向业务用户的简短中文说明，不得包含表名、字段名、SQL 或其他技术实现细节。"
+SQL_NO_WRITE_RULE = "禁止多条 SQL、Schema 或数据库前缀，以及任何写入或修改操作。"
+SQL_METRIC_REF_RULE = "metric_definition_ref 必须是与问题口径一致的那个指标；没有一致的指标时不得借用其他指标。"
+SQL_NUMERIC_ASSERTION_RULE = (
+    "只有列在上面的受控指标可以生成可确认事实；业务日期不是时区时间戳。"
+    "numeric_assertion 只用于用户问题已给出数值阈值或等值结论的情形。"
+)
+SQL_DATE_RULE = (
+    "业务时间列是 DATE 类型，按月存储的列存放当月 1 日；比较时写完整日期，"
+    "例如 month = DATE '2025-08-01'，不要写 '2025-08'。"
+)
+
+
 def _required_concepts_instruction(required_concepts: list[str] | None) -> str:
     if not required_concepts:
         return ""
@@ -202,12 +219,9 @@ def _build_snapshot_sql_generation_system_prompt(
                 "不要猜测字段含义。当快照不足以回答问题时，返回一个只查询可用字段的最小 SELECT，"
                 "并在 purpose 中用中文清楚说明缺少什么，绝不伪造结论。"
             ),
-            (
-                "每个会展示给用户的 SELECT 表达式都必须用中文业务别名，例如 "
-                'COUNT(t.id) AS "订单数量"、SUM(t.amount) AS "销售额"；不要把英文原始字段名作为输出列名。'
-            ),
-            "purpose 也必须是面向业务用户的简短中文说明，不得包含表名、字段名、SQL 或其他技术实现细节。",
-            "禁止多条 SQL、Schema 或数据库前缀，以及任何写入或修改操作。",
+            SQL_ALIAS_RULE,
+            SQL_PURPOSE_RULE,
+            SQL_NO_WRITE_RULE,
             "只返回 JSON 对象，不返回 Markdown 或额外文本。",
             (
                 'JSON 格式：{"sql": "...", "purpose": "...", "query_contract": '
@@ -219,15 +233,9 @@ def _build_snapshot_sql_generation_system_prompt(
             "",
             "可验证指标契约：",
             *contract_lines,
-            "metric_definition_ref 必须是与问题口径一致的那个指标；没有一致的指标时不得借用其他指标。",
-            (
-                "只有列在上面的受控指标可以生成可确认事实；业务日期不是时区时间戳。"
-                "numeric_assertion 只用于用户问题已给出数值阈值或等值结论的情形。"
-            ),
-            (
-                "业务时间列是 DATE 类型，按月存储的列存放当月 1 日；比较时写完整日期，"
-                "例如 month = DATE '2025-08-01'，不要写 '2025-08'。"
-            ),
+            SQL_METRIC_REF_RULE,
+            SQL_NUMERIC_ASSERTION_RULE,
+            SQL_DATE_RULE,
             "",
             "当前公司允许的表：",
             *table_lines,

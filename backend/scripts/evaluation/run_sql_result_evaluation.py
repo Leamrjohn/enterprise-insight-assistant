@@ -102,18 +102,39 @@ def cross_check_references(cases: list[dict], *, source, catalog) -> dict:
     }
 
 
-def evaluate_case(case: dict, *, gateway: ModelGateway, source, catalog) -> dict:
+def first_try_passed(attempts: dict) -> bool:
+    """Did the first SQL the model wrote get through every gate?"""
+    loop = attempts.get("tool_loop")
+    if loop is None:
+        return attempts.get("model_attempts") == 1 and attempts.get("sql_attempts") == 1
+    if "switched_to_fixed" in attempts:
+        return False
+    sql_calls = [step for step in loop["trace"] if step["tool"] == "run_sql"]
+    return bool(sql_calls) and sql_calls[0]["outcome"] != "repairable"
+
+
+def evaluate_case(
+    case: dict, *, gateway: ModelGateway, source, catalog, strategy: str = "fixed"
+) -> dict:
     from app.modules.analysis.data.data_agent import DataAgent
     from app.modules.analysis.data.sql_generation import SQLGenerationService
+    from app.modules.analysis.data.tool_agent import ToolCallingDataAgent
     from app.modules.reporting.semantic_review_service import SemanticReviewService
 
-    agent = DataAgent(
-        sql_generator=SQLGenerationService(gateway=gateway, catalog=catalog),
-        data_source=source,
-        snapshot_catalog=catalog,
-        semantic_reviewer=SemanticReviewService(
+    shared = {
+        "sql_generator": SQLGenerationService(gateway=gateway, catalog=catalog),
+        "data_source": source,
+        "snapshot_catalog": catalog,
+        "semantic_reviewer": SemanticReviewService(
             gateway=gateway, sleeper=lambda _seconds: None
         ),
+    }
+    agent = (
+        DataAgent(**shared)
+        if strategy == "fixed"
+        else ToolCallingDataAgent(
+            gateway=gateway, seed_schema=strategy == "tools_seeded", **shared
+        )
     )
     output = agent.run(
         _agent_input(
@@ -154,6 +175,7 @@ def evaluate_case(case: dict, *, gateway: ModelGateway, source, catalog) -> dict
         ),
         "error_code": output.error_code,
         "attempts": output.attempts,
+        "first_try_passed": first_try_passed(output.attempts or {}),
         "sql": evidence.get("sql"),
         "rows": evidence.get("rows"),
     }
@@ -200,6 +222,11 @@ def main() -> None:
     parser.add_argument("--max-calls", type=int, default=80)
     parser.add_argument("--max-cost", type=Decimal, default=Decimal("0.10"))
     parser.add_argument("--report", type=Path)
+    parser.add_argument(
+        "--strategy",
+        choices=("fixed", "tools_seeded", "tools_on_demand"),
+        default="fixed",
+    )
     args = parser.parse_args()
 
     cases = json.loads(FIXTURE.read_text(encoding="utf-8"))["cases"]
@@ -234,7 +261,13 @@ def main() -> None:
     for case in cases:
         try:
             results.append(
-                evaluate_case(case, gateway=gateway, source=source, catalog=catalog)
+                evaluate_case(
+                    case,
+                    gateway=gateway,
+                    source=source,
+                    catalog=catalog,
+                    strategy=args.strategy,
+                )
             )
         except BudgetGuardExceeded as exc:
             stopped = str(exc)
@@ -244,6 +277,13 @@ def main() -> None:
         "stopped_by_budget_guard": stopped,
         "model_calls": guard.calls if guard else 0,
         "estimated_cost_usd": str(guard.estimated_cost) if guard else "0",
+        "strategy": args.strategy,
+        "first_try_passed": sum(r["first_try_passed"] for r in results),
+        "switched_to_fixed": [
+            r["case_id"]
+            for r in results
+            if "switched_to_fixed" in (r["attempts"] or {})
+        ],
         **summarize(results),
         "results": results,
     }

@@ -21,6 +21,8 @@ class ToolOutput:
     error: str | None = None
     error_code: str | None = None
     repairable: bool = False
+    # Reason a model can act on. Set only for its own mistakes, never for outages.
+    model_feedback: str | None = None
 
 
 class Tool(ABC):

@@ -5,7 +5,8 @@ from app.modules.analysis.catalog.snapshot_catalog import SnapshotCatalog
 from app.modules.analysis.data.sql_executor import execute_readonly_sql
 from app.modules.analysis.tool_protocol import Tool, ToolInput, ToolOutput
 from app.modules.organizations.models import BusinessDataSource
-from psycopg.errors import GroupingError, QueryCanceled
+from psycopg import DataError, ProgrammingError
+from psycopg.errors import GroupingError, InsufficientPrivilege, QueryCanceled
 
 ALLOWED_TABLES = set(BUSINESS_TABLES)
 DEFAULT_STATEMENT_TIMEOUT_MS = 10_000
@@ -90,6 +91,24 @@ class SQLTool(Tool):
                 error="经营数据查询暂时无法完成。",
                 error_code="sql_semantic_error",
                 repairable=True,
+            )
+        except InsufficientPrivilege:
+            # A permission problem is not the statement's mistake: nothing to repair.
+            return ToolOutput(
+                success=False,
+                error="经营数据查询暂时无法完成。",
+                error_code="business_db_execution_failed",
+                repairable=False,
+            )
+        except (DataError, ProgrammingError) as error:
+            # The statement itself is wrong (a bad date, an unknown column). The
+            # error code stays as it was; only a model in the loop reads the reason.
+            return ToolOutput(
+                success=False,
+                error="经营数据查询暂时无法完成。",
+                error_code="business_db_execution_failed",
+                repairable=False,
+                model_feedback=error.diag.message_primary or "SQL 执行被数据库拒绝。",
             )
         except Exception:  # noqa: BLE001 - Return a non-repairable failure without driver details.
             return ToolOutput(
