@@ -16,7 +16,7 @@ from hashlib import sha256
 from pathlib import Path
 from typing import Literal
 
-from app.core.gateway.base import ModelGateway
+from app.core.gateway.base import ModelGateway, ToolCall, ToolChatResponse
 
 ReplayMode = Literal["record", "replay"]
 
@@ -68,6 +68,46 @@ class RecordReplayGateway(ModelGateway):
         temporary.write_text(
             json.dumps(
                 {"key": key, "json_mode": json_mode, "response": response},
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        os.replace(temporary, path)
+        return response
+
+    def chat_with_tools(
+        self,
+        messages: list[dict],
+        tools: list[dict],
+        *,
+        tool_choice: str | dict = "auto",
+    ) -> ToolChatResponse:
+        material = json.dumps(
+            [messages, tools, tool_choice], ensure_ascii=False, sort_keys=True
+        )
+        key = "tools-" + sha256(material.encode("utf-8")).hexdigest()
+        path = self._path(key)
+        if self._mode == "replay":
+            if not path.exists():
+                raise ReplayMissError(f"no recording for request {key[:18]}")
+            stored = json.loads(path.read_text(encoding="utf-8"))
+            return ToolChatResponse(
+                text=stored["text"],
+                tool_calls=tuple(ToolCall(**call) for call in stored["tool_calls"]),
+            )
+        assert self._inner is not None
+        response = self._inner.chat_with_tools(messages, tools, tool_choice=tool_choice)
+        temporary = path.with_suffix(".tmp")
+        temporary.write_text(
+            json.dumps(
+                {
+                    "key": key,
+                    "text": response.text,
+                    "tool_calls": [
+                        {"id": c.id, "name": c.name, "arguments": c.arguments}
+                        for c in response.tool_calls
+                    ],
+                },
                 ensure_ascii=False,
             ),
             encoding="utf-8",

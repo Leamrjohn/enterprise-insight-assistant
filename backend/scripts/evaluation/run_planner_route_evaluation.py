@@ -65,6 +65,27 @@ class BudgetGuardGateway(ModelGateway):
         )
         return response
 
+    def chat_with_tools(self, messages, tools, *, tool_choice="auto"):
+        request = json.dumps([messages, tools], ensure_ascii=False)
+        prompt_tokens = self._inner.count_tokens(request)
+        worst_case = self._cost(prompt_tokens, RESERVED_COMPLETION_TOKENS)
+        if self.calls >= self.max_calls:
+            raise BudgetGuardExceeded(f"call ceiling {self.max_calls} reached")
+        if self.estimated_cost + worst_case > self.max_cost:
+            raise BudgetGuardExceeded(
+                f"next call could exceed ${self.max_cost} "
+                f"(spent ~${self.estimated_cost:.6f})"
+            )
+        self.calls += 1
+        response = self._inner.chat_with_tools(messages, tools, tool_choice=tool_choice)
+        written = (response.text or "") + "".join(
+            call.arguments for call in response.tool_calls
+        )
+        self.estimated_cost += self._cost(
+            prompt_tokens, self._inner.count_tokens(written)
+        )
+        return response
+
     def count_tokens(self, text: str) -> int:
         return self._inner.count_tokens(text)
 

@@ -1,3 +1,4 @@
+import json
 import time
 from logging import getLogger
 
@@ -20,7 +21,12 @@ from app.core.exceptions import (
     PermanentModelError,
     RetryableModelError,
 )
-from app.core.gateway.base import ModelCallRecord, ModelGateway
+from app.core.gateway.base import (
+    ModelCallRecord,
+    ModelGateway,
+    ToolCall,
+    ToolChatResponse,
+)
 from app.core.settings import get_settings
 from app.modules.runtime.model_governance import (
     estimate_chat_prompt_tokens,
@@ -63,9 +69,33 @@ class DeepSeekGateway(ModelGateway):
         with fallback_chain_scope(self.model_name):
             return self._chat_once(prompt, system_prompt, json_mode=json_mode)
 
+    def chat_with_tools(
+        self,
+        messages: list[dict],
+        tools: list[dict],
+        *,
+        tool_choice: str | dict = "auto",
+    ) -> ToolChatResponse:
+        # The whole request is the "prompt" for the ledger's estimate and hash.
+        prompt = json.dumps({"messages": messages, "tools": tools}, ensure_ascii=False)
+        with fallback_chain_scope(self.model_name):
+            return self._chat_once(
+                prompt,
+                messages=messages,
+                tools=tools,
+                tool_choice=tool_choice,
+            )
+
     def _chat_once(
-        self, prompt: str, system_prompt: str | None = None, *, json_mode: bool = False
-    ) -> str:
+        self,
+        prompt: str,
+        system_prompt: str | None = None,
+        *,
+        json_mode: bool = False,
+        messages: list[dict] | None = None,
+        tools: list[dict] | None = None,
+        tool_choice: str | dict = "auto",
+    ) -> str | ToolChatResponse:
         create_at = time.perf_counter()
         max_output_tokens = frozen_max_output_tokens(self.max_output_tokens)
         timeout_seconds = frozen_timeout_seconds(self.timeout_seconds)
@@ -87,13 +117,18 @@ class DeepSeekGateway(ModelGateway):
             pricing_parameters=provenance["model_parameters"],
         )
         try:
-            messages = []
-            if system_prompt is not None:
-                messages.append({"role": "system", "content": system_prompt})
-            messages.append({"role": "user", "content": prompt})
+            if messages is None:
+                request_messages = []
+                if system_prompt is not None:
+                    request_messages.append(
+                        {"role": "system", "content": system_prompt}
+                    )
+                request_messages.append({"role": "user", "content": prompt})
+            else:
+                request_messages = messages
             request_kwargs = {
                 "model": self.model_name,
-                "messages": messages,
+                "messages": request_messages,
                 "timeout": timeout_seconds,
                 "temperature": self.temperature,
                 "max_tokens": max_output_tokens,
@@ -104,17 +139,33 @@ class DeepSeekGateway(ModelGateway):
                 # reasoning trace. DeepSeek documents this request option for
                 # turning off thinking mode.
                 request_kwargs["extra_body"] = {"thinking": {"type": "disabled"}}
+            if tools is not None:
+                request_kwargs["tools"] = tools
+                request_kwargs["tool_choice"] = tool_choice
+                request_kwargs["extra_body"] = {"thinking": {"type": "disabled"}}
             response = self.client.chat.completions.create(**request_kwargs)
 
             try:
                 result = response.choices[0].message.content
                 usage = response.usage
+                tool_calls = (
+                    tuple(
+                        ToolCall(
+                            id=call.id,
+                            name=call.function.name,
+                            arguments=call.function.arguments,
+                        )
+                        for call in (response.choices[0].message.tool_calls or [])
+                    )
+                    if tools is not None
+                    else ()
+                )
             except (AttributeError, IndexError, TypeError) as exc:
                 raise MalformedModelResponseError(
                     "Model returned a malformed response"
                 ) from exc
             if result is None or not result.strip():
-                if json_mode:
+                if json_mode or (tools is not None and not tool_calls):
                     raise RetryableModelError("Model returned an empty JSON response")
                 result = ""
             if usage is not None:
@@ -154,6 +205,8 @@ class DeepSeekGateway(ModelGateway):
                 result_category="success",
                 **provenance,
             )
+            if tools is not None:
+                return ToolChatResponse(text=result or None, tool_calls=tool_calls)
             return result
         except (
             APIConnectionError,
@@ -177,7 +230,14 @@ class DeepSeekGateway(ModelGateway):
                 failed_model = self.model_name
                 self.model_name = fallback_model
                 try:
-                    return self._chat_once(prompt, system_prompt, json_mode=json_mode)
+                    return self._chat_once(
+                        prompt,
+                        system_prompt,
+                        json_mode=json_mode,
+                        messages=messages,
+                        tools=tools,
+                        tool_choice=tool_choice,
+                    )
                 finally:
                     self.model_name = failed_model
             raise RetryableModelError(
