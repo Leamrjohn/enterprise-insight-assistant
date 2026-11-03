@@ -205,3 +205,38 @@ def test_agent_without_the_check_makes_one_call():
     output, gateway = _run(ANSWER, support_check=False)
     assert output.answer == "上限520元。因为成本上涨。"
     assert len(gateway.prompts) == 1
+
+
+class _RecordingSystemPrompt(_Gateway):
+    def chat(self, prompt, system_prompt=None, *, json_mode=False):
+        self.system_prompt = system_prompt
+        return super().chat(prompt, system_prompt, json_mode=json_mode)
+
+
+def _system_prompt_for(facts):
+    gateway = _RecordingSystemPrompt(_verdicts(("supported", [1])))
+    check_support(
+        gateway,
+        question="上限是多少？",
+        answer="上限520元。",
+        evidences=[CURRENT],
+        window=WINDOW,
+        confirmed_facts=facts,
+    )
+    return gateway.system_prompt
+
+
+def test_data_fact_is_not_offered_when_no_confirmed_facts_exist():
+    assert "data_fact" not in _system_prompt_for(None)
+    assert "data_fact" not in _system_prompt_for([])
+
+
+def test_data_fact_is_offered_when_confirmed_facts_exist():
+    prompt = _system_prompt_for(["营收100元"])
+    assert "data_fact（句子只是复述“已确认经营事实”）" in prompt
+    assert "boundary（" in prompt
+
+
+def test_a_data_fact_verdict_without_facts_is_still_removed():
+    outcome = _check("营收100元。", _verdicts(("data_fact", [])))
+    assert outcome.answer == ""
