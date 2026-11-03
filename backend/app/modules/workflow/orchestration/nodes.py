@@ -14,6 +14,7 @@ from app.modules.analysis.agent_protocol import AgentInput
 from app.modules.analysis.catalog.snapshot_catalog import SnapshotCatalog
 from app.modules.analysis.data.data_agent import DataAgent
 from app.modules.analysis.data.sql_tool import SQLTool
+from app.modules.analysis.data.tool_agent import ToolCallingDataAgent
 from app.modules.analysis.metrics.facts import (
     build_confirmed_facts,
     build_data_evidence,
@@ -22,12 +23,20 @@ from app.modules.analysis.planner.planner_agent import PlannerAgent
 from app.modules.analysis.planner.planner_decision import (
     enforce_explicit_document_evidence_contract,
 )
+from app.modules.analysis.tool_protocol import Tool
 from app.modules.knowledge.agent import KnowledgeAgent
 from app.modules.knowledge.tool import RAGTool
+from app.modules.knowledge.tool_agent import ToolCallingKnowledgeAgent
 from app.modules.reporting.citation_validation import validate_citations
 from app.modules.reporting.reviewer_agent import ReviewerAgent
 from app.modules.reporting.semantic_review_service import SemanticReviewService
 from app.modules.runtime.model_governance import model_node_scope
+from app.modules.runtime.tool_guard import (
+    CircuitBreaker,
+    FallbackTool,
+    GuardedTool,
+    redis_breaker_store,
+)
 from app.modules.workflow.lifecycle.recovery import recovery_decision_for_node
 from app.modules.workflow.orchestration.node_outcome import NodeOutcome
 from app.modules.workflow.orchestration.router import (
@@ -416,6 +425,35 @@ def planning_failure_node(state: WorkflowState) -> dict:
     }
 
 
+def model_tools_enabled(company_id: int | None) -> bool:
+    """Off by default; the allowlist lets one company try it before anyone else."""
+    settings = get_settings()
+    if settings.model_tool_mode == "all":
+        return True
+    return (
+        settings.model_tool_mode == "allowlist"
+        and company_id in settings.model_tool_company_ids
+    )
+
+
+def _guarded_rag_tool() -> Tool:
+    store = redis_breaker_store()
+    local = GuardedTool(
+        RAGTool(degrade_on_rerank_failure=True),
+        CircuitBreaker("rag_search:local", store),
+    )
+    if get_settings().knowledge_evidence_transport != "mcp_stdio":
+        return local
+    from app.modules.knowledge.mcp_adapter import McpEvidenceReadTool
+
+    return FallbackTool(
+        GuardedTool(
+            McpEvidenceReadTool.stdio(), CircuitBreaker("rag_search:mcp", store)
+        ),
+        local,
+    )
+
+
 def knowledge_node(state: WorkflowState) -> dict:
     """
     Knowledge 节点：检索文档证据。
@@ -425,17 +463,22 @@ def knowledge_node(state: WorkflowState) -> dict:
     """
     _set_stage(state, "retrieving_knowledge", "knowledge_node")
     runtime = state.get("tool_runtime")
-    rag_tool = RAGTool()
-    if get_settings().knowledge_evidence_transport == "mcp_stdio":
-        from app.modules.knowledge.mcp_adapter import McpEvidenceReadTool
-
-        rag_tool = McpEvidenceReadTool.stdio()
     support_check = get_settings().knowledge_support_check_enabled
-    agent = (
-        KnowledgeAgent(rag_tool=runtime.wrap(rag_tool), support_check=support_check)
-        if runtime
-        else KnowledgeAgent(support_check=support_check)
-    )
+    if runtime and model_tools_enabled(state.get("company_id")):
+        agent = ToolCallingKnowledgeAgent(
+            rag_tool=runtime.wrap(_guarded_rag_tool()), support_check=support_check
+        )
+    else:
+        rag_tool = RAGTool()
+        if get_settings().knowledge_evidence_transport == "mcp_stdio":
+            from app.modules.knowledge.mcp_adapter import McpEvidenceReadTool
+
+            rag_tool = McpEvidenceReadTool.stdio()
+        agent = (
+            KnowledgeAgent(rag_tool=runtime.wrap(rag_tool), support_check=support_check)
+            if runtime
+            else KnowledgeAgent(support_check=support_check)
+        )
     with model_node_scope("knowledge"):
         result = agent.run(
             AgentInput(
@@ -529,7 +572,22 @@ def data_node(state: WorkflowState) -> dict:
     if data_source is not None and snapshot_data is not None:
         catalog = SnapshotCatalog.from_snapshot(snapshot_data)
         tool_runtime = state.get("tool_runtime")
-        if tool_runtime is not None:
+        if tool_runtime is not None and model_tools_enabled(state.get("company_id")):
+            sql_tool = SQLTool(data_source=data_source, snapshot_catalog=catalog)
+            agent = ToolCallingDataAgent(
+                sql_tool=tool_runtime.wrap(
+                    GuardedTool(
+                        sql_tool,
+                        CircuitBreaker(
+                            f"sql_query:{state.get('company_id')}",
+                            redis_breaker_store(),
+                        ),
+                    )
+                ),
+                data_source=data_source,
+                snapshot_catalog=catalog,
+            )
+        elif tool_runtime is not None:
             agent = DataAgent(
                 sql_tool=tool_runtime.wrap(
                     SQLTool(data_source=data_source, snapshot_catalog=catalog)

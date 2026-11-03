@@ -40,9 +40,11 @@ class RAGTool(Tool):
         self,
         reranker: Reranker | None = None,
         retrieval_policy: RetrievalPolicy = HYBRID_RETRIEVAL_POLICY,
+        degrade_on_rerank_failure: bool = False,
     ) -> None:
         self._reranker = reranker
         self._retrieval_policy = retrieval_policy
+        self._degrade_on_rerank_failure = degrade_on_rerank_failure
 
     @property
     def name(self) -> str:
@@ -87,6 +89,7 @@ class RAGTool(Tool):
             )
 
         db = None
+        degraded = False
         try:
             settings = get_settings()
             db = SessionLocal()
@@ -166,25 +169,36 @@ class RAGTool(Tool):
                             "question_characters": len(question),
                         },
                     )
-                    raise
-                record_model_call(
-                    rerank_scope,
-                    provider="local",
-                    model_name=settings.reranker_model,
-                    duration_ms=(time.perf_counter() - rerank_started_at) * 1000,
-                    result_category="success",
-                    resource_usage={
-                        "candidate_count": len(evidences),
-                        "question_characters": len(question),
-                    },
-                )
-                evidences = keep_relevant(evidences, settings.rag_rerank_min_score)
-            else:
+                    if not self._degrade_on_rerank_failure:
+                        raise
+                    logger.warning(
+                        "Rerank failed, using retrieval order", exc_info=True
+                    )
+                    degraded = True
+                else:
+                    record_model_call(
+                        rerank_scope,
+                        provider="local",
+                        model_name=settings.reranker_model,
+                        duration_ms=(time.perf_counter() - rerank_started_at) * 1000,
+                        result_category="success",
+                        resource_usage={
+                            "candidate_count": len(evidences),
+                            "question_characters": len(question),
+                        },
+                    )
+                    evidences = keep_relevant(evidences, settings.rag_rerank_min_score)
+            if degraded or not self._retrieval_policy.rerank_enabled:
                 evidences = evidences[: settings.rag_rerank_top_k]
             if not check_sufficiency(
                 evidences,
                 question=question,
-                min_avg_score=settings.rag_rerank_min_score,
+                # Retrieval scores are on another scale than the reranker's threshold.
+                min_avg_score=(
+                    settings.rag_retrieval_min_score
+                    if degraded
+                    else settings.rag_rerank_min_score
+                ),
             ):
                 return ToolOutput(
                     success=True,
@@ -203,6 +217,7 @@ class RAGTool(Tool):
                 data={
                     "status": "ready",
                     "retrieval_policy_id": self._retrieval_policy.policy_id,
+                    **({"degraded": True} if degraded else {}),
                     "evidences": [
                         {
                             "chunk_id": evidence.chunk_id,

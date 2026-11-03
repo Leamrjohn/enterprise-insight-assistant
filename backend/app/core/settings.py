@@ -113,6 +113,9 @@ class Settings(BaseSettings):
     rag_rerank_min_score: float = 0.5
     knowledge_evidence_transport: Literal["local", "mcp_stdio"] = "local"
     knowledge_support_check_enabled: bool = True
+    # Model-chosen tools inside Data and Knowledge. "allowlist" is the gradual rollout.
+    model_tool_mode: Literal["off", "allowlist", "all"] = "off"
+    model_tool_company_ids: list[int] = []
 
     @model_validator(mode="after")
     def validate_database_password(self) -> Self:

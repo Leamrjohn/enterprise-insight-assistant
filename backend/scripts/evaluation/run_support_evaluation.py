@@ -47,6 +47,7 @@ from app.modules.knowledge.rag.reranker import (
 from app.modules.knowledge.rag.retrieval import retrieve_evidence
 from app.modules.knowledge.rag.support import check_support
 from app.modules.knowledge.rag.validity import ValidityWindow, business_today
+from app.modules.knowledge.tool_agent import ToolCallingKnowledgeAgent
 from app.modules.organizations.models import Company
 from scripts.evaluation.run_planner_route_evaluation import (
     BudgetGuardExceeded,
@@ -196,6 +197,16 @@ class _CapturingGateway(ModelGateway):
         self.replies.append(reply)
         return reply
 
+    def chat_with_tools(self, messages, tools, *, tool_choice="auto"):
+        response = self._inner.chat_with_tools(messages, tools, tool_choice=tool_choice)
+        # The submitted answer plays the role of the fixed route's first reply.
+        self.replies.extend(
+            call.arguments
+            for call in response.tool_calls
+            if call.name == "submit_answer"
+        )
+        return response
+
     def count_tokens(self, text: str) -> int:
         return self._inner.count_tokens(text)
 
@@ -225,7 +236,9 @@ def _case_row(case_id, answer, output, replies, stale_id=None) -> dict:
     }
 
 
-def evaluate_end_to_end(gateway: ModelGateway) -> tuple[list[dict], list[dict]]:
+def evaluate_end_to_end(
+    gateway: ModelGateway, strategy: str = "fixed"
+) -> tuple[list[dict], list[dict]]:
     settings = get_settings()
     traps = json.loads(TRAP_FIXTURE.read_text(encoding="utf-8"))
     connection = engine.connect()
@@ -251,7 +264,10 @@ def evaluate_end_to_end(gateway: ModelGateway) -> tuple[list[dict], list[dict]]:
             settings,
         )
         capture = _CapturingGateway(gateway)
-        agent = KnowledgeAgent(rag_tool=tool, gateway=capture, support_check=True)
+        agent_class = (
+            KnowledgeAgent if strategy == "fixed" else ToolCallingKnowledgeAgent
+        )
+        agent = agent_class(rag_tool=tool, gateway=capture, support_check=True)
         rows = []
         cases = [
             (q["case_id"], q["question"], q["answer"], None)
@@ -274,7 +290,11 @@ def evaluate_end_to_end(gateway: ModelGateway) -> tuple[list[dict], list[dict]]:
                     context={"company_id": company.id},
                 )
             )
-            rows.append(_case_row(case_id, answer, output, capture.replies, stale_id))
+            row = _case_row(case_id, answer, output, capture.replies, stale_id)
+            loop = (output.attempts or {}).get("tool_loop")
+            row["searches"] = loop["searches"] if loop else 1
+            row["switched_to_fixed"] = (output.attempts or {}).get("switched_to_fixed")
+            rows.append(row)
             print(f"{case_id}: {output.error_code}", file=sys.stderr, flush=True)
         unanswerable = []
         for case in json.loads(UNANSWERABLE.read_text(encoding="utf-8"))["cases"]:
@@ -308,6 +328,7 @@ def main() -> None:
     parser.add_argument("--max-calls", type=int, default=150)
     parser.add_argument("--max-cost", type=Decimal, default=Decimal("0.12"))
     parser.add_argument("--report", type=Path)
+    parser.add_argument("--strategy", choices=("fixed", "tools"), default="fixed")
     args = parser.parse_args()
     if engine.url.database != EXPECTED_DATABASE:
         sys.exit(f"refusing to run outside {EXPECTED_DATABASE}")
@@ -326,8 +347,9 @@ def main() -> None:
     fixture = json.loads(FIXTURE.read_text(encoding="utf-8"))
     stopped, sentences, end_to_end, unanswerable = None, [], [], []
     try:
-        sentences = evaluate_sentences(gateway, fixture["cases"])
-        end_to_end, unanswerable = evaluate_end_to_end(gateway)
+        if args.strategy == "fixed":
+            sentences = evaluate_sentences(gateway, fixture["cases"])
+        end_to_end, unanswerable = evaluate_end_to_end(gateway, args.strategy)
     except BudgetGuardExceeded as exc:
         stopped = str(exc)
     report = {
@@ -335,6 +357,11 @@ def main() -> None:
         "stopped_by_budget_guard": stopped,
         "model_calls": guard.calls if guard else 0,
         "estimated_cost_usd": str(guard.estimated_cost) if guard else "0",
+        "strategy": args.strategy,
+        "searched_again": sum(r["searches"] > 1 for r in end_to_end),
+        "switched_to_fixed": [
+            r["case_id"] for r in end_to_end if r["switched_to_fixed"]
+        ],
         "sentences": summarize_support_cases(sentences) if sentences else None,
         "end_to_end": summarize_end_to_end(end_to_end) if end_to_end else None,
         "unanswerable": {

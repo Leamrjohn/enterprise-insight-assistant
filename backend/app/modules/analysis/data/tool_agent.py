@@ -47,6 +47,7 @@ from app.modules.analysis.metrics.claim_validation import assess_numeric_asserti
 from app.modules.analysis.metrics.metric_validation import assess_metric_query
 from app.modules.analysis.tool_protocol import ToolInput, ToolOutput
 from app.modules.reporting.semantic_review_service import SemanticReviewService
+from app.modules.runtime.tool_guard import outcome_of_failure
 from app.modules.runtime.tool_loop import (
     LoopLimits,
     LoopResult,
@@ -57,18 +58,6 @@ from app.modules.runtime.tool_loop import (
 from pydantic import BaseModel, ConfigDict, Field
 
 MAX_ROWS_SHOWN = 5
-# Denials and exhausted budgets must stop the loop, not read as something to fix.
-DENIED_CODES = frozenset(
-    {
-        "tool_not_allowlisted",
-        "tool_schema_unregistered",
-        "tool_company_scope_missing",
-        "tool_company_scope_denied",
-        "tool_current_authorization_denied",
-        "tool_task_missing",
-    }
-)
-EXHAUSTED_CODES = frozenset({"tool_budget_exhausted"})
 
 
 class DescribeTableArgs(BaseModel):
@@ -379,14 +368,13 @@ class _DataToolSession:
     def _tool_failure(self, result: ToolOutput) -> ToolReply:
         code = result.error_code or "sql_execution_failed"
         self.last_failure = (code, result.error or "经营数据查询失败。")
-        if code in DENIED_CODES:
-            return ToolReply({"error": result.error}, "denied", code)
-        if code in EXHAUSTED_CODES:
-            return ToolReply({"error": result.error}, "exhausted", code)
-        if result.repairable or result.model_feedback:
-            detail = result.model_feedback or result.error
-            return ToolReply({"error": detail}, "repairable", code)
-        return ToolReply({"error": result.error}, "unavailable", code)
+        outcome = outcome_of_failure(result)
+        detail = (
+            result.model_feedback or result.error
+            if outcome == "repairable"
+            else result.error
+        )
+        return ToolReply({"error": detail}, outcome, code)
 
     def _tool_success(
         self, candidate: SQLCandidate, result: ToolOutput, metric_assessment
