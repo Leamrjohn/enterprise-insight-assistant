@@ -254,3 +254,36 @@ def test_redelivery_to_unclaimable_task_closes_stale_outbox_event(
     assert event.status == "worker_claimed"
     assert event.worker_execution_id == execution.attempt.execution_id
     assert pending_event_ids(db_session) == []
+
+
+def test_outbox_stays_retryable_when_recording_acceptance_breaks_the_session(
+    db_session, test_user, monkeypatch
+):
+    task = AnalysisTask(
+        user_id=test_user.id, question="问题", status="queued", stage="queued"
+    )
+    db_session.add(task)
+    db_session.flush()
+    event = create_analysis_task_event(db_session, task_id=task.id)
+    db_session.commit()
+
+    def fails_like_a_deadlock(db, *, claim, broker_message_id):
+        db.add(
+            AnalysisTask(user_id=None, question="x", status="queued", stage="queued")
+        )
+        db.flush()
+
+    monkeypatch.setattr(
+        outbox_module, "mark_analysis_task_event_broker_accepted", fails_like_a_deadlock
+    )
+
+    published = publish_analysis_task_event(
+        db_session,
+        event_id=event.id,
+        enqueue=lambda _task_id: SimpleNamespace(id="broker-message"),
+    )
+
+    assert published is False
+    db_session.refresh(event)
+    assert event.status == "pending"
+    assert event.last_error == "broker_publish_failed"

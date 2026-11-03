@@ -80,6 +80,8 @@ def publish_analysis_task_event(
             db, claim=claim, broker_message_id=celery_task_id
         )
     except Exception as exc:  # noqa: BLE001 - Any publish failure must remain retryable.
+        # A database error leaves the session unusable until it is rolled back.
+        db.rollback()
         return_analysis_task_event_to_pending(
             db,
             claim=claim,
@@ -174,6 +176,11 @@ def claim_analysis_task_event_for_publication(
 def mark_analysis_task_event_broker_accepted(
     db: Session, *, claim: ClaimedAnalysisTaskPublication, broker_message_id: str
 ) -> bool:
+    from app.modules.workflow.models import AnalysisTask
+
+    # A Worker's claim locks the task and then this event. Taking them in the same
+    # order means the two wait for each other instead of deadlocking.
+    task = db.get(AnalysisTask, claim.task_id, with_for_update=True)
     now = database_now(db)
     updated = db.scalar(
         update(AnalysisTaskOutboxEvent)
@@ -197,9 +204,6 @@ def mark_analysis_task_event_broker_accepted(
     if updated is None:
         db.rollback()
         return False
-    from app.modules.workflow.models import AnalysisTask
-
-    task = db.get(AnalysisTask, claim.task_id)
     if task is not None:
         task.celery_task_id = broker_message_id.strip()
     db.commit()

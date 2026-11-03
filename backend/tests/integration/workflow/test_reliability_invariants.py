@@ -2,10 +2,18 @@
 
 from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier
+from time import sleep
 from uuid import uuid4
 
 from app.db.session import SessionLocal
 from app.modules.identity.models import User
+from app.modules.workflow.delivery.outbox import (
+    AnalysisTaskOutboxEvent,
+    claim_analysis_task_event_for_publication,
+    create_analysis_task_event,
+    mark_analysis_task_event_broker_accepted,
+    mark_analysis_task_event_worker_claimed,
+)
 from app.modules.workflow.lifecycle.execution import claim_execution, finish_execution
 from app.modules.workflow.lifecycle.execution_attempt import TaskExecutionAttempt
 from app.modules.workflow.models import AnalysisTask
@@ -100,6 +108,72 @@ def test_concurrent_deliveries_create_exactly_one_execution(
     finally:
         cleanup = SessionLocal()
         try:
+            cleanup.query(AnalysisTask).filter(AnalysisTask.id == task_id).delete()
+            cleanup.query(User).filter(User.id == user_id).delete()
+            cleanup.commit()
+        finally:
+            cleanup.close()
+
+
+def test_publisher_and_fast_worker_do_not_deadlock(
+    migrated_test_database: None,
+) -> None:
+    """A Worker holding the task row settles the event the publisher is recording."""
+    suffix = uuid4().hex
+    setup = SessionLocal()
+    try:
+        user = User(name=f"lock-order-{suffix}", api_key=f"lock-order-{suffix}")
+        setup.add(user)
+        setup.flush()
+        task = AnalysisTask(
+            user_id=user.id, question="lock order", status="queued", stage="queued"
+        )
+        setup.add(task)
+        setup.flush()
+        event = create_analysis_task_event(setup, task_id=task.id)
+        setup.commit()
+        user_id, task_id, event_id = user.id, task.id, event.id
+        claim = claim_analysis_task_event_for_publication(setup, event_id=event_id)
+        assert claim is not None
+    finally:
+        setup.close()
+
+    def publisher_records_acceptance() -> bool:
+        db = SessionLocal()
+        try:
+            return mark_analysis_task_event_broker_accepted(
+                db, claim=claim, broker_message_id="broker-message"
+            )
+        finally:
+            db.close()
+
+    worker = SessionLocal()
+    try:
+        # The order claim_execution uses: the task row first, then the event.
+        worker.get(AnalysisTask, task_id, with_for_update=True)
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            accepted = executor.submit(publisher_records_acceptance)
+            sleep(0.3)  # Let the publisher take whatever locks it takes first.
+            assert mark_analysis_task_event_worker_claimed(
+                worker, task_id=task_id, execution_id="worker-execution"
+            )
+            worker.commit()
+            assert accepted.result(timeout=10) is False
+
+        check = SessionLocal()
+        try:
+            status = check.get(AnalysisTaskOutboxEvent, event_id).status
+        finally:
+            check.close()
+        assert status == "worker_claimed"
+    finally:
+        worker.rollback()
+        worker.close()
+        cleanup = SessionLocal()
+        try:
+            cleanup.query(AnalysisTaskOutboxEvent).filter(
+                AnalysisTaskOutboxEvent.id == event_id
+            ).delete()
             cleanup.query(AnalysisTask).filter(AnalysisTask.id == task_id).delete()
             cleanup.query(User).filter(User.id == user_id).delete()
             cleanup.commit()
