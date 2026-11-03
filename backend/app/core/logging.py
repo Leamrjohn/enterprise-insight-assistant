@@ -61,6 +61,20 @@ class JsonFormatter(logging.Formatter):
             "error_type",
             "is_graph_repair",
             "error_code",
+            # Counts and names only, never prompt, answer or evidence text.
+            "model",
+            "prompt_tokens",
+            "completion_tokens",
+            "sentences",
+            "removed",
+            "qualifications_proposed",
+            "qualifications_kept",
+            "context_node",
+            "context_tokens",
+            "context_budget_tokens",
+            "context_left_out",
+            "context_compressed",
+            "context_over_budget",
         ):
             value = getattr(record, field, None)
             if value is not None:

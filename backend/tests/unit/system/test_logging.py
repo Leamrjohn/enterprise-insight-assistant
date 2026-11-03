@@ -39,6 +39,31 @@ def _record(message: str, *, exc_info=None) -> logging.LogRecord:
     )
 
 
+def test_json_formatter_keeps_counts_needed_to_diagnose_model_answers() -> None:
+    record = logging.LogRecord("app.x", logging.INFO, "f.py", 1, "m", (), None)
+    fields = {
+        "model": "m",
+        "prompt_tokens": 7,
+        "completion_tokens": 3,
+        "sentences": 4,
+        "removed": 1,
+        "qualifications_proposed": 2,
+        "qualifications_kept": 0,
+        "context_node": "evidence_review",
+        "context_tokens": 3000,
+        "context_budget_tokens": 4000,
+        "context_left_out": ["x"],
+        "context_compressed": ["data_result"],
+        "context_over_budget": False,
+    }
+    for key, value in fields.items():
+        setattr(record, key, value)
+
+    payload = json.loads(JsonFormatter().format(record))
+
+    assert {key: payload[key] for key in fields} == fields
+
+
 def test_json_formatter_carries_task_and_execution_attempt_ids() -> None:
     from app.core.logging import execution_attempt_id_context, task_id_context
 

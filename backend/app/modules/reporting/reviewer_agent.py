@@ -1,5 +1,6 @@
 """Reviewer Agent —— 检查数据一致性和建议合理性，不替代确定性校验器"""
 
+import logging
 from collections.abc import Callable
 
 from app.core.exceptions import (
@@ -24,6 +25,8 @@ from app.modules.reporting.schemas import (
 )
 from app.modules.reporting.semantic_review import EvidenceSemanticReview
 from app.modules.reporting.semantic_review_service import SemanticReviewService
+
+logger = logging.getLogger(__name__)
 
 
 def _format_data_result(data_result: dict) -> str | None:
@@ -216,6 +219,13 @@ def _verbatim_document_qualifications(
                 citation_chunk_ids=sorted(cited_ids),
             )
         )
+    logger.info(
+        "Document qualifications checked",
+        extra={
+            "qualifications_proposed": len(semantic_review.document_qualifications),
+            "qualifications_kept": len(qualifications),
+        },
+    )
     return qualifications
 
 
