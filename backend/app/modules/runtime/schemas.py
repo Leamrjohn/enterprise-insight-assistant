@@ -8,6 +8,8 @@ class RAGSearchInputSchema(BaseModel):
     company_id: int
     document_ids: list[int] | None = None
     question: str = Field(min_length=1)
+    # Set by code from the user's question; RAGTool defaults to "valid today" without it.
+    validity_window: list[str] | None = None
 
 
 class SQLQueryInputSchema(BaseModel):
