@@ -59,3 +59,23 @@ def test_fixture_questions_have_unique_scopes_inside_the_corpus() -> None:
         questions
     )
     assert all(set(q["scope"]) <= corpus for q in questions)
+
+
+def test_compiled_volumes_keep_every_answer_and_map_each_original_file() -> None:
+    from scripts.evaluation.run_retrieval_evaluation import compile_volumes
+
+    sources = [(f"crm/{i}.md", f"# 记录{i}\n\n答案{i}") for i in range(9)]
+    sources.append(("finance/a.md", "# 财务\n\n答案财务"))
+
+    volumes, volume_of = compile_volumes(sources, documents_per_volume=8)
+
+    assert [name for name, _ in volumes] == [
+        "volume:crm-1",
+        "volume:crm-2",
+        "volume:finance-1",
+    ]
+    assert volume_of["crm/0.md"] == "volume:crm-1"
+    assert volume_of["crm/8.md"] == "volume:crm-2"
+    text = dict(volumes)
+    assert all(f"答案{i}" in text[volume_of[f"crm/{i}.md"]] for i in range(9))
+    assert "保密声明" in text["volume:finance-1"]

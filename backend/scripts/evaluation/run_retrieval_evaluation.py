@@ -16,6 +16,7 @@ import json
 import sys
 from datetime import date
 from pathlib import Path
+from statistics import fmean
 from time import perf_counter
 
 from app.core.settings import get_settings
@@ -35,10 +36,12 @@ from app.modules.knowledge.rag.embeddings_local import (
     LOCAL_EMBEDDING_MODEL_NAME,
     LocalEmbeddingProvider,
 )
+from app.modules.knowledge.rag.engine import build_prompt, keep_relevant
 from app.modules.knowledge.rag.policy import (
     BASELINE_RETRIEVAL_POLICY,
     DUAL_CHUNK_RETRIEVAL_POLICY,
     HYBRID_RETRIEVAL_POLICY,
+    PASSAGE_RETRIEVAL_POLICY,
     RetrievalPolicy,
 )
 from app.modules.knowledge.rag.reranker import (
@@ -53,7 +56,6 @@ from app.modules.knowledge.rag.validity import (
 from app.modules.organizations.models import Company
 from app.utils.document_chunk import (
     PARAGRAPH_CHUNK_STRATEGY,
-    SLIDING_WINDOW_CHUNK_STRATEGY,
     chunk_text_for_strategy,
 )
 from sqlalchemy import select, update
@@ -95,7 +97,43 @@ POLICIES = (
         keyword_tokenizer="bigram",
     ),
     HYBRID_RETRIEVAL_POLICY,
+    PASSAGE_RETRIEVAL_POLICY,
 )
+
+VOLUME_DOCUMENTS = 8
+VOLUME_FRONT_MATTER = """## 修订记录
+本文件由公司文件管理部门统一维护，修订时须经部门负责人审批，并在发布后通知相关人员。
+
+## 保密声明
+本文件内容仅供公司内部使用，未经书面许可不得复制、转发或向第三方披露，违者依公司制度处理。
+
+## 使用须知
+使用人应确认所持版本为最新有效版本，打印件仅作参考，归档、借阅和销毁均按档案管理规定办理。"""
+
+
+def compile_volumes(
+    sources: list[tuple[str, str]], *, documents_per_volume: int = VOLUME_DOCUMENTS
+) -> tuple[list[tuple[str, str]], dict[str, str]]:
+    """Bind short documents into long ones, the shape real company files tend to have.
+
+    Each folder becomes numbered volumes with shared front matter.  No wording is
+    changed, so the answers the existing questions expect are still in the text.
+    """
+    folders: dict[str, list[tuple[str, str]]] = {}
+    for path, content in sorted(sources):
+        folders.setdefault(path.split("/", 1)[0], []).append((path, content))
+    volumes: list[tuple[str, str]] = []
+    volume_of: dict[str, str] = {}
+    for folder, documents in folders.items():
+        for index in range(0, len(documents), documents_per_volume):
+            bound = documents[index : index + documents_per_volume]
+            number = index // documents_per_volume + 1
+            name = f"volume:{folder}-{number}"
+            cover = f"# {folder} 资料汇编 第{number}册\n\n{VOLUME_FRONT_MATTER}"
+            body = "\n\n".join(content for _, content in bound)
+            volumes.append((name, f"{cover}\n\n{body}"))
+            volume_of.update({path: name for path, _ in bound})
+    return volumes, volume_of
 
 
 def load_scoped_questions(fixture_root: Path) -> list[dict]:
@@ -138,7 +176,9 @@ def _index_corpus(
     company_id: int,
     user_id: int,
     trap_documents: list[dict],
+    strategies: tuple[str, ...],
     register_versions: bool = True,
+    compiled: bool = False,
 ) -> dict[str, int]:
     manifest = json.loads((CORPUS_ROOT / "manifest.json").read_text(encoding="utf-8"))
     sources = [
@@ -148,6 +188,9 @@ def _index_corpus(
         )
         for artifact in manifest["artifacts"]
     ]
+    volume_of: dict[str, str] = {}
+    if compiled:
+        sources, volume_of = compile_volumes(sources)
     # Trap documents exist only in this rolled-back transaction.
     sources += [(f"trap:{doc['key']}", doc["content"]) for doc in trap_documents]
     trap_by_path = {f"trap:{doc['key']}": doc for doc in trap_documents}
@@ -178,7 +221,7 @@ def _index_corpus(
                 version_number=trap["version"],
                 effective_from=date.fromisoformat(trap["effective_from"]),
             )
-        for strategy in (PARAGRAPH_CHUNK_STRATEGY, SLIDING_WINDOW_CHUNK_STRATEGY):
+        for strategy in strategies:
             for index, chunk in enumerate(chunk_text_for_strategy(content, strategy)):
                 texts.append(chunk.content)
                 metadata.append(
@@ -209,6 +252,10 @@ def _index_corpus(
         )
     )
     db.flush()
+    # Questions name the original files; each now lives inside a volume.
+    document_ids.update(
+        {path: document_ids[volume] for path, volume in volume_of.items()}
+    )
     return document_ids
 
 
@@ -239,6 +286,8 @@ def _evaluate_policy(
     embedder: LocalEmbeddingProvider,
     reranker: LocalCrossEncoderReranker,
     final_k: int,
+    candidate_k: int,
+    min_rerank_score: float,
 ) -> dict:
     started = perf_counter()
     print(f"evaluating {policy.policy_id}", file=sys.stderr, flush=True)
@@ -247,6 +296,18 @@ def _evaluate_policy(
     candidates: list[RankedRetrievalCase] = []
     finals: list[RankedRetrievalCase] = []
     answers: list[dict] = []
+    prompt_answers: list[dict] = []
+    prompt_chars: list[int] = []
+
+    def in_prompt(question: str, final: list) -> list:
+        """What the model would really read: the steps RAGTool runs after reranking."""
+        kept = (
+            keep_relevant(final, min_rerank_score) if policy.rerank_enabled else final
+        )
+        if not kept:
+            return []
+        _, _, allowed = build_prompt(question, kept)
+        return [evidence for evidence in kept if evidence.chunk_id in allowed]
 
     def retrieve_final(question: str):
         evidences = retrieve_evidence(
@@ -254,7 +315,7 @@ def _evaluate_policy(
             question,
             company_id,
             embedder,
-            top_k=CANDIDATE_K,
+            top_k=candidate_k,
             min_score=-1.0,
             chunk_strategies=policy.chunk_strategies,
             # The same code path as production, not the fixture's label.
@@ -294,6 +355,15 @@ def _evaluate_policy(
                     "found": any(item["answer"] in e.content for e in final),
                 }
             )
+            sent = in_prompt(item["question"], final)
+            prompt_chars.append(sum(len(e.content) for e in sent))
+            prompt_answers.append(
+                {
+                    "case_id": item["case_id"],
+                    "split": item["split"],
+                    "found": any(item["answer"] in e.content for e in sent),
+                }
+            )
     trap_rows = []
     for case in trap_cases:
         _, final = retrieve_final(case["question"])
@@ -310,13 +380,15 @@ def _evaluate_policy(
     original_ids = {q["case_id"] for q in questions if "answer" not in q}
     return {
         "policy_id": policy.policy_id,
-        "candidates": evaluate_ranked_retrieval(candidates, ks=(1, 3, 5, CANDIDATE_K)),
+        "candidates": evaluate_ranked_retrieval(candidates, ks=(1, 3, 5, candidate_k)),
         "final": evaluate_ranked_retrieval(finals, ks=(1, final_k)),
         # The original 19 questions, comparable with the earlier baseline.
         "final_original_questions": evaluate_ranked_retrieval(
             [case for case in finals if case.case_id in original_ids], ks=(1, final_k)
         ),
         "answer_found": answer_hit_rates(answers),
+        "answer_in_prompt": answer_hit_rates(prompt_answers),
+        "prompt_chars": {"mean": round(fmean(prompt_chars)), "max": max(prompt_chars)},
         "version_traps": score_version_traps(trap_rows),
         "duration_ms": round((perf_counter() - started) * 1000),
     }
@@ -329,6 +401,12 @@ def main() -> None:
         nargs="*",
         help="policy ids to run; default all",
     )
+    parser.add_argument(
+        "--compiled",
+        action="store_true",
+        help="bind the corpus into long volumes before indexing",
+    )
+    parser.add_argument("--candidate-k", type=int, default=CANDIDATE_K)
     args = parser.parse_args()
     selected = [
         policy
@@ -355,6 +433,14 @@ def main() -> None:
             company_id=company.id,
             user_id=user.id,
             trap_documents=traps["documents"],
+            strategies=tuple(
+                dict.fromkeys(
+                    strategy
+                    for policy in selected
+                    for strategy in policy.chunk_strategies
+                )
+            ),
+            compiled=args.compiled,
         )
         indexing_ms = round((perf_counter() - indexing_started) * 1000)
         print(
@@ -364,7 +450,8 @@ def main() -> None:
         embedder = LocalEmbeddingProvider()
         reranker = LocalCrossEncoderReranker(settings.reranker_model)
         result = {
-            "corpus_documents": len(document_ids),
+            "corpus_shape": "compiled_volumes" if args.compiled else "original",
+            "corpus_documents": len(set(document_ids.values())),
             "questions": len(questions),
             "splits": {
                 split: sum(q["split"] == split for q in questions)
@@ -372,7 +459,7 @@ def main() -> None:
             },
             "embedding_model": LOCAL_EMBEDDING_MODEL_NAME,
             "reranker_model": settings.reranker_model,
-            "candidate_k": CANDIDATE_K,
+            "candidate_k": args.candidate_k,
             "final_k": settings.rag_rerank_top_k,
             "indexing_ms": indexing_ms,
             "policies": [
@@ -386,6 +473,8 @@ def main() -> None:
                     embedder=embedder,
                     reranker=reranker,
                     final_k=settings.rag_rerank_top_k,
+                    candidate_k=args.candidate_k,
+                    min_rerank_score=settings.rag_rerank_min_score,
                 )
                 for policy in selected
             ],
