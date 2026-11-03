@@ -39,7 +39,11 @@ from app.modules.knowledge.rag.engine import (
     check_sufficiency,
     keep_relevant,
 )
-from app.modules.knowledge.rag.policy import HYBRID_RETRIEVAL_POLICY
+from app.modules.knowledge.rag.policy import (
+    HYBRID_RETRIEVAL_POLICY,
+    PASSAGE_RETRIEVAL_POLICY,
+    RetrievalPolicy,
+)
 from app.modules.knowledge.rag.reranker import (
     LocalCrossEncoderReranker,
     rerank_evidences,
@@ -70,6 +74,10 @@ FIXTURE = (
 )
 UNANSWERABLE = FIXTURE.with_name("unanswerable_v1.json")
 EXPECTED_DATABASE = "agent_platform_test"
+POLICIES = {
+    policy.policy_id: policy
+    for policy in (HYBRID_RETRIEVAL_POLICY, PASSAGE_RETRIEVAL_POLICY)
+}
 
 
 def evaluate_sentences(gateway: ModelGateway, cases: list[dict]) -> list[dict]:
@@ -109,11 +117,14 @@ class _InTransactionRag(Tool):
     The real tool opens its own connection, which cannot see uncommitted rows.
     """
 
-    def __init__(self, db: Session, company_id: int, reranker, settings) -> None:
+    def __init__(
+        self, db: Session, company_id: int, reranker, settings, policy: RetrievalPolicy
+    ) -> None:
         self._db = db
         self._company_id = company_id
         self._reranker = reranker
         self._settings = settings
+        self._policy = policy
         self._embedder = LocalEmbeddingProvider()
 
     @property
@@ -126,7 +137,7 @@ class _InTransactionRag(Tool):
 
     def execute(self, input: ToolInput) -> ToolOutput:
         question = input.parameters["question"]
-        policy = HYBRID_RETRIEVAL_POLICY
+        policy = self._policy
         evidences = retrieve_evidence(
             self._db,
             question,
@@ -237,7 +248,9 @@ def _case_row(case_id, answer, output, replies, stale_id=None) -> dict:
 
 
 def evaluate_end_to_end(
-    gateway: ModelGateway, strategy: str = "fixed"
+    gateway: ModelGateway,
+    strategy: str = "fixed",
+    policy: RetrievalPolicy = HYBRID_RETRIEVAL_POLICY,
 ) -> tuple[list[dict], list[dict]]:
     settings = get_settings()
     traps = json.loads(TRAP_FIXTURE.read_text(encoding="utf-8"))
@@ -255,6 +268,7 @@ def evaluate_end_to_end(
             company_id=company.id,
             user_id=user.id,
             trap_documents=traps["documents"],
+            strategies=policy.chunk_strategies,
         )
         _index_keywords(db, company.id, "jieba")
         tool = _InTransactionRag(
@@ -262,6 +276,7 @@ def evaluate_end_to_end(
             company.id,
             LocalCrossEncoderReranker(settings.reranker_model),
             settings,
+            policy,
         )
         capture = _CapturingGateway(gateway)
         agent_class = (
@@ -329,6 +344,9 @@ def main() -> None:
     parser.add_argument("--max-cost", type=Decimal, default=Decimal("0.12"))
     parser.add_argument("--report", type=Path)
     parser.add_argument("--strategy", choices=("fixed", "tools"), default="fixed")
+    parser.add_argument(
+        "--policy", choices=sorted(POLICIES), default=HYBRID_RETRIEVAL_POLICY.policy_id
+    )
     args = parser.parse_args()
     if engine.url.database != EXPECTED_DATABASE:
         sys.exit(f"refusing to run outside {EXPECTED_DATABASE}")
@@ -349,7 +367,9 @@ def main() -> None:
     try:
         if args.strategy == "fixed":
             sentences = evaluate_sentences(gateway, fixture["cases"])
-        end_to_end, unanswerable = evaluate_end_to_end(gateway, args.strategy)
+        end_to_end, unanswerable = evaluate_end_to_end(
+            gateway, args.strategy, POLICIES[args.policy]
+        )
     except BudgetGuardExceeded as exc:
         stopped = str(exc)
     report = {
@@ -358,6 +378,9 @@ def main() -> None:
         "model_calls": guard.calls if guard else 0,
         "estimated_cost_usd": str(guard.estimated_cost) if guard else "0",
         "strategy": args.strategy,
+        "policy": args.policy,
+        "retrieval_top_k": get_settings().rag_retrieval_top_k,
+        "rerank_top_k": get_settings().rag_rerank_top_k,
         "searched_again": sum(r["searches"] > 1 for r in end_to_end),
         "switched_to_fixed": [
             r["case_id"] for r in end_to_end if r["switched_to_fixed"]

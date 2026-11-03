@@ -56,6 +56,7 @@ from app.modules.knowledge.rag.validity import (
 from app.modules.organizations.models import Company
 from app.utils.document_chunk import (
     PARAGRAPH_CHUNK_STRATEGY,
+    SLIDING_WINDOW_CHUNK_STRATEGY,
     chunk_text_for_strategy,
 )
 from sqlalchemy import select, update
@@ -176,7 +177,10 @@ def _index_corpus(
     company_id: int,
     user_id: int,
     trap_documents: list[dict],
-    strategies: tuple[str, ...],
+    strategies: tuple[str, ...] = (
+        PARAGRAPH_CHUNK_STRATEGY,
+        SLIDING_WINDOW_CHUNK_STRATEGY,
+    ),
     register_versions: bool = True,
     compiled: bool = False,
 ) -> dict[str, int]:

@@ -61,6 +61,16 @@ def test_fixture_questions_have_unique_scopes_inside_the_corpus() -> None:
     assert all(set(q["scope"]) <= corpus for q in questions)
 
 
+def test_older_evaluation_scripts_can_still_index_without_naming_strategies() -> None:
+    import inspect
+
+    from scripts.evaluation.run_retrieval_evaluation import _index_corpus
+
+    default = inspect.signature(_index_corpus).parameters["strategies"].default
+
+    assert default == ("paragraph_v1", "sliding_window_v1")
+
+
 def test_compiled_volumes_keep_every_answer_and_map_each_original_file() -> None:
     from scripts.evaluation.run_retrieval_evaluation import compile_volumes
 
