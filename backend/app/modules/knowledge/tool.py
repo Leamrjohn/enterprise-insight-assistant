@@ -26,6 +26,8 @@ from app.modules.knowledge.rag.reranker import (
 from app.modules.knowledge.rag.retrieval import retrieve_evidence
 from app.modules.knowledge.rag.validity import ValidityWindow, business_today
 from app.modules.runtime.model_governance import (
+    ModelBudgetExceeded,
+    ModelCallCancelled,
     record_model_call,
     reserve_local_resource_call,
 )
@@ -243,6 +245,10 @@ class RAGTool(Tool):
                     "allowed_chunk_ids": sorted(allowed_chunk_ids),
                 },
             )
+
+        except (ModelBudgetExceeded, ModelCallCancelled):
+            # The task is stopping; this is not a search that can be retried.
+            raise
 
         except RetrievalError as exc:
             logger.warning(

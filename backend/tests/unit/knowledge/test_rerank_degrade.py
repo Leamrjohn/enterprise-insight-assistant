@@ -6,6 +6,10 @@ import pytest
 from app.modules.analysis.tool_protocol import ToolInput
 from app.modules.knowledge import tool as tool_module
 from app.modules.knowledge.tool import RAGTool
+from app.modules.runtime.model_governance import (
+    ModelBudgetExceeded,
+    ModelCallCancelled,
+)
 
 
 class _Db:
@@ -82,3 +86,16 @@ def test_with_permission_it_keeps_retrieval_order_and_says_it_degraded(rag):
     assert output.success
     assert output.data["degraded"] is True
     assert [e["chunk_id"] for e in output.data["evidences"]] == [1, 2, 3]
+
+
+@pytest.mark.parametrize("signal", [ModelCallCancelled, ModelBudgetExceeded])
+def test_a_task_stop_signal_is_not_reported_as_a_search_failure(
+    rag, monkeypatch, signal
+):
+    def stop(**_kwargs):
+        raise signal("stop")
+
+    monkeypatch.setattr(tool_module, "reserve_local_resource_call", stop)
+
+    with pytest.raises(signal):
+        _run(RAGTool(reranker=_Broken(), degrade_on_rerank_failure=True))

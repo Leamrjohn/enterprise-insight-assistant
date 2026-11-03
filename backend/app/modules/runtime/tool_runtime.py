@@ -10,6 +10,10 @@ from app.modules.documents.models import Documents
 from app.modules.documents.repository import allowed_min_view_roles
 from app.modules.identity.models import User
 from app.modules.organizations.models import CompanyMember
+from app.modules.runtime.model_governance import (
+    ModelBudgetExceeded,
+    ModelCallCancelled,
+)
 from app.modules.runtime.schemas import (
     RAGSearchInputSchema,
     SQLQueryInputSchema,
@@ -398,10 +402,17 @@ class ToolRuntime:
         )
         self._db.commit()
         started = perf_counter()
+        task_stop: ModelBudgetExceeded | ModelCallCancelled | None = None
         try:
             result = tool.execute(input)
             if not isinstance(result, ToolOutput):
                 raise TypeError("tool returned an invalid result contract")
+        except (ModelBudgetExceeded, ModelCallCancelled) as stop:
+            # The whole task is stopping: keep the receipt, then let the signal through.
+            task_stop = stop
+            result = ToolOutput(
+                success=False, error="任务已停止。", error_code=stop.code
+            )
         except Exception:  # noqa: BLE001 - Persist a failed tool receipt without exception text.
             result = ToolOutput(
                 success=False,
@@ -440,4 +451,6 @@ class ToolRuntime:
             )
         )
         self._db.commit()
+        if task_stop is not None:
+            raise task_stop
         return result

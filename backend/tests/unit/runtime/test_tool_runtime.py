@@ -12,6 +12,10 @@ from app.modules.knowledge.mcp_adapter import (
     document_scope_sha256,
 )
 from app.modules.organizations.models import Company, CompanyMember
+from app.modules.runtime.model_governance import (
+    ModelBudgetExceeded,
+    ModelCallCancelled,
+)
 from app.modules.runtime.tool_runtime import ToolRuntime, ToolRuntimeContext
 from app.modules.workflow.audit.events_models import WorkflowEvent
 from app.modules.workflow.audit.tool_call import ToolCallRecord
@@ -364,6 +368,39 @@ def test_tool_runtime_degrades_exception_and_malformed_result_without_leaking_de
     assert "private-driver-detail-must-not-persist" not in persisted
     assert "secret document text" not in persisted
     assert "private-driver-detail-must-not-persist" not in repr(result)
+
+
+@pytest.mark.parametrize(
+    ("signal", "code"),
+    [
+        (ModelCallCancelled, "task_cancelled"),
+        (ModelBudgetExceeded, "model_budget_exhausted"),
+    ],
+)
+def test_tool_runtime_records_a_task_stop_signal_and_lets_it_stop_the_task(
+    db_session, signal, code
+) -> None:
+    runtime, attempt, company = _runtime(db_session)
+
+    with pytest.raises(signal):
+        runtime.execute(
+            _FaultyRagTool(signal("stop")),
+            ToolInput(
+                parameters={
+                    "company_id": company.id,
+                    "document_ids": [11],
+                    "question": "问题",
+                }
+            ),
+        )
+
+    record = (
+        db_session.query(ToolCallRecord)
+        .filter(ToolCallRecord.execution_attempt_id == attempt.id)
+        .one()
+    )
+    assert record.status == "failed"
+    assert record.error_code == code
 
 
 def test_tool_runtime_denies_document_ids_outside_frozen_scope(db_session) -> None:
