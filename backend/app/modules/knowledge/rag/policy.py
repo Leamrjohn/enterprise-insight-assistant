@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 from app.utils.document_chunk import (
     PARAGRAPH_CHUNK_STRATEGY,
+    PASSAGE_CHUNK_STRATEGY,
     SLIDING_WINDOW_CHUNK_STRATEGY,
 )
 
@@ -39,4 +40,12 @@ DUAL_CHUNK_RETRIEVAL_POLICY = RetrievalPolicy(
     policy_id="paragraph_sliding_vector_rerank_v1",
     chunk_strategies=(PARAGRAPH_CHUNK_STRATEGY, SLIDING_WINDOW_CHUNK_STRATEGY),
     rerank_enabled=True,
+)
+
+# A candidate, not yet in use: existing documents have no passage chunks.
+PASSAGE_RETRIEVAL_POLICY = RetrievalPolicy(
+    policy_id="passage_jieba_rrf_rerank_v1",
+    chunk_strategies=(PASSAGE_CHUNK_STRATEGY,),
+    rerank_enabled=True,
+    keyword_tokenizer="jieba",
 )
