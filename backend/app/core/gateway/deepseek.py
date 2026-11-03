@@ -40,6 +40,19 @@ from app.modules.runtime.model_governance import (
 )
 
 
+def _response_details(response, usage) -> dict:
+    """What the provider says beyond tokens: was it cut off, who answered, cache use."""
+    details = {
+        "finish_reason": getattr(response.choices[0], "finish_reason", None),
+        "served_model": getattr(response, "model", None),
+        "prompt_cache_hit_tokens": getattr(usage, "prompt_cache_hit_tokens", None),
+        "prompt_cache_miss_tokens": getattr(usage, "prompt_cache_miss_tokens", None),
+    }
+    return {
+        key: value for key, value in details.items() if isinstance(value, (str, int))
+    }
+
+
 class DeepSeekGateway(ModelGateway):
     def __init__(self, model_name: str | None = None):
         settings = get_settings()
@@ -195,6 +208,15 @@ class DeepSeekGateway(ModelGateway):
                     "cost_status": "settled_by_ledger",
                 },
             )
+            response_details = _response_details(response, usage)
+            if response_details.get("finish_reason") == "length":
+                self.logger.warning(
+                    "Model output reached the output token limit",
+                    extra={
+                        "model": record.model_name,
+                        "completion_tokens": record.completion_tokens,
+                    },
+                )
             record_model_call(
                 governance_scope,
                 provider="deepseek",
@@ -203,6 +225,7 @@ class DeepSeekGateway(ModelGateway):
                 completion_tokens=completion_tokens,
                 duration_ms=duration_ms,
                 result_category="success",
+                resource_usage=response_details,
                 **provenance,
             )
             if tools is not None:

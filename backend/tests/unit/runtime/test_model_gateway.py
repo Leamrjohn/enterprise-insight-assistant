@@ -104,6 +104,56 @@ def test_deepseek_gateway_sends_expected_request(monkeypatch):
         get_settings.cache_clear()
 
 
+def test_deepseek_ledger_keeps_cutoff_served_model_and_cache_use(monkeypatch, caplog):
+    monkeypatch.setenv("LLM_PROVIDER", "deepseek")
+    monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
+    get_settings.cache_clear()
+    try:
+        gateway = DeepSeekGateway()
+        recorded = {}
+        monkeypatch.setattr(
+            "app.core.gateway.deepseek.record_model_call",
+            lambda _scope, **kwargs: recorded.update(kwargs),
+        )
+        response = SimpleNamespace(
+            model="deepseek-served-version",
+            choices=[
+                SimpleNamespace(
+                    finish_reason="length",
+                    message=SimpleNamespace(content='{"private": "cut'),
+                )
+            ],
+            usage=SimpleNamespace(
+                prompt_tokens=7,
+                completion_tokens=3,
+                prompt_cache_hit_tokens=5,
+                prompt_cache_miss_tokens=2,
+            ),
+        )
+        create = Mock(return_value=response)
+        monkeypatch.setattr(
+            gateway,
+            "client",
+            SimpleNamespace(
+                chat=SimpleNamespace(completions=SimpleNamespace(create=create))
+            ),
+        )
+
+        with caplog.at_level(logging.WARNING, logger="app.core.gateway.deepseek"):
+            gateway.chat("问题", json_mode=True)
+
+        assert recorded["resource_usage"] == {
+            "finish_reason": "length",
+            "served_model": "deepseek-served-version",
+            "prompt_cache_hit_tokens": 5,
+            "prompt_cache_miss_tokens": 2,
+        }
+        assert "output token limit" in caplog.text
+        assert "private" not in caplog.text
+    finally:
+        get_settings.cache_clear()
+
+
 def test_deepseek_gateway_requests_json_mode(monkeypatch):
     monkeypatch.setenv("LLM_PROVIDER", "deepseek")
     monkeypatch.setenv("DEEPSEEK_API_KEY", "test-key")
