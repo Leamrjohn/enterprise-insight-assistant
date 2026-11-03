@@ -19,4 +19,4 @@ def test_a_missing_window_stays_missing_so_the_tool_uses_today():
     dumped = RAGSearchInputSchema.model_validate(
         {"company_id": 1, "question": "q"}
     ).model_dump()
-    assert dumped["validity_window"] is None
+    assert "validity_window" not in dumped

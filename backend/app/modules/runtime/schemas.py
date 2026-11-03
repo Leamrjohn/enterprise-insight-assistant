@@ -1,7 +1,7 @@
 """Frozen, machine-enforced contracts for workflow tool access."""
 
 from app.modules.analysis.data.data_request import DataRequest
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_serializer
 
 
 class RAGSearchInputSchema(BaseModel):
@@ -10,6 +10,13 @@ class RAGSearchInputSchema(BaseModel):
     question: str = Field(min_length=1)
     # Set by code from the user's question; RAGTool defaults to "valid today" without it.
     validity_window: list[str] | None = None
+
+    @model_serializer(mode="wrap")
+    def _omit_absent_window(self, handler):
+        dumped = handler(self)
+        if dumped.get("validity_window") is None:
+            dumped.pop("validity_window", None)
+        return dumped
 
 
 class SQLQueryInputSchema(BaseModel):
