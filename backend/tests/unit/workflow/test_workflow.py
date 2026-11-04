@@ -1,5 +1,6 @@
 """工作流节点的数据流测试，不调用真实模型或数据库。"""
 
+import pytest
 from app.core.exceptions import RetryableModelError
 from app.modules.analysis.agent_protocol import AgentOutput
 from app.modules.analysis.planner.planner_decision import PlannerDecision
@@ -91,15 +92,67 @@ def test_effective_question_prefers_the_planner_resolution() -> None:
     )
 
 
-def test_planner_terminal_renders_structured_clarification_instead_of_free_text() -> (
-    None
-):
+def test_planner_terminal_shows_the_specific_clarification_question() -> None:
     result = workflow_nodes.planner_terminal_node(
         {
             "plan": {
                 "action": "needs_clarification",
                 "reason": "缺少必要条件。",
-                "clarification_question": "无关的旧追问。",
+                "clarification_question": "你想看哪个月、哪个区域的销售额？",
+                "clarification": {
+                    "missing_slots": ["time_range", "region"],
+                    "examples": ["2026年6月", "华东区"],
+                },
+            }
+        }
+    )
+
+    assert result["final_answer"] == "你想看哪个月、哪个区域的销售额？"
+    assert result["terminal_result"]["missing_fields"] == ["time_range", "region"]
+
+
+@pytest.mark.parametrize(
+    "question",
+    ["是否按 invoices.status=open 判定？", "是否已过 due_date？"],
+)
+def test_planner_terminal_never_shows_internal_names(question: str) -> None:
+    result = workflow_nodes.planner_terminal_node(
+        {
+            "plan": {
+                "action": "needs_clarification",
+                "reason": "缺少必要条件。",
+                "clarification_question": question,
+                "clarification": {"missing_slots": ["metric"], "examples": []},
+            }
+        }
+    )
+
+    assert result["final_answer"] == "请补充需要查询的经营指标。"
+
+
+def test_planner_terminal_keeps_business_identifiers_in_the_question() -> None:
+    question = "CUST-0280 的坏账按什么口径判定？"
+    result = workflow_nodes.planner_terminal_node(
+        {
+            "plan": {
+                "action": "needs_clarification",
+                "reason": "缺少必要条件。",
+                "clarification_question": question,
+                "clarification": {"missing_slots": ["metric"], "examples": []},
+            }
+        }
+    )
+
+    assert result["final_answer"] == question
+
+
+def test_planner_terminal_falls_back_to_structured_clarification() -> None:
+    result = workflow_nodes.planner_terminal_node(
+        {
+            "plan": {
+                "action": "needs_clarification",
+                "reason": "缺少必要条件。",
+                "clarification_question": None,
                 "clarification": {
                     "missing_slots": ["time_range", "region"],
                     "examples": ["2026年6月", "华东区"],

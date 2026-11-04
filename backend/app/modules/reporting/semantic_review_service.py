@@ -183,7 +183,8 @@ class SemanticReviewService:
             '"clarification_question":null,"response_message":null,'
             '"resolved_question":null,"clarification":null,"intent":null,'
             '"evaluation_scope":null}。'
-            "选择 needs_clarification 时，clarification_question 写具体追问，clarification 写"
+            "选择 needs_clarification 时，clarification_question 用业务语言写具体追问，"
+            "不得出现表名或字段名，clarification 写"
             f'{{"missing_slots":["{"|".join(get_args(ClarificationSlot))}"],"examples":[]}}。'
             f"{_OTHER_TABLES_NOTE}"
         )

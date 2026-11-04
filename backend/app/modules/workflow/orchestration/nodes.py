@@ -1,6 +1,7 @@
 """LangGraph 工作流节点 —— 每个节点封装一个 Agent 调用"""
 
 import logging
+import re
 from typing import Any
 
 from app.core.exceptions import (
@@ -56,25 +57,24 @@ _CLARIFICATION_SLOT_LABELS = {
     "product": "产品",
     "object": "分析对象",
 }
+# Table and column names such as invoices.status or due_date never reach users.
+_INTERNAL_NAME = re.compile(r"[A-Za-z]+_[A-Za-z_]+|[A-Za-z_]+\.[A-Za-z_]+")
 
 
 logger = logging.getLogger(__name__)
 
 
 def _render_clarification(plan: dict) -> str:
-    """Render a bounded user question from structured missing slots when present."""
+    """Show the specific question when there is one; missing slots are the fallback."""
+    question = plan.get("clarification_question")
+    if question and not _INTERNAL_NAME.search(question):
+        return question
     clarification = plan.get("clarification")
     if not isinstance(clarification, dict):
-        return (
-            plan.get("clarification_question")
-            or "请补充需要分析的指标、时间、区域或对象。"
-        )
+        return "请补充需要分析的指标、时间、区域或对象。"
     slots = clarification.get("missing_slots")
     if not isinstance(slots, list) or not slots:
-        return (
-            plan.get("clarification_question")
-            or "请补充需要分析的指标、时间、区域或对象。"
-        )
+        return "请补充需要分析的指标、时间、区域或对象。"
     labels = [_CLARIFICATION_SLOT_LABELS.get(slot, str(slot)) for slot in slots[:3]]
     examples = clarification.get("examples")
     example_text = ""
