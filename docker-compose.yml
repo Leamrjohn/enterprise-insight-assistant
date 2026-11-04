@@ -183,7 +183,8 @@ services:
     logging: *default-logging
     env_file:
       - ./backend/.env
-    environment: *backend-environment
+    environment:
+      <<: [*backend-environment, *online-retrieval]
     ports:
       - "8000:8000"
     volumes:
