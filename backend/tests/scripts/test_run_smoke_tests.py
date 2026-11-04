@@ -181,13 +181,13 @@ def test_pending_review_continues_without_waiting_cancelling_or_approving(
     assert submissions == list(smoke.IDS)
     sleep.assert_not_called()
     client.post.assert_not_called()
-    assert terminal_observation.call_count == 7
+    assert terminal_observation.call_count == len(smoke.IDS) - 1
     assert all(
         call.kwargs["task_id"] != review_task_id
         for call in terminal_observation.call_args_list
     )
     results = [e for e in events if e["event"] == "result"]
-    assert len(results) == 8
+    assert len(results) == len(smoke.IDS)
     result = results[review_task_id - 1]
     assert result["status"] == "awaiting_review"
     assert result["category"] == "失败"
