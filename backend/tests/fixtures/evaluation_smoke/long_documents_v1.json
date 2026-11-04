@@ -1,0 +1,68 @@
+{
+  "schema_version": "1.0",
+  "dataset_version": "smoke-long-documents-v1",
+  "cases": [
+    {
+      "case_id": "long-document-bad-debt-provision",
+      "scenario": "collection_risk",
+      "complexity": "medium",
+      "split": "development",
+      "coverage_tags": ["knowledge_rag", "long_document"],
+      "question": "根据应收风险提示，对华北汽车零部件客户067建议按什么比例计提坏账准备？",
+      "company_scope": "acme-demo",
+      "document_scope": [
+        "finance/DOC-FR-0006.md",
+        "finance/DOC-FR-0007.md",
+        "finance/DOC-FR-0008.md",
+        "finance/DOC-FR-0009.md"
+      ],
+      "expected_route": "knowledge_only",
+      "expected_entities": ["华北汽车零部件客户067"],
+      "expected_period": "2025",
+      "expected_query_requirements": ["检索坏账准备计提比例"],
+      "expected_result_fingerprint": {"scenario": "long_document_bad_debt_provision"},
+      "expected_document_claim_terms": [
+        {"all_of": ["30%"]}
+      ],
+      "expected_outcome": "completed",
+      "inapplicable_hard_gates": {
+        "entity_scope_correct": "文档路线由冻结文档和引用范围证明授权，问题未声明独立业务期间。",
+        "sql_result_equivalent": "知识库专用路线不执行 SQL。",
+        "numeric_consistent": "知识库专用路线没有 SQL 数值输出。"
+      },
+      "max_model_calls": 5,
+      "max_tokens": 10000
+    },
+    {
+      "case_id": "long-document-inventory-turnover",
+      "scenario": "inventory_turnover",
+      "complexity": "medium",
+      "split": "development",
+      "coverage_tags": ["knowledge_rag", "long_document"],
+      "question": "根据库存物流简报，2025年6月电气自动化类的周转天数是多少？",
+      "company_scope": "acme-demo",
+      "document_scope": [
+        "operations/DOC-IV-0001.md",
+        "operations/DOC-IV-0002.md",
+        "operations/DOC-IV-0003.md",
+        "operations/DOC-IV-0004.md"
+      ],
+      "expected_route": "knowledge_only",
+      "expected_entities": ["电气自动化"],
+      "expected_period": "2025-06",
+      "expected_query_requirements": ["检索周转天数"],
+      "expected_result_fingerprint": {"scenario": "long_document_inventory_turnover"},
+      "expected_document_claim_terms": [
+        {"all_of": ["41"]}
+      ],
+      "expected_outcome": "completed",
+      "inapplicable_hard_gates": {
+        "entity_scope_correct": "文档路线由冻结文档和引用范围证明授权，问题未声明独立业务期间。",
+        "sql_result_equivalent": "知识库专用路线不执行 SQL。",
+        "numeric_consistent": "知识库专用路线没有 SQL 数值输出。"
+      },
+      "max_model_calls": 5,
+      "max_tokens": 10000
+    }
+  ]
+}

@@ -276,6 +276,7 @@ def test_stdio_server_allows_only_read_only_rag_runtime_configuration() -> None:
         "DATABASE_POOL_TIMEOUT_SECONDS",
         "BUSINESS_DATABASE_PASSWORD",
         "RERANKER_MODEL",
+        "RAG_RETRIEVAL_POLICY",
         "RAG_RETRIEVAL_TOP_K",
         "RAG_RETRIEVAL_MIN_SCORE",
         "RAG_RERANK_TOP_K",

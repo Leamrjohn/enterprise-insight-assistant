@@ -29,7 +29,14 @@ IDS = (
     "knowledge-receivable-risk-boundary",
     "hybrid-east-delivered-revenue-causality-boundary",
     "clarification-missing-time-range",
+    "long-document-bad-debt-provision",
+    "long-document-inventory-turnover",
 )
+LONG_DOCUMENT_IDS = IDS[-2:]
+LONG_DOCUMENT_SELECTION = {
+    "file": "../evaluation_smoke/long_documents_v1.json",
+    "purpose": "长文档检索：在多份相近文档中找到正确片段",
+}
 STOP_POLLING = {"completed", "partial", "failed", "cancelled", "needs_clarification", "awaiting_review"}
 
 
@@ -160,7 +167,9 @@ def run_container(payload):
                            "violations": violations, "error_type": task.get("error_type"), "cost_limit_hit": cost_limit_hit}
                 results.append(row)
                 emit("result", **row)
-                if uncertain or (row["category"] != "成功" and task.get("status") != "awaiting_review"):
+                # A wrong long-document answer is a retrieval measurement, so finish the round.
+                expected_to_continue = row["category"] == "成功" or task.get("status") == "awaiting_review" or case.case_id in LONG_DOCUMENT_IDS
+                if uncertain or not expected_to_continue:
                     emit("stop", reason="transport_or_cancellation_uncertain" if uncertain else "unexpected_result")
                     return
             elapsed = time.monotonic() - round_start
@@ -229,7 +238,7 @@ def main():
     corpus = root / "data/business_knowledge_base"
     hashes = {a["path"]: a["sha256"] for a in json.loads((corpus / "manifest.json").read_text(encoding="utf-8"))["artifacts"]}
     for cid in IDS:
-        selected = next(c for c in selection["cases"] if c["case_id"] == cid)
+        selected = next((c for c in selection["cases"] if c["case_id"] == cid), LONG_DOCUMENT_SELECTION)
         file = root / "backend/tests/fixtures/evaluation" / selected["file"]
         raw = file.read_bytes()
         case = next(c for c in json.loads(raw)["cases"] if c["case_id"] == cid)

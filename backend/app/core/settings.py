@@ -107,6 +107,9 @@ class Settings(BaseSettings):
     model_price_table_version: str = "unconfigured"
     model_price_table: list[dict[str, Any]] = []
     reranker_model: str = "BAAI/bge-reranker-base"
+    rag_retrieval_policy: Literal[
+        "paragraph_jieba_rrf_rerank_v1", "passage_jieba_rrf_rerank_v1"
+    ] = "paragraph_jieba_rrf_rerank_v1"
     rag_retrieval_top_k: int = 10
     rag_retrieval_min_score: float = 0.1
     rag_rerank_top_k: int = 3

@@ -138,6 +138,7 @@ def _stdio_runtime_environment() -> dict[str, str]:
         # future accidental business-DB access fails instead of inheriting power.
         "BUSINESS_DATABASE_PASSWORD": _UNUSED_BUSINESS_DATABASE_PASSWORD,
         "RERANKER_MODEL": settings.reranker_model,
+        "RAG_RETRIEVAL_POLICY": settings.rag_retrieval_policy,
         "RAG_RETRIEVAL_TOP_K": str(settings.rag_retrieval_top_k),
         "RAG_RETRIEVAL_MIN_SCORE": str(settings.rag_retrieval_min_score),
         "RAG_RERANK_TOP_K": str(settings.rag_rerank_top_k),

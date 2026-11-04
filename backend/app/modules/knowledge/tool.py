@@ -15,7 +15,7 @@ from app.modules.knowledge.rag.engine import (
     keep_relevant,
 )
 from app.modules.knowledge.rag.policy import (
-    HYBRID_RETRIEVAL_POLICY,
+    SELECTABLE_RETRIEVAL_POLICIES,
     RetrievalPolicy,
 )
 from app.modules.knowledge.rag.reranker import (
@@ -41,11 +41,14 @@ class RAGTool(Tool):
     def __init__(
         self,
         reranker: Reranker | None = None,
-        retrieval_policy: RetrievalPolicy = HYBRID_RETRIEVAL_POLICY,
+        retrieval_policy: RetrievalPolicy | None = None,
         degrade_on_rerank_failure: bool = False,
     ) -> None:
         self._reranker = reranker
-        self._retrieval_policy = retrieval_policy
+        self._retrieval_policy = (
+            retrieval_policy
+            or SELECTABLE_RETRIEVAL_POLICIES[get_settings().rag_retrieval_policy]
+        )
         self._degrade_on_rerank_failure = degrade_on_rerank_failure
 
     @property

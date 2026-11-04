@@ -69,7 +69,8 @@ from app.core.settings import get_settings
 fields = {"llm_provider", "llm_model", "llm_temperature", "llm_max_output_tokens",
           "llm_timeout_seconds", "workflow_release_version", "model_price_table_version",
           "model_price_table", "analysis_task_model_max_calls", "analysis_task_model_max_cost",
-          "analysis_task_model_max_total_tokens", "reranker_model", "rag_retrieval_top_k"}
+          "analysis_task_model_max_total_tokens", "reranker_model", "rag_retrieval_top_k",
+          "rag_retrieval_policy", "rag_rerank_top_k"}
 settings = get_settings()
 model = settings.model_dump(mode="json", include=fields)
 endpoint = settings.deepseek_base_url if settings.llm_provider == "deepseek" else os.environ.get("OPENAI_BASE_URL", "https://api.openai.com/v1")

@@ -42,10 +42,15 @@ DUAL_CHUNK_RETRIEVAL_POLICY = RetrievalPolicy(
     rerank_enabled=True,
 )
 
-# A candidate, not yet in use: existing documents have no passage chunks.
 PASSAGE_RETRIEVAL_POLICY = RetrievalPolicy(
     policy_id="passage_jieba_rrf_rerank_v1",
     chunk_strategies=(PASSAGE_CHUNK_STRATEGY,),
     rerank_enabled=True,
     keyword_tokenizer="jieba",
 )
+
+# What the rag_retrieval_policy setting may choose.
+SELECTABLE_RETRIEVAL_POLICIES = {
+    policy.policy_id: policy
+    for policy in (HYBRID_RETRIEVAL_POLICY, PASSAGE_RETRIEVAL_POLICY)
+}

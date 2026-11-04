@@ -1,8 +1,11 @@
+import json
 from contextlib import nullcontext
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
+from app.modules.evaluation.business_schemas import EvaluationFixture
 from scripts.evaluation import prepare_business_evaluation as prepare
 from scripts.evaluation import run_smoke_tests as smoke
 
@@ -262,3 +265,43 @@ def test_timeout_cancels_and_stops_before_next_submission(monkeypatch, smoke_run
     results = [e for e in events if e["event"] == "result"]
     assert len(results) == 1 and results[0]["category"] == "无响应"
     assert events[-1] == {"event": "stop", "reason": "unexpected_result"}
+
+
+def test_long_document_cases_are_valid_and_their_files_are_in_the_corpus():
+    root = Path(__file__).resolve().parents[3]
+    fixture = EvaluationFixture.model_validate_json(
+        (
+            root
+            / "backend/tests/fixtures/evaluation"
+            / smoke.LONG_DOCUMENT_SELECTION["file"]
+        ).read_bytes()
+    )
+    manifest = json.loads(
+        (root / "data/business_knowledge_base/manifest.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    corpus = {artifact["path"] for artifact in manifest["artifacts"]}
+
+    assert tuple(case.case_id for case in fixture.cases) == smoke.LONG_DOCUMENT_IDS
+    for case in fixture.cases:
+        assert case.document_scope and set(case.document_scope) <= corpus
+
+
+def test_wrong_long_document_answer_does_not_stop_the_round(monkeypatch, smoke_runtime):
+    from app.modules.evaluation import business
+
+    payload, events, submissions, _client = smoke_runtime
+    monkeypatch.setattr(
+        business,
+        "evaluate_case",
+        lambda case, *_: SimpleNamespace(
+            passed=case.case_id != smoke.LONG_DOCUMENT_IDS[0],
+            violations=[],
+        ),
+    )
+
+    smoke.run_container(payload)
+
+    assert submissions == list(smoke.IDS)
+    assert events[-1] == {"event": "done"}
