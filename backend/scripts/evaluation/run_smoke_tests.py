@@ -167,8 +167,8 @@ def run_container(payload):
                            "violations": violations, "error_type": task.get("error_type"), "cost_limit_hit": cost_limit_hit}
                 results.append(row)
                 emit("result", **row)
-                # A wrong long-document answer is a retrieval measurement, so finish the round.
-                expected_to_continue = row["category"] == "成功" or task.get("status") == "awaiting_review" or case.case_id in LONG_DOCUMENT_IDS
+                # A wrong answer is a measurement, so finish the round; failures and timeouts still stop it.
+                expected_to_continue = row["category"] in {"成功", "结果错误"} or task.get("status") == "awaiting_review"
                 if uncertain or not expected_to_continue:
                     emit("stop", reason="transport_or_cancellation_uncertain" if uncertain else "unexpected_result")
                     return
@@ -284,9 +284,15 @@ def main():
         state.write_text(json.dumps(events, ensure_ascii=False), encoding="utf-8")
         output.write_text(render(payload, events), encoding="utf-8")
         print(json.dumps(event, ensure_ascii=True), flush=True)
-    rc = process.wait()
+    return exit_code(process.wait(), events)
+
+
+def exit_code(rc, events):
     if rc or not events or events[-1].get("event") != "done":
         print("STOP: inspect the recorded gate; do not automatically rerun.")
+        return 1
+    if any(e.get("event") == "result" and e.get("category") == "结果错误" for e in events):
+        print("WRONG RESULTS: the round finished; see the recorded violations.")
         return 1
     return 0
 

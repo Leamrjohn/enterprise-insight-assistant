@@ -198,18 +198,18 @@ def test_pending_review_continues_without_waiting_cancelling_or_approving(
 
 
 @pytest.mark.parametrize(
-    "status,passed,category",
+    "status,passed,category,finishes_round",
     [
-        ("partial", False, "结果错误"),
-        ("completed", False, "结果错误"),
-        ("failed", False, "失败"),
-        ("cancelled", False, "失败"),
-        ("partial", True, "成功"),
-        ("needs_clarification", True, "成功"),
+        ("partial", False, "结果错误", True),
+        ("completed", False, "结果错误", True),
+        ("failed", False, "失败", False),
+        ("cancelled", False, "失败", False),
+        ("partial", True, "成功", True),
+        ("needs_clarification", True, "成功", True),
     ],
 )
-def test_stop_after_unexpected_result_before_next_submission(
-    monkeypatch, smoke_runtime, status, passed, category
+def test_only_failures_stop_the_round_before_next_submission(
+    monkeypatch, smoke_runtime, status, passed, category, finishes_round
 ):
     from app.modules.evaluation import business
 
@@ -234,14 +234,30 @@ def test_stop_after_unexpected_result_before_next_submission(
     smoke.run_container(payload)
     results = [e for e in events if e["event"] == "result"]
     assert results[0]["category"] == category
-    assert submissions == (list(smoke.IDS) if passed else [smoke.IDS[0]])
+    if category == "结果错误":
+        assert results[0]["violations"] == ["outcome_correct"]
+    assert submissions == (list(smoke.IDS) if finishes_round else [smoke.IDS[0]])
     client.post.assert_not_called()
-    if passed:
+    if finishes_round:
         assert events[-1] == {"event": "done"}
     else:
         assert len(results) == 1
         assert events[-1] == {"event": "stop", "reason": "unexpected_result"}
         assert not any(e["event"] in {"round", "done"} for e in events)
+
+
+@pytest.mark.parametrize(
+    "rc,events,expected",
+    [
+        (0, [{"event": "result", "category": "成功"}, {"event": "done"}], 0),
+        (0, [{"event": "result", "category": "结果错误"}, {"event": "done"}], 1),
+        (0, [{"event": "stop", "reason": "unexpected_result"}], 1),
+        (1, [{"event": "done"}], 1),
+        (0, [], 1),
+    ],
+)
+def test_a_finished_round_with_wrong_results_still_exits_nonzero(rc, events, expected):
+    assert smoke.exit_code(rc, events) == expected
 
 
 def test_timeout_cancels_and_stops_before_next_submission(monkeypatch, smoke_runtime):
