@@ -229,7 +229,9 @@ def _section_passages(
     def flush() -> None:
         if not buffer:
             return
-        label = "｜".join(part for part in (title, identifiers, heading) if part)
+        # Under the title with no section yet, the heading is the title itself.
+        parts = (title, identifiers, "" if heading == title else heading)
+        label = "｜".join(part for part in parts if part)
         # People ask about 2025年7月 or 2025年07月, so the label says both.
         label = _PADDED_MONTH.sub(r"\1\2（\g<0>）", label)
         body = "\n".join(([table_header] if table_header else []) + buffer)

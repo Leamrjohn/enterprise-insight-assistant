@@ -102,6 +102,12 @@ def test_passage_labels_write_months_both_ways() -> None:
     assert "2025年10月" in chunk_text_with_passages(october)[0].content
 
 
+def test_passage_label_says_a_title_once_when_it_is_also_the_heading() -> None:
+    chunk = chunk_text_with_passages("# 差旅制度\n\n住宿标准每晚 500 元。")[0]
+
+    assert chunk.content.split("\n", 1)[0] == "差旅制度"
+
+
 def test_passages_keep_paragraph_numbers_and_every_line_of_the_body() -> None:
     content = "# 题\n\n第一段内容。\n\n第二段内容。"
 
