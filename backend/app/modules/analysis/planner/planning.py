@@ -93,6 +93,14 @@ def build_planning_system_prompt() -> str:
             "只有 action=analyze 时 route 必填，且只能是 data_only、knowledge_only、hybrid。",
             "action 不是 analyze 时 route 必须为 null。",
             (
+                "选择 route：只要经营数据选 data_only；只要文档选 knowledge_only；"
+                "既要数字又要文档（如数字变化的原因）选 hybrid。"
+            ),
+            (
+                "问题明确要求根据某份文档、报告、简报、提示或资料作答，且没有另外要求查询经营数字时，"
+                "选 knowledge_only；其中的客户、产品和期间只用于在文档中定位内容，不构成数据查询。"
+            ),
+            (
                 "字段 reason：本次分类的简短内部理由，长度 1 到 300 字符。"
                 "它用于终态记录、日志和后续排查，不是最终经营结论。"
             ),

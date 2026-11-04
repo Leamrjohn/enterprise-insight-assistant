@@ -175,6 +175,13 @@ def test_planning_service_rejects_action_route_mismatch() -> None:
     assert "route 必须明确写为 null" in gateway.calls[1]["prompt"]
 
 
+def test_planning_prompt_routes_questions_about_a_named_document_to_knowledge() -> None:
+    prompt = build_planning_system_prompt()
+
+    assert "选择 route：只要经营数据选 data_only" in prompt
+    assert "没有另外要求查询经营数字时，选 knowledge_only" in prompt
+
+
 def test_planning_prompt_forbids_business_answer_generation() -> None:
     prompt = build_planning_system_prompt()
 
