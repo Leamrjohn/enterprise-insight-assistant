@@ -13,6 +13,7 @@ from app.modules.documents.storage import save_document_file
 from app.modules.knowledge.rag.embeddings_local import LocalEmbeddingProvider
 from app.utils.document_chunk import (
     PARAGRAPH_CHUNK_STRATEGY,
+    PASSAGE_CHUNK_STRATEGY,
     SLIDING_WINDOW_CHUNK_STRATEGY,
     ChunkText,
     chunk_file,
@@ -69,6 +70,15 @@ def upload_document_service(
         raise
 
 
+def passage_records(content: str, fallback: list[ChunkText]) -> list[ChunkText]:
+    """Passages for one document; never empty when the document has text.
+
+    Text made only of headings or quotes has no passages, and retrieval refuses a
+    document missing a strategy, so such a document indexes its fallback chunks.
+    """
+    return chunk_text_for_strategy(content, PASSAGE_CHUNK_STRATEGY) or fallback
+
+
 def process_document_chunks(
     db: Session,
     document: Documents,
@@ -100,11 +110,12 @@ def process_document_chunks(
             )
             for index, record in enumerate(chunk_records)
         ]
+        full_text = "\n\n".join(record.content for record in chunk_records)
         chunk_records_by_strategy = {
             PARAGRAPH_CHUNK_STRATEGY: chunk_records,
+            PASSAGE_CHUNK_STRATEGY: passage_records(full_text, chunk_records),
             SLIDING_WINDOW_CHUNK_STRATEGY: chunk_text_for_strategy(
-                "\n\n".join(record.content for record in chunk_records),
-                SLIDING_WINDOW_CHUNK_STRATEGY,
+                full_text, SLIDING_WINDOW_CHUNK_STRATEGY
             ),
         }
         indexed_chunks = [
@@ -137,7 +148,7 @@ def process_document_chunks(
                 paragraph_end=chunk_record.paragraph_end,
             )
         document.status = "completed"
-        document.content = "\n\n".join(record.content for record in chunk_records)
+        document.content = full_text
         db.commit()
         db.refresh(document)
         return document

@@ -14,14 +14,19 @@ from app.modules.knowledge.rag.retrieval import retrieve_evidence
 from app.modules.organizations.models import Company, CompanyMember
 from app.utils.document_chunk import (
     PARAGRAPH_CHUNK_STRATEGY,
+    PASSAGE_CHUNK_STRATEGY,
     SLIDING_WINDOW_CHUNK_STRATEGY,
 )
 
 
 def test_document_worker_persists_mocked_ingestion_output(monkeypatch) -> None:
     chunk_texts = ["first chunk", "second chunk"]
-    indexed_texts = [*chunk_texts, "first chunk\n\nsecond chunk"]
-    embeddings = [[0.1] * 384, [0.2] * 384, [0.3] * 384]
+    indexed_texts = [
+        *chunk_texts,
+        "first chunk\nsecond chunk",
+        "first chunk\n\nsecond chunk",
+    ]
+    embeddings = [[0.1] * 384, [0.2] * 384, [0.3] * 384, [0.4] * 384]
 
     class FakeEmbeddingProvider:
         def embed_batch(self, texts: list[str]) -> list[list[float]]:
@@ -99,10 +104,11 @@ def test_document_worker_persists_mocked_ingestion_output(monkeypatch) -> None:
         assert [chunk.chunk_strategy for chunk in chunks] == [
             PARAGRAPH_CHUNK_STRATEGY,
             PARAGRAPH_CHUNK_STRATEGY,
+            PASSAGE_CHUNK_STRATEGY,
             SLIDING_WINDOW_CHUNK_STRATEGY,
         ]
         assert [chunk.content for chunk in chunks] == indexed_texts
-        assert [len(chunk.embedding) for chunk in chunks] == [384, 384, 384]
+        assert [len(chunk.embedding) for chunk in chunks] == [384, 384, 384, 384]
         assert chunks[0].embedding[0] == 0.1
         assert chunks[1].embedding[0] == 0.2
         assert chunks[2].embedding[0] == 0.3
@@ -210,9 +216,11 @@ def test_document_worker_indexes_and_retrieves_real_text_file(
         )
         assert [chunk.chunk_strategy for chunk in chunks] == [
             PARAGRAPH_CHUNK_STRATEGY,
+            PASSAGE_CHUNK_STRATEGY,
             SLIDING_WINDOW_CHUNK_STRATEGY,
         ]
         assert [chunk.content for chunk in chunks] == [
+            stored_document.content,
             stored_document.content,
             stored_document.content,
         ]
