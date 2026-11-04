@@ -214,6 +214,21 @@ def test_plan_review_widens_before_asking_the_user_to_clarify():
     assert "other_tables" not in second
 
 
+def test_plan_review_sees_metric_definitions_and_is_told_documents_are_not_in_schema():
+    gateway = _Gateway(_plan("analyze"))
+    SemanticReviewService(gateway=gateway).review_plan(
+        question="华东区销售额",
+        proposed_plan=json.loads(_plan("analyze")),
+        catalog=CATALOG,
+    )
+    payload = json.loads(gateway.calls[0]["prompt"])
+    prompt = gateway.calls[0]["system_prompt"]
+    assert payload["registered_metrics"]
+    assert "filter_value_definitions" in payload
+    assert "不得因快照未展示文档" in prompt
+    assert '"missing_slots":["metric|' in prompt
+
+
 def test_planner_prompt_only_changes_when_constraints_exist():
     plain = build_planning_user_prompt("销售额是多少", {"messages": []})
     assert "standing_constraints" not in plain

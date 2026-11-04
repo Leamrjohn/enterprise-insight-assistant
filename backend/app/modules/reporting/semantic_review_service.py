@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import re
 from time import sleep
-from typing import Any
+from typing import Any, get_args
 
 import sqlglot
 from app.core.exceptions import RetryableModelError, StructuredOutputError
@@ -17,6 +17,7 @@ from app.modules.analysis.catalog.schema_selection import (
 )
 from app.modules.analysis.catalog.semantic_catalog import FILTER_VALUE_DEFINITIONS
 from app.modules.analysis.catalog.snapshot_catalog import SnapshotCatalog
+from app.modules.analysis.data.query_contract import ClarificationSlot
 from app.modules.analysis.data.sql_candidate import SQLCandidate
 from app.modules.analysis.data.sql_generation import metric_contract_lines
 from app.modules.analysis.planner.planner_decision import PlannerDecision
@@ -143,14 +144,20 @@ class SemanticReviewService:
             "当前公司已授权范围和契约快照一致。若指标或关键条件不能由快照支持，"
             "选择 needs_clarification；若明确要求其他公司、未授权资料、系统内部数据、"
             "写入或危险行为，选择 refuse。不得因为缺少时间而忽略跨公司或越权意图。"
+            "registered_metrics 是已审定的指标口径，filter_value_definitions 是筛选值的含义；"
+            "能用它们表达的指标和条件视为快照支持，不得再以缺少定义为由追问。"
+            "快照不含文档内容；route 为 knowledge_only 或 hybrid 时，文档证据由后续知识节点"
+            "在已授权文档内检索，不得因快照未展示文档、政策或风险提示而选择 needs_clarification。"
             "scope_exit 不得实际完成翻译、写诗、推荐等无关任务。"
             "action 只能是 analyze、direct_response、scope_exit、needs_clarification、refuse；"
             "若初始计划正确，必须原样保留它的 action 和其他字段，不能使用 proceed、accept、keep 等词。"
-            "必须只输出以下九字段 JSON："
+            "必须只输出以下九字段 JSON，九个字段都必须出现，不适用的填 null："
             '{"action":"...","route":null,"reason":"...",'
             '"clarification_question":null,"response_message":null,'
             '"resolved_question":null,"clarification":null,"intent":null,'
             '"evaluation_scope":null}。'
+            "选择 needs_clarification 时，clarification_question 写具体追问，clarification 写"
+            f'{{"missing_slots":["{"|".join(get_args(ClarificationSlot))}"],"examples":[]}}。'
             f"{_OTHER_TABLES_NOTE}"
         )
         shown = select_tables(catalog, [question]) if catalog is not None else set()
@@ -159,6 +166,8 @@ class SemanticReviewService:
             "proposed_plan": proposed_plan,
             "current_scope": "仅当前登录公司的已授权数据源和文档",
             "schema_snapshot": _catalog_payload(catalog, shown),
+            "registered_metrics": metric_contract_lines(catalog),
+            "filter_value_definitions": _filter_values(catalog, shown),
         }
         reviewed_plan = self._review_plan_once(system_prompt, payload, proposed_plan)
         if (
@@ -168,6 +177,7 @@ class SemanticReviewService:
         ):
             # "Cannot be supported" must not come from a narrowed view.
             payload["schema_snapshot"] = _catalog_payload(catalog)
+            payload["filter_value_definitions"] = _filter_values(catalog, None)
             reviewed_plan = self._review_plan_once(
                 system_prompt, payload, proposed_plan
             )
