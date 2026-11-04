@@ -21,12 +21,6 @@ x-backend-environment: &backend-environment
   ACME_DEMO_DATABASE_PASSWORD: acme_demo_readonly_password
   BETA_DEMO_DATABASE_PASSWORD: beta_demo_readonly_password
 
-# Online retrieval only; evaluation keeps choosing its own policy. Remove to roll back.
-x-online-retrieval: &online-retrieval
-  RAG_RETRIEVAL_POLICY: passage_jieba_rrf_rerank_v1
-  RAG_RETRIEVAL_TOP_K: "30"
-  RAG_RERANK_TOP_K: "5"
-
 x-default-logging: &default-logging
   driver: json-file
   options:
@@ -217,7 +211,7 @@ services:
     env_file:
       - ./backend/.env
     environment:
-      <<: [*backend-environment, *online-retrieval]
+      <<: *backend-environment
       HF_HOME: /app/storage/huggingface
     volumes:
       - ./backend/logs:/app/logs
@@ -345,8 +339,7 @@ services:
       ]
     env_file:
       - ./backend/.env
-    environment:
-      <<: [*backend-environment, *online-retrieval]
+    environment: *backend-environment
     volumes:
       - ./backend/logs:/app/logs
       - ./backend/storage:/app/storage
