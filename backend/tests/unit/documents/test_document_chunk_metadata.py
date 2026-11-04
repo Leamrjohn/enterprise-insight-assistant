@@ -89,6 +89,19 @@ def test_each_piece_of_a_cut_table_keeps_its_header() -> None:
     assert "| 客户39 | 39 |" in chunks[-1].content
 
 
+def test_passage_labels_write_months_both_ways() -> None:
+    content = "# 2025年07月经营月度事实包\n\n2025年07月已交付订单：147 笔。"
+    october = "# 2025年10月经营月度事实包\n\n已交付订单：154 笔。"
+
+    chunk = chunk_text_with_passages(content)[0]
+
+    label, body = chunk.content.split("\n", 1)
+    assert "2025年7月（2025年07月）经营月度事实包" in label
+    # Only the generated label changes; the document's own words stay as written.
+    assert body == "2025年07月已交付订单：147 笔。"
+    assert "2025年10月" in chunk_text_with_passages(october)[0].content
+
+
 def test_passages_keep_paragraph_numbers_and_every_line_of_the_body() -> None:
     content = "# 题\n\n第一段内容。\n\n第二段内容。"
 

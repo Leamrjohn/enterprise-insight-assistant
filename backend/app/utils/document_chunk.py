@@ -154,6 +154,7 @@ MAX_PASSAGE_HEADING_CHARS = 24
 MAX_PASSAGE_IDENTIFIERS = 3
 _IDENTIFIER = re.compile(r"[A-Z]{2,}-\d[\dA-Z-]*")
 _SENTENCE_END = re.compile(r"(?<=[。！？；;])")
+_PADDED_MONTH = re.compile(r"(\d{4}年)0(\d月)")
 
 
 def _title_sections(paragraphs: list[str]) -> list[list[tuple[int, str]]]:
@@ -229,6 +230,8 @@ def _section_passages(
         if not buffer:
             return
         label = "｜".join(part for part in (title, identifiers, heading) if part)
+        # People ask about 2025年7月 or 2025年07月, so the label says both.
+        label = _PADDED_MONTH.sub(r"\1\2（\g<0>）", label)
         body = "\n".join(([table_header] if table_header else []) + buffer)
         chunks.append(ChunkText(f"{label}\n{body}" if label else body, start, end))
         buffer.clear()
