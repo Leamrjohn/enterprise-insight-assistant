@@ -34,6 +34,13 @@ _NUMBER = re.compile(r"(?<![A-Za-z0-9-])\d+(?:\.\d+)?")
 _OTHER_TABLES_NOTE = (
     "schema_snapshot.other_tables 是当前公司也有、但这里未展示字段的表。"
 )
+_PLAN_NULLABLE_FIELDS = (
+    "route",
+    "clarification_question",
+    "response_message",
+    "resolved_question",
+)
+_MAX_CLARIFICATION_EXAMPLES = 3
 
 
 def _catalog_payload(
@@ -77,6 +84,26 @@ def _tables_in_sql(sql: str) -> set[str] | None:
         }
     except sqlglot.errors.SqlglotError:
         return None
+
+
+def _complete_plan_output(raw_output: str) -> str:
+    """An omitted nullable field means null; PlannerDecision still checks the rest."""
+    try:
+        payload = json.loads(raw_output)
+    except json.JSONDecodeError:
+        return raw_output
+    if not isinstance(payload, dict):
+        return raw_output
+    for field in _PLAN_NULLABLE_FIELDS:
+        payload.setdefault(field, None)
+    clarification = payload.get("clarification")
+    if isinstance(clarification, dict) and isinstance(
+        clarification.get("examples"), list
+    ):
+        clarification["examples"] = clarification["examples"][
+            :_MAX_CLARIFICATION_EXAMPLES
+        ]
+    return json.dumps(payload, ensure_ascii=False)
 
 
 def _numbers(text: str) -> set[str]:
@@ -211,6 +238,7 @@ class SemanticReviewService:
             "Planner 语义复核结果不符合 JSON 契约",
             system_prompt,
             payload,
+            normalize=_complete_plan_output,
         )
 
     @staticmethod
@@ -359,9 +387,10 @@ class SemanticReviewService:
         error_message: str,
         system_prompt: str,
         payload: dict[str, Any],
+        normalize=lambda output: output,
     ):
         try:
-            return model.model_validate_json(raw_output)
+            return model.model_validate_json(normalize(raw_output))
         except ValidationError:
             repaired_output = self._chat(
                 system_prompt=(
@@ -371,7 +400,7 @@ class SemanticReviewService:
                 payload=payload,
             )
             try:
-                return model.model_validate_json(repaired_output)
+                return model.model_validate_json(normalize(repaired_output))
             except ValidationError as error:
                 raise StructuredOutputError(error_message) from error
 

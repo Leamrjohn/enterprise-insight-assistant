@@ -1,7 +1,7 @@
 import json
 
 import pytest
-from app.core.exceptions import RetryableModelError
+from app.core.exceptions import RetryableModelError, StructuredOutputError
 from app.modules.analysis.catalog.snapshot_catalog import SnapshotCatalog
 from app.modules.analysis.data.sql_candidate import SQLCandidate
 from app.modules.analysis.planner.planner_decision import PlannerDecision
@@ -163,6 +163,48 @@ def test_plan_semantic_reviewer_can_turn_cross_company_query_into_refusal() -> N
 
     assert isinstance(decision, PlannerDecision)
     assert decision.action == "refuse"
+
+
+def test_plan_semantic_reviewer_treats_omitted_nullable_fields_as_null() -> None:
+    gateway = FakeGateway(
+        {
+            "action": "needs_clarification",
+            "reason": "快照没有广告数据。",
+            "clarification_question": "你想看哪个广告平台的点击率？",
+            "clarification": {
+                "missing_slots": ["object"],
+                "examples": ["甲", "乙", "丙", "丁", "戊"],
+            },
+        }
+    )
+
+    decision = SemanticReviewService(gateway=gateway).review_plan(
+        question="本月广告点击率是多少？",
+        proposed_plan={"action": "needs_clarification"},
+        catalog=None,
+    )
+
+    assert len(gateway.calls) == 1
+    assert decision.action == "needs_clarification"
+    assert decision.clarification_question == "你想看哪个广告平台的点击率？"
+    assert decision.clarification.examples == ["甲", "乙", "丙"]
+
+
+def test_plan_semantic_reviewer_still_rejects_analyze_without_a_route() -> None:
+    gateway = FakeGateway(
+        {
+            "action": "analyze",
+            "reason": "需要查询。",
+            "resolved_question": "当前销售订单总数是多少？",
+        }
+    )
+
+    with pytest.raises(StructuredOutputError):
+        SemanticReviewService(gateway=gateway).review_plan(
+            question="当前销售订单总数是多少？",
+            proposed_plan={"action": "needs_clarification"},
+            catalog=None,
+        )
 
 
 def test_plan_semantic_reviewer_preserves_initial_plan_for_accept_vocabulary() -> None:
