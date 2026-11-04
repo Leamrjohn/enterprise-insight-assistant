@@ -45,7 +45,7 @@ def classify(status, passed, timed_out=False):
         return "无响应"
     if passed and status in {"completed", "partial", "needs_clarification"}:
         return "成功"
-    return "结果错误" if status in {"completed", "partial"} else "失败"
+    return "结果错误" if status in {"completed", "partial", "needs_clarification"} else "失败"
 
 
 def emit(event, **fields):

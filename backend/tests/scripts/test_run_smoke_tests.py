@@ -202,6 +202,7 @@ def test_pending_review_continues_without_waiting_cancelling_or_approving(
     [
         ("partial", False, "结果错误", True),
         ("completed", False, "结果错误", True),
+        ("needs_clarification", False, "结果错误", True),
         ("failed", False, "失败", False),
         ("cancelled", False, "失败", False),
         ("partial", True, "成功", True),
