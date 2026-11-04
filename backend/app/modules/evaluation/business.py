@@ -38,6 +38,8 @@ _DOCUMENT_TERM_VARIANTS: dict[str, tuple[str, ...]] = {
     "暂停采购": ("暂停常规采购", "暂停日常采购", "暂停例行采购"),
 }
 _NEGATION_MARKERS = ("没有", "并没有", "并未", "未", "不", "非")
+# "不低于30%" states a bound on the number; it does not deny it.
+_QUANTITY_BOUND_MARKERS = ("不低于", "不少于", "不高于", "不超过")
 _QUALIFIED_NEGATION_MARKERS = (
     "不能证明",
     "不能仅凭",
@@ -54,6 +56,8 @@ _QUESTION_NEGATION_SUFFIX_MARKERS = ("不足以判断", "无法给出结论")
 def _term_is_negated(item: str, start: int) -> bool:
     """Reject a literal or approved variant when its preceding clause negates it."""
     context = item[max(0, start - 4) : start]
+    for marker in _QUANTITY_BOUND_MARKERS:
+        context = context.replace(marker, "")
     if any(marker in context for marker in _NEGATION_MARKERS):
         return True
     sentence_start = max(item.rfind(marker, 0, start) for marker in "。！？!?；;")

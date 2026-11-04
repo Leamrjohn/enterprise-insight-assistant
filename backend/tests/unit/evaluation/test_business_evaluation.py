@@ -1426,6 +1426,44 @@ def test_document_term_expectations_reject_a_negated_literal() -> None:
 
 
 @pytest.mark.parametrize(
+    ("claim", "supported"),
+    [
+        ("建议按不低于30%的比例计提坏账准备。", True),
+        ("计提比例不少于30%。", True),
+        ("计提比例不高于30%。", True),
+        ("计提比例不超过30%。", True),
+        ("建议不按30%的比例计提坏账准备。", False),
+        ("计提比例未达到30%。", False),
+    ],
+)
+def test_document_term_quantity_bound_is_not_a_negation(
+    claim: str, supported: bool
+) -> None:
+    case = _case(
+        expected_route="knowledge_only",
+        expected_supported_claims=[],
+        expected_document_claim_terms=[{"all_of": ["30%"]}],
+        expected_limitations=[],
+        inapplicable_hard_gates={
+            "sql_result_equivalent": "知识库专用路线不执行 SQL。",
+            "numeric_consistent": "知识库专用路线没有 SQL 数值输出。",
+        },
+    )
+
+    result = evaluate_case(
+        case,
+        _observation(
+            actual_route="knowledge_only",
+            actual_result_fingerprint=None,
+            actual_supported_claims=[claim],
+            numeric_check_status="unknown",
+        ),
+    )
+
+    assert result.required_claims_supported is supported
+
+
+@pytest.mark.parametrize(
     ("case_id", "claim", "qualification"),
     [
         (
