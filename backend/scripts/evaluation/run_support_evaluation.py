@@ -28,7 +28,9 @@ from app.main import app  # noqa: F401 - registers every model for the mapper
 from app.modules.analysis.agent_protocol import AgentInput
 from app.modules.analysis.tool_protocol import Tool, ToolInput, ToolOutput
 from app.modules.evaluation.support_check import (
+    answer_matches_loosely,
     summarize_end_to_end,
+    summarize_loose_answers,
     summarize_support_cases,
 )
 from app.modules.identity.models import User
@@ -238,6 +240,7 @@ def _case_row(case_id, answer, output, replies, stale_id=None) -> dict:
         "case_id": case_id,
         "answer_before_check": answer in before,
         "answer_after_check": answer in (output.answer or ""),
+        "answer_loose": answer_matches_loosely(answer, output.answer or ""),
         "answer_in_cited_chunk": any(answer in e["content"] for e in output.evidence),
         "stale_cited": sum(e["document_id"] == stale_id for e in output.evidence),
         "cited": bool(output.evidence),
@@ -387,6 +390,7 @@ def main() -> None:
         ],
         "sentences": summarize_support_cases(sentences) if sentences else None,
         "end_to_end": summarize_end_to_end(end_to_end) if end_to_end else None,
+        "end_to_end_loose": summarize_loose_answers(end_to_end) if end_to_end else None,
         "unanswerable": {
             "cases": len(unanswerable),
             "answered_with_citation": [r for r in unanswerable if r["cited"]],

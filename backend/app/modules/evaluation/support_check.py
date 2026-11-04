@@ -2,9 +2,36 @@
 
 from __future__ import annotations
 
+import re
+import unicodedata
+
 # Fixed before the first recording.
 CITATION_SUPPORT_TARGET = 0.95
 WRONGLY_REMOVED_LIMIT = 0.15
+
+# Decimal points, percent signs and minus signs change a value, so they stay.
+_SEPARATORS = re.compile(r"[\s:;,、。!?()\"'`|“”‘’]")
+
+
+def _without_separators(text: str) -> str:
+    return _SEPARATORS.sub("", unicodedata.normalize("NFKC", text))
+
+
+def answer_matches_loosely(expected: str, answer: str) -> bool:
+    """Whether the answer states the expected text, however it is spaced.
+
+    A second score beside the exact match, which also rejects 约12% for 约 12%.
+    A number must match whole: 147 笔 is not found in 1147 笔.
+    """
+    expected = _without_separators(expected)
+    if not expected:
+        return False
+    pattern = re.escape(expected)
+    if expected[0].isdigit():
+        pattern = r"(?<![\d.])" + pattern
+    if expected[-1].isdigit():
+        pattern += r"(?!\.?\d)"
+    return re.search(pattern, _without_separators(answer)) is not None
 
 
 def summarize_support_cases(rows: list[dict]) -> dict:
@@ -45,4 +72,16 @@ def summarize_end_to_end(rows: list[dict]) -> dict:
         "sentences": sum(r["sentences"] for r in rows),
         "sentences_removed": sum(r["sentences_removed"] for r in rows),
         "no_supported_claim": [r["case_id"] for r in rows if not r["cited"]],
+    }
+
+
+def summarize_loose_answers(rows: list[dict]) -> dict:
+    """The second score, and which answers only it accepts, so they can be read."""
+    return {
+        "answer_after_check_loose": sum(r["answer_loose"] for r in rows),
+        "accepted_only_by_loose": [
+            r["case_id"]
+            for r in rows
+            if r["answer_loose"] and not r["answer_after_check"]
+        ],
     }
