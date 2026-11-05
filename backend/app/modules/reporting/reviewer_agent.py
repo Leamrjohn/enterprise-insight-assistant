@@ -17,6 +17,7 @@ from app.modules.reporting.composer import (
 )
 from app.modules.reporting.coverage import calculate_coverage
 from app.modules.reporting.numeric_validation import validate_numbers
+from app.modules.reporting.qualification import resolve_references
 from app.modules.reporting.schema_validation import validate_schema
 from app.modules.reporting.schemas import (
     DocumentQualification,
@@ -203,8 +204,12 @@ def _verbatim_document_qualifications(
         if isinstance(chunk_id := evidence.get("chunk_id"), int)
         and isinstance(content := evidence.get("content"), str)
     }
+    referenced, unknown_references = resolve_references(
+        semantic_review.document_qualification_refs, knowledge_evidences
+    )
+    proposals = [*semantic_review.document_qualifications, *referenced]
     qualifications: list[DocumentQualification] = []
-    for proposed in semantic_review.document_qualifications:
+    for proposed in proposals:
         cited_ids = set(proposed.citation_chunk_ids)
         if not cited_ids or not cited_ids.issubset(supported_chunk_ids):
             continue
@@ -212,6 +217,8 @@ def _verbatim_document_qualifications(
             proposed.statement in content_by_chunk.get(chunk_id, "")
             for chunk_id in cited_ids
         ):
+            continue
+        if any(kept.statement == proposed.statement for kept in qualifications):
             continue
         qualifications.append(
             DocumentQualification(
@@ -222,8 +229,9 @@ def _verbatim_document_qualifications(
     logger.info(
         "Document qualifications checked",
         extra={
-            "qualifications_proposed": len(semantic_review.document_qualifications),
+            "qualifications_proposed": len(proposals),
             "qualifications_kept": len(qualifications),
+            "qualification_refs_unknown": unknown_references,
         },
     )
     return qualifications

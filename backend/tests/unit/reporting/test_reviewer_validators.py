@@ -425,3 +425,67 @@ def test_reviewer_discards_a_nonverbatim_document_qualification() -> None:
     assert result.evidence[0]["report"]["status"] == "completed"
     assert result.evidence[0]["report"]["document_findings"][0]["qualifications"] == []
     assert "该客户已正式拒绝续约。" not in (result.answer or "")
+
+
+# The quality review's real wording; task 578's reviewer rewrote its first sentence.
+QUALITY_REVIEW_CONTENT = (
+    "工单和退货是可复算事实，供应商批次异常是文档支持的原因假设。"
+    "该复盘不是对所有产品或所有客户的质量结论。"
+)
+
+
+def test_rewritten_qualification_is_dropped() -> None:
+    review = EvidenceSemanticReview(
+        verdict="supported",
+        reason="test",
+        document_qualifications=[
+            {
+                "statement": "供应商批次异常是文档支持的原因假设，并非可复算事实。",
+                "citation_chunk_ids": [42],
+            }
+        ],
+    )
+    assert (
+        _verbatim_document_qualifications(
+            semantic_review=review,
+            supported_chunk_ids={42},
+            knowledge_evidences=[{"chunk_id": 42, "content": QUALITY_REVIEW_CONTENT}],
+        )
+        == []
+    )
+
+
+def test_qualification_reference_keeps_the_source_sentence() -> None:
+    review = EvidenceSemanticReview(
+        verdict="supported",
+        reason="test",
+        document_qualification_refs=["42.1", "42.2"],
+    )
+    kept = _verbatim_document_qualifications(
+        semantic_review=review,
+        supported_chunk_ids={42},
+        knowledge_evidences=[{"chunk_id": 42, "content": QUALITY_REVIEW_CONTENT}],
+    )
+    assert [(item.statement, item.citation_chunk_ids) for item in kept] == [
+        ("工单和退货是可复算事实，供应商批次异常是文档支持的原因假设。", [42]),
+        ("该复盘不是对所有产品或所有客户的质量结论。", [42]),
+    ]
+
+
+def test_unknown_or_unsupported_qualification_references_are_ignored() -> None:
+    review = EvidenceSemanticReview(
+        verdict="supported",
+        reason="test",
+        document_qualification_refs=["42.9", "7.1", "not-a-ref"],
+    )
+    assert (
+        _verbatim_document_qualifications(
+            semantic_review=review,
+            supported_chunk_ids={42},
+            knowledge_evidences=[
+                {"chunk_id": 42, "content": QUALITY_REVIEW_CONTENT},
+                {"chunk_id": 7, "content": "另一份资料的结论。"},
+            ],
+        )
+        == []
+    )

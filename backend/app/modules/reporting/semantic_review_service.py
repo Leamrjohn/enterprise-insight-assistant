@@ -11,6 +11,7 @@ import sqlglot
 from app.core.exceptions import RetryableModelError, StructuredOutputError
 from app.core.gateway.base import ModelGateway
 from app.core.gateway.factory import get_model_gateway
+from app.core.settings import get_settings
 from app.modules.analysis.catalog.schema_selection import (
     narrow_catalog,
     select_tables,
@@ -21,6 +22,7 @@ from app.modules.analysis.data.query_contract import ClarificationSlot
 from app.modules.analysis.data.sql_candidate import SQLCandidate
 from app.modules.analysis.data.sql_generation import metric_contract_lines
 from app.modules.analysis.planner.planner_decision import PlannerDecision
+from app.modules.reporting.qualification import with_numbered_sentences
 from app.modules.reporting.semantic_review import (
     EvidenceSemanticReview,
     SQLSemanticReview,
@@ -328,6 +330,26 @@ class SemanticReviewService:
         report: dict[str, Any],
         memories_used: list[dict[str, Any]] | None = None,
     ) -> EvidenceSemanticReview:
+        sentence_refs = get_settings().review_qualification_mode == "sentence_ref"
+        qualification_rule = (
+            "document_qualification_refs 只可填写已列引用 chunk 中方括号内的句子编号"
+            "（如 1.2），标出原文写明的结论边界；不要抄写、改写或补充句子。"
+            if sentence_refs
+            else "document_qualifications 仅可记录已列引用 chunk 中逐字出现的结论边界；"
+            "不得推断、改写或补充文档未写出的限制。"
+        )
+        qualification_json = (
+            '"document_qualification_refs":["1.2"]}。'
+            if sentence_refs
+            else '"document_qualifications":[{"statement":"...","citation_chunk_ids":[1]}]}。'
+        )
+        if sentence_refs:
+            knowledge_result = {
+                **knowledge_result,
+                "evidences": with_numbered_sentences(
+                    knowledge_result.get("evidences") or []
+                ),
+            }
         system_prompt = (
             "你是企业经营报告的证据语义复核器。只返回 JSON，不生成新事实、数字、"
             "引用或建议。判断现有数据和文档证据是否支持回答原问题：supported 表示"
@@ -339,12 +361,11 @@ class SemanticReviewService:
             "指标，或 SQL 未包含文档背景，而把已分别覆盖的混合问题判为 partial。"
             "对于 document_question，只有直接支持非因果、非数值文档事实的已列引用 chunk "
             "才可写入 supported_document_chunk_ids；其他情况必须为空数组。"
-            "document_qualifications 仅可记录已列引用 chunk 中逐字出现的结论边界；"
-            "不得推断、改写或补充文档未写出的限制。"
+            f"{qualification_rule}"
             "必须只输出 JSON："
             '{"verdict":"supported|partial|unsupported","reason":"...",'
             '"limitations":["..."],"supported_document_chunk_ids":[1],'
-            '"document_qualifications":[{"statement":"...","citation_chunk_ids":[1]}]}。'
+            f"{qualification_json}"
         )
         payload, _ = assemble(
             EVIDENCE_REVIEW,

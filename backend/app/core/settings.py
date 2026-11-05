@@ -116,6 +116,8 @@ class Settings(BaseSettings):
     rag_rerank_min_score: float = 0.5
     knowledge_evidence_transport: Literal["local", "mcp_stdio"] = "local"
     knowledge_support_check_enabled: bool = True
+    # How evidence review marks document boundaries: copied text or sentence numbers.
+    review_qualification_mode: Literal["text", "sentence_ref"] = "text"
     # Model-chosen tools inside Data and Knowledge. "allowlist" is the gradual rollout.
     model_tool_mode: Literal["off", "allowlist", "all"] = "off"
     model_tool_company_ids: list[int] = []

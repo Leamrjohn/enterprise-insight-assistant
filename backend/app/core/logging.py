@@ -69,6 +69,7 @@ class JsonFormatter(logging.Formatter):
             "removed",
             "qualifications_proposed",
             "qualifications_kept",
+            "qualification_refs_unknown",
             "context_node",
             "context_tokens",
             "context_budget_tokens",

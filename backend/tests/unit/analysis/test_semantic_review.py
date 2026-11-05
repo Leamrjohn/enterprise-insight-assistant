@@ -362,3 +362,39 @@ def test_semantic_reviewer_retries_a_transient_model_failure() -> None:
     assert decision.decision == "execute"
     assert service.model_attempts == 2
     assert waits == [1.0]
+
+
+def test_evidence_review_asks_for_sentence_references_when_enabled(
+    monkeypatch,
+) -> None:
+    from app.core.settings import get_settings
+
+    monkeypatch.setattr(get_settings(), "review_qualification_mode", "sentence_ref")
+    gateway = FakeGateway(
+        {
+            "verdict": "supported",
+            "reason": "资料写明了结论边界。",
+            "supported_document_chunk_ids": [17],
+            "document_qualification_refs": ["17.2"],
+        }
+    )
+
+    decision = SemanticReviewService(gateway=gateway).review_evidence(
+        question="哪些资料支持SUP-003传感器批次异常？",
+        plan={"route": "knowledge_only"},
+        data_result={},
+        knowledge_result={
+            "status": "ready",
+            "evidences": [
+                {"chunk_id": 17, "content": "批次存在异常。该复盘不是全部结论。"}
+            ],
+        },
+        report={"status": "completed"},
+    )
+
+    call = gateway.calls[0]
+    assert "document_qualification_refs" in call["system_prompt"]
+    assert '"document_qualifications"' not in call["system_prompt"]
+    evidence = json.loads(call["prompt"])["knowledge_result"]["evidences"][0]
+    assert evidence["content"] == "[17.1] 批次存在异常。\n[17.2] 该复盘不是全部结论。"
+    assert decision.document_qualification_refs == ["17.2"]

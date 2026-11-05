@@ -31,6 +31,8 @@ class EvidenceSemanticReview(BaseModel):
     document_qualifications: list[DocumentQualificationReview] = Field(
         default_factory=list, max_length=8
     )
+    # Sentence references such as "17.2"; code resolves them to the source text.
+    document_qualification_refs: list[str] = Field(default_factory=list, max_length=8)
     contradicted_memories: list[ContradictedMemory] = Field(
         default_factory=list, max_length=8
     )
