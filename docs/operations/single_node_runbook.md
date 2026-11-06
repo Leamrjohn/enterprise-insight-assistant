@@ -74,6 +74,7 @@ The initializer is responsible for creating the local development bucket. A Loca
 - 模型鉴权、参数或结构契约错误：修复配置或 Prompt 契约后重新创建任务。
 - SQL Schema、权限或 AST 校验失败：检查任务冻结的 Schema Snapshot 和只读账号，不得绕过校验器。
 - `awaiting_review`：由授权人员批准或驳回；批准只发布已存在且通过校验的草稿。
+- 文档限定条件丢失或日志 `qualification_refs_unknown` 大于 0：先看是否为编号对不上；需要回退时，在 worker 环境设置 `REVIEW_QUALIFICATION_MODE=text` 并重启 `agent-worker-1`，不改代码。
 
 ## 队列检查
 
