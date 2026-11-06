@@ -459,7 +459,7 @@ def test_qualification_reference_keeps_the_source_sentence() -> None:
     review = EvidenceSemanticReview(
         verdict="supported",
         reason="test",
-        document_qualification_refs=["42.1", "42.2"],
+        document_qualification_refs=["S1", "S2"],
     )
     kept = _verbatim_document_qualifications(
         semantic_review=review,
@@ -476,7 +476,7 @@ def test_unknown_or_unsupported_qualification_references_are_ignored() -> None:
     review = EvidenceSemanticReview(
         verdict="supported",
         reason="test",
-        document_qualification_refs=["42.9", "7.1", "not-a-ref"],
+        document_qualification_refs=["S9", "S3", "42.1", "not-a-ref"],
     )
     assert (
         _verbatim_document_qualifications(
@@ -489,3 +489,19 @@ def test_unknown_or_unsupported_qualification_references_are_ignored() -> None:
         )
         == []
     )
+
+
+def test_global_references_continue_across_chunks() -> None:
+    from app.modules.reporting.qualification import global_references
+
+    assert global_references(
+        [
+            {"chunk_id": 1413, "content": "甲。乙；丙。"},
+            {"chunk_id": 7, "content": "丁"},
+        ]
+    ) == {
+        "S1": (1413, "甲。"),
+        "S2": (1413, "乙；"),
+        "S3": (1413, "丙。"),
+        "S4": (7, "丁"),
+    }

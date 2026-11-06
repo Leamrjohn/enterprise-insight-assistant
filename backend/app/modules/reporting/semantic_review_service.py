@@ -332,14 +332,14 @@ class SemanticReviewService:
     ) -> EvidenceSemanticReview:
         sentence_refs = get_settings().review_qualification_mode == "sentence_ref"
         qualification_rule = (
-            "document_qualification_refs 只可填写已列引用 chunk 中方括号内的句子编号"
-            "（如 1.2），标出原文写明的结论边界；不要抄写、改写或补充句子。"
+            "document_qualification_refs 只可填写已列引用 chunk 中方括号内的完整句子编号"
+            "（S 加数字），标出原文写明的结论边界；不要抄写、改写或补充句子。"
             if sentence_refs
             else "document_qualifications 仅可记录已列引用 chunk 中逐字出现的结论边界；"
             "不得推断、改写或补充文档未写出的限制。"
         )
         qualification_json = (
-            '"document_qualification_refs":["1.2"]}。'
+            '"document_qualification_refs":["S编号"]}。'
             if sentence_refs
             else '"document_qualifications":[{"statement":"...","citation_chunk_ids":[1]}]}。'
         )

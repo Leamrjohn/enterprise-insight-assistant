@@ -375,7 +375,7 @@ def test_evidence_review_asks_for_sentence_references_when_enabled(
             "verdict": "supported",
             "reason": "资料写明了结论边界。",
             "supported_document_chunk_ids": [17],
-            "document_qualification_refs": ["17.2"],
+            "document_qualification_refs": ["S2"],
         }
     )
 
@@ -396,5 +396,6 @@ def test_evidence_review_asks_for_sentence_references_when_enabled(
     assert "document_qualification_refs" in call["system_prompt"]
     assert '"document_qualifications"' not in call["system_prompt"]
     evidence = json.loads(call["prompt"])["knowledge_result"]["evidences"][0]
-    assert evidence["content"] == "[17.1] 批次存在异常。\n[17.2] 该复盘不是全部结论。"
-    assert decision.document_qualification_refs == ["17.2"]
+    assert evidence["content"] == "[S1] 批次存在异常。\n[S2] 该复盘不是全部结论。"
+    assert "S编号" in call["system_prompt"]
+    assert decision.document_qualification_refs == ["S2"]

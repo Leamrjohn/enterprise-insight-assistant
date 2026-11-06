@@ -25,9 +25,21 @@ def number_sentences(evidences: list[dict]) -> dict[str, tuple[int, str]]:
     return numbered
 
 
+def global_references(evidences: list[dict]) -> dict[str, tuple[int, str]]:
+    """Number every sentence of all evidences S1, S2, … in evidence order.
+
+    A plain sequence leaves no prefix to copy wrongly: a reviewer once wrote 1.8
+    for 1413.8 after a prompt example, and the boundary was lost.
+    """
+    return {
+        f"S{index}": value
+        for index, value in enumerate(number_sentences(evidences).values(), start=1)
+    }
+
+
 def with_numbered_sentences(evidences: list[dict]) -> list[dict]:
     """The same evidences, each sentence prefixed by its reference."""
-    numbered = number_sentences(evidences)
+    numbered = global_references(evidences)
     by_chunk: dict[int, list[str]] = {}
     for reference, (chunk_id, sentence) in numbered.items():
         by_chunk.setdefault(chunk_id, []).append(f"[{reference}] {sentence}")
@@ -43,7 +55,7 @@ def resolve_references(
     references: list[str], evidences: list[dict]
 ) -> tuple[list[DocumentQualificationReview], int]:
     """The referenced sentences, and how many references matched nothing."""
-    numbered = number_sentences(evidences)
+    numbered = global_references(evidences)
     resolved = []
     unknown = 0
     for reference in references:
