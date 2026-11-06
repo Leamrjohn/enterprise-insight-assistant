@@ -539,3 +539,4 @@
 - 默认 REVIEW_QUALIFICATION_MODE=sentence_ref，回退写入 .env.example 和 Runbook；单元和脚本测试 1392 通过；三个镜像重建、依赖不变。
 - 冒烟 b5-default-on：9 成功 + 1 结果错误；编号对不上 0。混合题首次变成 partial（任务 771，复核判 partial：认为文档没有按 delivered 拆分销售额）；此前旧方式约 60 轮、新方式 4 轮均为待复核。是否与新提示词有关未证实。
 - 待办：混合题复核判断不稳定（任务 591 草稿里已有同样的理由）；“编号对不上”告警待加（O3）。累计实验费用约 $0.41。
+- 混合题对照（各 20 次，先 sentence_ref 后 text，非交替）：两组都是 20/20 待复核、复核结论 supported；任务 771 的 partial 未再出现。合计 $0.161（上限 $0.20），累计实验费用约 $0.57。默认保持 sentence_ref，Worker 已恢复默认。
