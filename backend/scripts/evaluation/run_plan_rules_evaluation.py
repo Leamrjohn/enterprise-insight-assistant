@@ -85,16 +85,25 @@ def planner_decisions(route_report: dict) -> dict[str, str]:
     return {row["case_id"]: row["actual"] for row in route_report["results"]}
 
 
+def planner_resolved(route_report: dict) -> dict[str, str | None]:
+    """The Planner's resolved question per case; None in reports from before B2j."""
+    return {
+        row["case_id"]: row.get("resolved_question") for row in route_report["results"]
+    }
+
+
 def compare_routes(
     cases: list[dict],
     planner: dict[str, str],
     enabled: set[str] | None = None,
     today: date = TODAY,
+    resolved: dict[str, str | None] | None = None,
 ) -> dict:
     """Final route per case with and without the enabled rules.
 
     Hits are settled by the B2j table (rules.arbitrate); disagreeing hits are listed.
-    A case may carry the Planner's resolved_question for a follow-up turn.
+    Rules read the Planner's resolved question when the report has one, as online;
+    else a resolved_question written on the case; else the original question.
     """
     missing = [case["case_id"] for case in cases if case["case_id"] not in planner]
     if missing:
@@ -105,7 +114,10 @@ def compare_routes(
     }
     changed, conflicts = [], []
     for case in cases:
-        question, _source = rule_question(case["question"], case)
+        rewrite = (resolved or {}).get(case["case_id"]) or case.get("resolved_question")
+        question, _source = rule_question(
+            case["question"], {"resolved_question": rewrite}
+        )
         hits = [
             rule
             for rule in matching_rules(extract_question_facts(question, today))
@@ -165,7 +177,10 @@ def main(argv: list[str] | None = None) -> None:
             route_report = json.loads(args.planner_results.read_text(encoding="utf-8"))
             enabled = set(args.enable.split(",")) if args.enable else None
             report["comparison"] = compare_routes(
-                cases, planner_decisions(route_report), enabled
+                cases,
+                planner_decisions(route_report),
+                enabled,
+                resolved=planner_resolved(route_report),
             )
     except LabelSetError as exc:
         parser.exit(2, f"refused: {exc}\n")

@@ -607,3 +607,9 @@
 - 裁决表写在 rules.py：意见一致即采纳；路由规则（R2/R3）优先于反问规则（R5）；其他分歧弃权交 Planner。多轮时规则读 resolved_question，没有则读原始问题。影子记录新增 decided、question_source；评测脚本 compare_routes 改用 arbitrate，题目可带 resolved_question。
 - 验证：针对性 45 通过；tests/scripts + unit/analysis + unit/evaluation + unit/workflow 865 通过 4 跳过；开发集对照（11-01 录音）两模式仍为 30/34、错误反问 1，无冲突题。部署 api/worker/report-worker 后冒烟 b2j-arbitration（任务 875–884，$0.025）：8 成功 + 比较题结果错误（876 列名“已交付订单销售额”，同已知判分误判）+ 混合题待复核；10 个任务都有 decided 和 question_source，decided 与 Planner 一致 7/7，冲突 0。
 - 待办：单轮题 Planner 也给 resolved_question（analyze 时必填）：冒烟 9 个 analyze 任务中 7 个与原题一字不差，876、877 只补了“2025年”“的”，规则命中不变；离线评测读原题，差异待留出集上再看；tasks.py 的 question_facts 事件（约 234 行）仍用原始问题，与规则读的问题可能不一致；R2+R3 分歧目前不可能出现，只有防御测试。
+
+## 2026-11-07 B2j 补充：离线对照读 Planner 补全后的问题
+- run_planner_route_evaluation 每题结果存 resolved_question；run_plan_rules_evaluation 新增 planner_resolved，compare_routes 优先读 Planner 的补全问题，其次题目自带的，最后原题，与线上一致。
+- 验证：针对性 52 通过；scripts + unit/analysis + unit/evaluation + unit/workflow 868 通过 4 跳过；旧报告（无该字段）对照仍 30/34，回退正常。
+- 发现：11-01 录音（evaluation-runs/planner/20261101-record）用当前提示词回放 39/39 ReplayMissError，提示词已变，旧录音已失效；端到端验证需重新付费录制（约 40 次调用，参考 11-01 约 $0.024），未运行。
+- 待办：多轮题离线需在题目里带对话历史并传给 decide(conversation_context=…)，随留出题工单定。

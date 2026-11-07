@@ -178,9 +178,12 @@ def evaluate(gateway: ModelGateway, cases: list[dict]) -> list[dict]:
     results = []
     for case in cases:
         service = PlanningService(gateway=gateway, sleeper=lambda _seconds: None)
+        resolved = None
         try:
             decision = service.decide(case["question"])
             actual = f"{decision.action}/{decision.route}"
+            # The plan rules read this question online (B2j), so keep it for them.
+            resolved = decision.resolved_question
         except BudgetGuardExceeded:
             raise
         except Exception as exc:  # noqa: BLE001 - one bad case must not hide the rest
@@ -195,6 +198,7 @@ def evaluate(gateway: ModelGateway, cases: list[dict]) -> list[dict]:
                 "actual": actual,
                 "correct": actual == expected,
                 "model_attempts": service.model_attempts,
+                "resolved_question": resolved,
             }
         )
     return results

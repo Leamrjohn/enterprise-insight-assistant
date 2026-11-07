@@ -12,6 +12,7 @@ from run_plan_rules_evaluation import (
     load_cases,
     main,
     planner_decisions,
+    planner_resolved,
     score_rules,
 )
 
@@ -212,3 +213,34 @@ def test_compare_routes_reads_the_resolved_question_of_a_follow_up():
     report = compare_routes(cases, {"follow-up": "analyze/data_only"})
 
     assert report["with_rules"]["correct"] == 1
+
+
+def test_planner_resolved_reads_the_route_evaluation_report():
+    report = {
+        "results": [
+            {"case_id": "a", "actual": "analyze/hybrid", "resolved_question": "qa"},
+            # Reports recorded before B2j have no resolved_question.
+            {"case_id": "b", "actual": "analyze/hybrid"},
+        ]
+    }
+
+    assert planner_resolved(report) == {"a": "qa", "b": None}
+
+
+def test_compare_routes_reads_the_planners_resolved_question():
+    cases = [
+        {
+            "case_id": "follow-up",
+            "question": "那华北呢？",
+            "acceptable": ["needs_clarification/None"],
+        }
+    ]
+    planner = {"follow-up": "analyze/data_only"}
+
+    with_rewrite = compare_routes(
+        cases, planner, resolved={"follow-up": "华北区销售额是多少？"}
+    )
+    without = compare_routes(cases, planner, resolved={"follow-up": None})
+
+    assert with_rewrite["with_rules"]["correct"] == 1  # R4 fires on the rewrite
+    assert without["with_rules"]["correct"] == 0  # the original hits nothing

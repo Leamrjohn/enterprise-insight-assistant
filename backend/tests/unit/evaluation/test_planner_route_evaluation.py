@@ -1,10 +1,12 @@
 from decimal import Decimal
+from types import SimpleNamespace
 
 import pytest
 from app.core.gateway.base import ModelGateway
 from scripts.evaluation.run_planner_route_evaluation import (
     BudgetGuardExceeded,
     BudgetGuardGateway,
+    evaluate,
     load_label_cases,
     load_route_cases,
 )
@@ -114,3 +116,29 @@ def test_label_cases_take_the_first_acceptable_decision_and_skip_excluded() -> N
             "expected": ("needs_clarification", None),
         }
     ]
+
+
+def test_evaluate_keeps_the_planners_resolved_question(monkeypatch) -> None:
+    # B2j: the rules read this question online, so the offline comparison must too.
+    class _Planner:
+        def __init__(self, **_kwargs) -> None:
+            self.model_attempts = 1
+
+        def decide(self, question):
+            return SimpleNamespace(
+                action="analyze", route="data_only", resolved_question=question + "!"
+            )
+
+    monkeypatch.setattr(
+        "app.modules.analysis.planner.planning.PlanningService", _Planner
+    )
+    case = {
+        "case_id": "a",
+        "split": "heldout",
+        "question": "q",
+        "expected": ("analyze", "data_only"),
+    }
+
+    [result] = evaluate(None, [case])
+
+    assert result["resolved_question"] == "q!"
