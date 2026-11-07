@@ -624,3 +624,8 @@
 - plan_rules_heldout_v1.json：43 题（target R2 8、R3 8、R4 9、R5 9、none 9），只做格式检查，未看题目、未跑规则；acceptable 由字符串机械转为列表，逐题核对值不变；状态 frozen，content_sha256=bbf20974…。
 - load_cases 对 frozen 集重算哈希，缺失或不符即拒绝（退出码 2）；新增 3 项测试，test_plan_rules_evaluation 19 通过。
 - 下一步：录制留出集 Planner 输出（待批准）→ 同题对照 → B2e。
+
+## 2026-11-07 留出集 v1 录制和同题对照（付费，用户已批准）
+- 录制 46 次调用、预估 $0.0278，回放逐条一致；heldout-r4-01 Planner 报错。只用 Planner 32/43、错误反问 7；全部规则 31/43、错误反问 6；无冲突。
+- 逐条：R2 样本 10 中 7，单独启用 -2；R3 样本 2 中 0；R4 样本 3 中 3，唯一修好的题是 Planner 报错题；R5 样本 5 中 5，单独启用无变化。详见 docs/smoke_results/b2e-heldout-v1.md。
+- 待办：compare_routes 应排除 Planner 报错题；事实提取覆盖低（R3、R4 正例命中 2/3 道）；Planner 7 次错误反问规则修不了；B2e 通过线尚未定义。
