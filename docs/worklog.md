@@ -550,3 +550,8 @@
 - B11：恢复和兜底共用 _deliver()，逐个投递，单个失败只记 warning（task_id、error_type）不中断整批；返回 {recovered/stranded, delivered}。B12：Beat 每 60 秒 reconcile_stranded_analysis_tasks，重投 retrying、无 active_execution_id、updated_at 超过 2 分钟的任务（每次最多 50 个）。
 - 验证：B11 测试修复前抛 ConnectionError、任务 13 未投递；修复后单元+脚本 1410 通过、workflow 集成 40 通过；B12 集成测试断言由用户给出，去掉 2 分钟条件后该测试失败（变异检查）；部署前只读确认库内无 retrying/running/queued 任务；部署后 reconcile 每分钟成功运行；冒烟 b11-b12-recovery 8 成功 + 比较题结果错误（任务 826 列名“已交付订单销售额”，同已知判分误判）+ 混合题待复核，$0.025。
 - 待办：死信未做（反复投递失败的任务没有上限，也不转 failed）；没有用真实 Redis 故障做端到端验证；queued 但 outbox 事件丢失的任务不在兜底范围。
+
+## 2026-11-07 死信上限（b7d18d7）
+- 状态机新增 retrying→failed（用户同意）；settle_stranded_task 按认领同款条件加行锁，重投次数用 workflow_events 的 stranded_redelivery 事件计数（不改表），重投满 10 次或卡满 30 分钟（任一）转 failed/DeliveryExhausted，同步助手消息为失败并记 error 日志。
+- 验证：判定规则由用户给出（or），首版用 > 时“第 4 次应失败”测试失败（差一），改 >= 后 4 个集成测试通过；去掉时长条件时“卡太久”测试失败（变异检查）；单元+脚本 1410 通过，workflow+conversations 集成 58 通过；部署前库内 retrying 为 0；冒烟 dead-letter 9 成功 + 混合题待复核（已知），$0.026。
+- 待办：reconcile 里“同步助手消息为失败”这段没有测试覆盖；告警目前只有 error 日志，尚未接 O3 告警；Worker 反复崩溃导致的无限恢复（attempt_count 无上限）不在本工单范围。
