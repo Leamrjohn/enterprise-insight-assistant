@@ -116,6 +116,24 @@ class Settings(BaseSettings):
     rag_rerank_min_score: float = 0.5
     knowledge_evidence_transport: Literal["local", "mcp_stdio"] = "local"
     knowledge_support_check_enabled: bool = True
+    # Tenant data sources may read only these credential names and never reach these hosts.
+    data_source_credential_env_allowlist: list[str] = [
+        "ACME_DEMO_DATABASE_PASSWORD",
+        "BETA_DEMO_DATABASE_PASSWORD",
+    ]
+    data_source_blocked_hosts: list[str] = [
+        "postgres",
+        "redis",
+        "api",
+        "worker",
+        "report-worker",
+        "beat",
+        "frontend",
+        "clamd",
+        "localstack",
+        "capacity-signal",
+        "localhost",
+    ]
     # How evidence review marks document boundaries: copied text or sentence numbers.
     review_qualification_mode: Literal["text", "sentence_ref"] = "sentence_ref"
     # Model-chosen tools inside Data and Knowledge. "allowlist" is the gradual rollout.

@@ -51,14 +51,14 @@ class FakeConnection:
 
 def test_discovers_columns_and_foreign_keys(monkeypatch) -> None:
     connection = FakeConnection()
-    monkeypatch.setenv("ACME_DB_PASSWORD", "not-a-real-password")
+    monkeypatch.setenv("ACME_DEMO_DATABASE_PASSWORD", "not-a-real-password")
     monkeypatch.setattr(
         "app.modules.analysis.catalog.schema_discovery.psycopg.connect",
         lambda **_: connection,
     )
     source = SimpleNamespace(
         dialect="postgresql",
-        credential_env_var="ACME_DB_PASSWORD",
+        credential_env_var="ACME_DEMO_DATABASE_PASSWORD",
         connection_config={
             "host": "db",
             "port": 5432,

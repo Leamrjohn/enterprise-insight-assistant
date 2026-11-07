@@ -3,7 +3,8 @@
 import re
 from datetime import datetime
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from app.modules.organizations.data_source_policy import ensure_data_source_allowed
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class CompanyCreate(BaseModel):
@@ -54,6 +55,13 @@ class BusinessDataSourceCreate(BaseModel):
         if not re.fullmatch(r"[A-Z][A-Z0-9_]*", value):
             raise ValueError("credential_env_var must be an uppercase environment name")
         return value
+
+    @model_validator(mode="after")
+    def source_stays_outside_platform(self) -> "BusinessDataSourceCreate":
+        ensure_data_source_allowed(
+            credential_env_var=self.credential_env_var, host=self.connection.host
+        )
+        return self
 
 
 class BusinessDataSourceOut(BaseModel):
