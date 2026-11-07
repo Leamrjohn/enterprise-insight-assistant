@@ -555,3 +555,4 @@
 - 状态机新增 retrying→failed（用户同意）；settle_stranded_task 按认领同款条件加行锁，重投次数用 workflow_events 的 stranded_redelivery 事件计数（不改表），重投满 10 次或卡满 30 分钟（任一）转 failed/DeliveryExhausted，同步助手消息为失败并记 error 日志。
 - 验证：判定规则由用户给出（or），首版用 > 时“第 4 次应失败”测试失败（差一），改 >= 后 4 个集成测试通过；去掉时长条件时“卡太久”测试失败（变异检查）；单元+脚本 1410 通过，workflow+conversations 集成 58 通过；部署前库内 retrying 为 0；冒烟 dead-letter 9 成功 + 混合题待复核（已知），$0.026。
 - 待办：reconcile 里“同步助手消息为失败”这段没有测试覆盖；告警目前只有 error 日志，尚未接 O3 告警；Worker 反复崩溃导致的无限恢复（attempt_count 无上限）不在本工单范围。
+- 2026-11-07 补测试：死信时助手消息改为失败、不再投递（集成测试，断言由用户给出思路；去掉消息同步时该测试失败）。
