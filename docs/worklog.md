@@ -545,3 +545,8 @@
 - 新增 data_source_policy：凭据变量名须在白名单内且不是平台配置项（平台名单由 Settings 字段自动推出），地址不能是平台服务名、回环、链路本地（含 169.254.169.254）；创建时和两个连接点（表结构发现、SQL 执行）读环境变量前都检查。
 - 验证：先写 15 个测试，修复前 12 个失败；修复后单元+脚本测试 1407 通过；容器内真实配置核对 6 组判定正确；库内 161 条数据源均合规；冒烟 a11a-allowlist 9 成功 + 1 失败（混合题待复核，为已知期望问题），$0.025。
 - 待办：同一白名单变量可被任意公司使用（B 公司可填 Acme 的变量和地址读到 Acme 数据），需 A11b 把凭据绑定到公司；按名字拦地址挡不住 DNS 别名和容器 IP，需网络隔离；接口层 422 未做端到端测试；migrations/ 有既存 lint 报错。
+
+## 2026-11-07 B11+B12 恢复投递（90673d1）
+- B11：恢复和兜底共用 _deliver()，逐个投递，单个失败只记 warning（task_id、error_type）不中断整批；返回 {recovered/stranded, delivered}。B12：Beat 每 60 秒 reconcile_stranded_analysis_tasks，重投 retrying、无 active_execution_id、updated_at 超过 2 分钟的任务（每次最多 50 个）。
+- 验证：B11 测试修复前抛 ConnectionError、任务 13 未投递；修复后单元+脚本 1410 通过、workflow 集成 40 通过；B12 集成测试断言由用户给出，去掉 2 分钟条件后该测试失败（变异检查）；部署前只读确认库内无 retrying/running/queued 任务；部署后 reconcile 每分钟成功运行；冒烟 b11-b12-recovery 8 成功 + 比较题结果错误（任务 826 列名“已交付订单销售额”，同已知判分误判）+ 混合题待复核，$0.025。
+- 待办：死信未做（反复投递失败的任务没有上限，也不转 failed）；没有用真实 Redis 故障做端到端验证；queued 但 outbox 事件丢失的任务不在兜底范围。
