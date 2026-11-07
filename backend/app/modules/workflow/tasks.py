@@ -20,6 +20,7 @@ from app.db.clock import database_now
 from app.db.errors import is_transient_database_error
 from app.db.session import SessionLocal, set_tenant_scope
 from app.modules.analysis.planner.facts import extract_question_facts
+from app.modules.analysis.planner.rules import shadow_details
 from app.modules.conversations.models import (  # noqa: F401
     Conversation,
     ConversationMessage,
@@ -248,6 +249,28 @@ def _record_question_facts(db, record: AnalysisTask, execution) -> None:
     )
 
 
+def _record_plan_rules(db, record: AnalysisTask, execution, plan) -> None:
+    """Shadow only (B2d): what the rules would suggest beside the Planner's plan."""
+    # It runs just before the result is saved, so even the event write is guarded;
+    # the write sits in a savepoint and cannot spoil the result's transaction.
+    try:
+        facts = extract_question_facts(record.question, business_today())
+        append_workflow_event(
+            db,
+            attempt=execution.attempt,
+            company_id=record.company_id,
+            event_type="plan_rule_shadow",
+            node_name="planner",
+            status="observed",
+            details=shadow_details(facts, plan if isinstance(plan, dict) else None),
+        )
+    except Exception as exc:  # noqa: BLE001 - recording is optional
+        logger.warning(
+            "Plan rules shadow failed",
+            extra={"error_type": type(exc).__name__},
+        )
+
+
 def _stop_if_cancelled(db, record: AnalysisTask) -> bool:
     """在每次不可逆操作前，以 Worker 自己的 Session 重新确认取消状态。"""
     db.refresh(record)
@@ -434,6 +457,7 @@ def _save_workflow_result(
         return
     if _stop_if_cancelled(db, record):
         return
+    _record_plan_rules(db, record, execution, workflow_result.get("plan"))
 
     result_data = jsonable_encoder(
         {
