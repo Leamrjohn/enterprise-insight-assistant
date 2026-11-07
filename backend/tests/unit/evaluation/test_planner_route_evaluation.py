@@ -5,6 +5,7 @@ from app.core.gateway.base import ModelGateway
 from scripts.evaluation.run_planner_route_evaluation import (
     BudgetGuardExceeded,
     BudgetGuardGateway,
+    load_label_cases,
     load_route_cases,
 )
 
@@ -90,3 +91,26 @@ def test_routing_label_file_keeps_original_label_first_and_cites_rules() -> None
         assert case["rules"] and set(case["rules"]) <= set(doc["rubric"])
         if case["included"]:
             assert case["acceptable"][0] == case["original"]
+
+
+def test_label_cases_take_the_first_acceptable_decision_and_skip_excluded() -> None:
+    label_doc = {
+        "cases": [
+            {
+                "case_id": "a",
+                "split": "heldout",
+                "question": "q",
+                "acceptable": ["needs_clarification/None", "analyze/data_only"],
+            },
+            {"case_id": "b", "question": "r", "acceptable": [], "included": False},
+        ]
+    }
+
+    assert load_label_cases(label_doc) == [
+        {
+            "case_id": "a",
+            "split": "heldout",
+            "question": "q",
+            "expected": ("needs_clarification", None),
+        }
+    ]

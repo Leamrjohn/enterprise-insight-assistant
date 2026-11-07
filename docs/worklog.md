@@ -592,3 +592,8 @@
 - 新增工单 B2i、B2j（R0）、E7a、E10a（R1）、P1（R10）；K1/K2/K4、O1/O3/O4、A11b 移到 R1，B13 移到 R5，M10 移到 R8 可选。
 - 验证：只改文档；路线 123 个工单编号在完整计划中一一对应；相对链接无失效；Codex 的代码事实已逐条读码或离线运行核实；未运行测试。
 - 待办：ADR-0001 第 7 节用户理由“最多超出一次”需用户改写；R0 先做 B2i、B2j。
+
+## 2026-11-07 B2i 规则评测方法（共建）
+- run_plan_rules_evaluation.py：默认读留出集；非冻结或无有效题时以退出码 2 拒绝（开发集需显式 --allow-unfrozen）；输出 min_samples=5 和 short_of_samples；--planner-results 同题对照两种模式的最终路由正确数、错误反问数、变化题和规则冲突（冲突暂不改路由，等 B2j）。run_planner_route_evaluation.py 加 --cases，可对留出集录制 Planner 输出。
+- 验证：针对性 18 通过；tests/scripts + unit/evaluation + unit/analysis 694 通过 4 跳过；草稿留出集运行退出码 2。开发集演示（11-01 录音，0 费用）：两模式均 30/34、错误反问均 1，R3/R4/R5 有效样本不足 5。
+- 待办：冻结时的内容哈希未校验（格式由留出题工单定）；留出集写好后需付费录制 Planner 一次（约 题数 次调用）。

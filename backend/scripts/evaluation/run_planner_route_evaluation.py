@@ -114,6 +114,24 @@ def load_route_cases(fixture_root: Path = FIXTURE_ROOT) -> list[dict]:
     return list(cases.values())
 
 
+def load_label_cases(label_doc: dict) -> list[dict]:
+    """Questions from a routing label set, e.g. the held-out set for B2i comparisons."""
+    cases = []
+    for case in label_doc["cases"]:
+        if not case.get("included", True):
+            continue
+        action, route = case["acceptable"][0].split("/")
+        cases.append(
+            {
+                "case_id": case["case_id"],
+                "split": case.get("split", "heldout"),
+                "question": case["question"],
+                "expected": (action, None if route == "None" else route),
+            }
+        )
+    return cases
+
+
 def score(results: list[dict]) -> dict:
     def accuracy(rows: list[dict]) -> float | None:
         return sum(r["correct"] for r in rows) / len(rows) if rows else None
@@ -191,6 +209,9 @@ def main() -> None:
     parser.add_argument(
         "--labels", type=Path, help="optional routing-specific label set"
     )
+    parser.add_argument(
+        "--cases", type=Path, help="take questions from this label set instead"
+    )
     args = parser.parse_args()
 
     guard: BudgetGuardGateway | None = None
@@ -210,7 +231,10 @@ def main() -> None:
         )
         gateway = RecordReplayGateway(args.cassette_dir, mode="record", inner=guard)
 
-    cases = load_route_cases()
+    if args.cases is not None:
+        cases = load_label_cases(json.loads(args.cases.read_text(encoding="utf-8")))
+    else:
+        cases = load_route_cases()
     stopped = None
     try:
         results = evaluate(gateway, cases)
