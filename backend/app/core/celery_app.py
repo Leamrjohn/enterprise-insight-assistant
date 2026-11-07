@@ -48,6 +48,10 @@ celery_app.conf.update(
             "task": "app.modules.workflow.outbox_tasks.recover_expired_analysis_executions",
             "schedule": 10.0,
         },
+        "reconcile-stranded-analysis-tasks": {
+            "task": "app.modules.workflow.outbox_tasks.reconcile_stranded_analysis_tasks",
+            "schedule": 60.0,
+        },
         "cleanup-expired-memories": {
             "task": "app.modules.memory.tasks.cleanup_expired_memories",
             # A clock time: an interval would restart whenever beat restarts.

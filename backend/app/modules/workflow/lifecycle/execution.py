@@ -834,3 +834,26 @@ def recover_expired_executions(
             task_ids.append(attempt.task_id)
     db.commit()
     return task_ids
+
+
+def stranded_retrying_task_ids(
+    db: Session,
+    *,
+    older_than: timedelta,
+    limit: int = 50,
+    now: datetime | None = None,
+) -> list[int]:
+    """Find retrying work nobody holds: recovery committed it but delivery was lost."""
+    current = now or database_now(db)
+    return [
+        task_id
+        for (task_id,) in db.query(AnalysisTask.id)
+        .filter(
+            AnalysisTask.status == "retrying",
+            AnalysisTask.active_execution_id.is_(None),
+            AnalysisTask.updated_at <= current - older_than,
+        )
+        .order_by(AnalysisTask.updated_at)
+        .limit(limit)
+        .all()
+    ]
