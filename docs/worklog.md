@@ -613,3 +613,9 @@
 - 验证：针对性 52 通过；scripts + unit/analysis + unit/evaluation + unit/workflow 868 通过 4 跳过；旧报告（无该字段）对照仍 30/34，回退正常。
 - 发现：11-01 录音（evaluation-runs/planner/20261101-record）用当前提示词回放 39/39 ReplayMissError，提示词已变，旧录音已失效；端到端验证需重新付费录制（约 40 次调用，参考 11-01 约 $0.024），未运行。
 - 待办：多轮题离线需在题目里带对话历史并传给 decide(conversation_context=…)，随留出题工单定。
+
+## 2026-11-07 开发集 Planner 重录（付费，用户已批准）
+- 录制 evaluation-runs/planner/20261107-record：40 次调用、预估 $0.0247（上限 80 次/$0.08）；路由标签 28/34，1 题 StructuredOutputError（collaboration-reviewer-retry）；回放 0 次调用，39 题决定和补全问题逐条一致。
+- 补全问题：27 个 analyze 中 14 个与原题一字不差、13 个改了措辞，规则命中 0 处变化。
+- 规则对照（开发集，参与过规则设计，不作 B2e 证据）：只用 Planner 28/34、错误反问 1；启用规则 29/34、错误反问 1；data-zero-denominator 修好，冲突 0。
+- 待办：score_rules 的逐规则命中仍按原题统计，与 compare_routes 读补全问题不一致（本次命中无差异）。
