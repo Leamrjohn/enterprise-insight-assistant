@@ -98,6 +98,8 @@ PR 触发（快，目标 15 分钟内）
 | `secrets` | gitleaks，配置允许测试用占位值 | 阻断 |
 | `deps` | `pip-audit -r …lock`；`npm audit --audit-level=high` | 高危阻断；有理由的例外写入清单并带到期日 |
 | `migrations` | 空库升级、回退一步、再升级；`alembic check` 确认模型和迁移一致 | 阻断 |
+
+**扫描工具本身也要锁版本（2026-11-07 补充）：** gitleaks、pip-audit、trivy 等工具和它们的 CI Action 按镜像摘要或精确版本拉取，能校验签名的就校验。原因：有报道称 2026-03 LiteLLM 投毒的入口，是它 CI 里用的 Trivy 先被攻破（各来源说法不一，见 [ADR-0001](../adr/0001-gateway-observability-build-or-buy.md) 第 9 节）。扫描工具有发布凭据和源码的访问权，被攻破时影响最大。
 | `eval-replay` | 见 3.1 | 阻断 |
 | `image-build` | `docker buildx`；`trivy image --severity HIGH,CRITICAL` | 高危阻断 |
 
@@ -330,7 +332,7 @@ scripts/ops/rollback.ps1 -To 1.3.2
 | **E3 版本固定** | compose、`package.json`、前端镜像 | 无浮动标签（脚本检查） | revert |
 | **E4 架构规则** | `.importlinter`、CI | 故意新增反向依赖时 CI 失败 | 忽略清单 |
 | **E5 分层门禁** | CI、标记、覆盖率基线 | 被跳过的测试都有运行时机 | revert |
-| **E6 安全扫描** | CI 任务 | 故意提交假密钥时失败 | 改为只告警 |
+| **E6 安全扫描** | CI 任务；扫描工具按摘要或精确版本拉取 | 故意提交假密钥时失败；CI 里没有浮动版本的扫描工具 | 改为只告警 |
 | **E7 迁移门禁** | CI 往返、规则文档 | 不可回退的迁移被发现 | 改为只告警 |
 | **E8 发布回滚** | `deploy.ps1`、`rollback.ps1`、CHANGELOG | 演练：发布 → 回滚 → 冒烟 | 手工启动 |
 | **E9 协作规范** | ADR、模板、CODEOWNERS | 分支保护生效 | 无 |
