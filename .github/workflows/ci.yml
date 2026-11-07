@@ -110,6 +110,10 @@ jobs:
       - name: Apply migrations as migration role
         working-directory: backend
         run: python -m alembic upgrade head
+      - name: Check the newest migration round-trips
+        if: matrix.suite == 'integration'
+        working-directory: backend
+        run: python scripts/db/check_migration_roundtrip.py
       - name: Run ${{ matrix.suite }} tests as application role
         id: tests
         working-directory: backend

@@ -634,3 +634,8 @@
 - 依据留出集 v1 同题对照：R2 单独启用答对 -2；R3、R4 有效样本不足 5（R4 唯一增益来自 Planner 报错题）；R5 5/5 但启用后无变化，不值得改主链。未改代码，规则继续只写影子记录。
 - R0 段验收：每条规则都有结论，依据为冻结留出集上的同题对照。完整计划第 5 节 R0、第 8 节已更新；AGENTS.md 当前段仍为 R0，待用户确认后改为 R1。
 - 待办（留给后续段）：事实提取覆盖低；Planner 7 次错误反问；compare_routes 排除 Planner 报错题；score_rules 按原题统计。
+
+## 2026-11-07 E7a 迁移往返检查（R1，代做）
+- 新增 backend/scripts/db/check_migration_roundtrip.py：upgrade head → downgrade -1 → upgrade head，比较两次升级后的表结构；只允许 *_test 库；CI 的 integration 任务在迁移后运行。
+- 验证：8 项单元测试（SQLite 临时迁移：可回退通过；downgrade 空操作、抛错、留残表都失败；非 _test 库拒绝）；tests/scripts 全部通过；一次性容器 agent-migration-check（无数据卷，已停止删除）上真实 PostgreSQL：最新迁移 a3b4c5d6e7f8 往返通过；加一个 downgrade 为 pass 的迁移后退出 1（DuplicateColumn）；DATABASE_NAME=agent_platform 时拒绝。
+- 没验证：CI 里的这一步（未推送）；只查最新一个迁移，全量规则留给 R10 的 E7。
