@@ -151,13 +151,15 @@
 | R2 | C4、C6、C7、C8 | C3、C5、M7 | |
 | R3 | T2、T3、T4 | T1、T5、T6、T7、T8、T9 | B1a、B1b |
 | R4 | M3、M5、M6 | M1、M2、M4、M8、M9、M10、M11 | |
-| R5 | G2、G4 | G3、G5、G6、G7、G8、G9 | |
+| R5 | V、G2、G4 | G3、G5、G6、G7、G8、G9 | |
 | R6 | B6b、B6d、B6e、B6f | B6a、B6c、B6g、B7、B8a、B8b | |
 | R7 | B4d、B4e | B4a、B4b、B4c、B4f、B4g、B3 | |
 | R8 | B9c、B15a、B15c | B9a、B9b、B9d、B9e、B10、B14a、B15b、B2a、B2b、B2f、B2g、B2h | E10 |
 | R9 | A4、A5 | A11b、A1、A2、A3、A6、A8、A9、A10、K3、K4 | A7、K1、K2 |
 | R10 | O3、O5 | O1、O2b、O4、O6、O7、B13、E7、E8、B16a、B16b、B16e | B16c、B16d、B16f、B17a～B17f、E12 |
 | R11 | 毕业项目 | | |
+
+**ADR-0001 后 R5 的变化：** 新增训练工单 V，验证 LiteLLM Router 的实际行为（V1～V5）。G4 的训练内容从“写重试和退避”改为“写异常映射和回调记账”；G2 改为“按配置版本构造并复用 Router”。V1 或 V2 不通过时，G2、G4 恢复原来的训练内容。见 [ADR-0001](../design/adr/0001-gateway-observability-build-or-buy.md)。
 
 **已经完成的：** B5、A11a、B11、B12、B2c、B2d 和 R2/R3 规则修复。**B14 的审题**放在每个模块的第 4 步做，不单独排。
 
