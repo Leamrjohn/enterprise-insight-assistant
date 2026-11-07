@@ -9,6 +9,7 @@ from run_plan_rules_evaluation import (
     MIN_SAMPLES,
     LabelSetError,
     compare_routes,
+    content_sha256,
     load_cases,
     main,
     planner_decisions,
@@ -43,13 +44,38 @@ def test_score_rules_counts_right_wrong_and_unmatched():
 
 
 def _label_doc(status="frozen", cases=None):
-    return {
+    doc = {
         "version": "plan-rules-heldout/test",
         "status": status,
         "cases": [{"case_id": "a", "question": "q", "acceptable": ["analyze/hybrid"]}]
         if cases is None
         else cases,
     }
+    if status == "frozen":
+        doc["content_sha256"] = content_sha256(doc["cases"])
+    return doc
+
+
+def test_load_cases_refuses_a_frozen_set_without_its_hash():
+    doc = _label_doc()
+    del doc["content_sha256"]
+
+    with pytest.raises(LabelSetError, match="hash"):
+        load_cases(doc)
+
+
+def test_load_cases_refuses_a_frozen_set_edited_after_freezing():
+    doc = _label_doc()
+    doc["cases"][0]["acceptable"] = ["analyze/data_only"]
+
+    with pytest.raises(LabelSetError, match="hash"):
+        load_cases(doc)
+
+
+def test_content_sha256_ignores_key_order():
+    assert content_sha256([{"a": 1, "b": "华"}]) == content_sha256(
+        [{"b": "华", "a": 1}]
+    )
 
 
 def test_load_cases_refuses_an_empty_set():

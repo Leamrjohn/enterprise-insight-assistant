@@ -619,3 +619,8 @@
 - 补全问题：27 个 analyze 中 14 个与原题一字不差、13 个改了措辞，规则命中 0 处变化。
 - 规则对照（开发集，参与过规则设计，不作 B2e 证据）：只用 Planner 28/34、错误反问 1；启用规则 29/34、错误反问 1；data-zero-denominator 修好，冲突 0。
 - 待办：score_rules 的逐规则命中仍按原题统计，与 compare_routes 读补全问题不一致（本次命中无差异）。
+
+## 2026-11-07 留出集 v1 冻结（题目由用户手写）
+- plan_rules_heldout_v1.json：43 题（target R2 8、R3 8、R4 9、R5 9、none 9），只做格式检查，未看题目、未跑规则；acceptable 由字符串机械转为列表，逐题核对值不变；状态 frozen，content_sha256=bbf20974…。
+- load_cases 对 frozen 集重算哈希，缺失或不符即拒绝（退出码 2）；新增 3 项测试，test_plan_rules_evaluation 19 通过。
+- 下一步：录制留出集 Planner 输出（待批准）→ 同题对照 → B2e。

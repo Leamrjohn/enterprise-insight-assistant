@@ -10,6 +10,7 @@ it also compares final routes: the Planner alone versus the Planner with rules a
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import sys
 from datetime import date
@@ -41,8 +42,22 @@ class LabelSetError(ValueError):
     """The label set or Planner results cannot support a verdict."""
 
 
+def content_sha256(cases: list[dict]) -> str:
+    """Hash recorded when a set is frozen; key order and whitespace do not count."""
+    canonical = json.dumps(
+        cases, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    )
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
 def load_cases(label_doc: dict, *, allow_unfrozen: bool = False) -> list[dict]:
-    if label_doc.get("status") != "frozen" and not allow_unfrozen:
+    if label_doc.get("status") == "frozen":
+        # A frozen set edited afterwards is no longer held out.
+        if label_doc.get("content_sha256") != content_sha256(label_doc["cases"]):
+            raise LabelSetError(
+                f"{label_doc['version']} does not match its frozen content hash"
+            )
+    elif not allow_unfrozen:
         raise LabelSetError(
             f"{label_doc['version']} is {label_doc.get('status')!r}, not frozen"
         )
