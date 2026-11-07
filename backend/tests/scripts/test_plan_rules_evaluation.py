@@ -151,8 +151,7 @@ def test_compare_routes_only_applies_enabled_rules():
     assert report["changed"] == []
 
 
-def test_compare_routes_keeps_the_planner_decision_on_a_rule_conflict():
-    # B2j decides conflicts; until then a conflict changes nothing and is reported.
+def test_compare_routes_reports_a_rule_conflict():
     cases = [
         {
             "case_id": "cmp",
@@ -180,3 +179,36 @@ def test_planner_decisions_reads_the_route_evaluation_report():
     report = {"results": [{"case_id": "a", "actual": "analyze/hybrid"}]}
 
     assert planner_decisions(report) == {"a": "analyze/hybrid"}
+
+
+def test_compare_routes_settles_a_conflict_by_the_arbitration_table():
+    # Table row 1: R2 (routing) beats R5 (clarification), fixing a wrong Planner.
+    cases = [
+        {
+            "case_id": "cmp",
+            "question": COMPARE_DOCS,
+            "acceptable": ["analyze/knowledge_only"],
+        }
+    ]
+
+    report = compare_routes(cases, {"cmp": "needs_clarification/None"})
+
+    assert report["planner_only"] == {"correct": 0, "wrong_clarifications": 1}
+    assert report["with_rules"] == {"correct": 1, "wrong_clarifications": 0}
+    assert report["changed"][0]["effect"] == "fixed"
+
+
+def test_compare_routes_reads_the_resolved_question_of_a_follow_up():
+    # Table row 2: "那华北呢？" alone hits nothing; its resolved question hits R4.
+    cases = [
+        {
+            "case_id": "follow-up",
+            "question": "那华北呢？",
+            "resolved_question": "华北区销售额是多少？",
+            "acceptable": ["needs_clarification/None"],
+        }
+    ]
+
+    report = compare_routes(cases, {"follow-up": "analyze/data_only"})
+
+    assert report["with_rules"]["correct"] == 1

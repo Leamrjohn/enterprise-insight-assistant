@@ -65,9 +65,41 @@ def matching_rules(facts: QuestionFacts) -> list[PlanRule]:
     return [rule for rule in PLAN_RULES if rule.applies(facts)]
 
 
+# B2j arbitration table (decided by the user, 2026-11-07):
+# 1. Hits that agree decide together. A routing rule (R2/R3) beats a clarification
+#    rule (R5): a document question needs no period. Any other disagreement abstains
+#    and leaves the decision to the Planner.
+# 2. Rules read the Planner's resolved question when there is one, else the original,
+#    so they see the same question as the Data and Knowledge nodes.
+ROUTING_RULES = frozenset({"R2", "R3"})
+
+
+def arbitrate(hits: list[PlanRule]) -> str | None:
+    """The decision the hits make together, or None to leave it to the Planner."""
+    if not hits:
+        return None
+    suggests = {rule.suggests for rule in hits}
+    if len(suggests) == 1:
+        return hits[0].suggests
+    routing = [rule for rule in hits if rule.rule_id in ROUTING_RULES]
+    routing_suggests = {rule.suggests for rule in routing}
+    if len(routing_suggests) == 1:
+        return routing[0].suggests
+    return None
+
+
+def rule_question(original: str, plan: dict | None) -> tuple[str, str]:
+    """The question the rules read, and "resolved" or "original" for the record."""
+    resolved = (plan or {}).get("resolved_question")
+    if resolved:
+        return (resolved, "resolved")
+    return (original, "original")
+
+
 def shadow_details(facts: QuestionFacts, plan: dict | None) -> dict:
     """Rule ids and labels only; like the facts event, no question text."""
     planner = plan_label(plan)
+    hits = matching_rules(facts)
     return {
         "version": RULES_VERSION,
         "facts_version": FACTS_VERSION,
@@ -78,6 +110,8 @@ def shadow_details(facts: QuestionFacts, plan: dict | None) -> dict:
                 "suggests": rule.suggests,
                 "agrees": rule.suggests == planner,
             }
-            for rule in matching_rules(facts)
+            for rule in hits
         ],
+        # What the rules would decide if enabled (B2e); None leaves it to the Planner.
+        "decided": arbitrate(hits),
     }

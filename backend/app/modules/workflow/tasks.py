@@ -20,7 +20,7 @@ from app.db.clock import database_now
 from app.db.errors import is_transient_database_error
 from app.db.session import SessionLocal, set_tenant_scope
 from app.modules.analysis.planner.facts import extract_question_facts
-from app.modules.analysis.planner.rules import shadow_details
+from app.modules.analysis.planner.rules import rule_question, shadow_details
 from app.modules.conversations.models import (  # noqa: F401
     Conversation,
     ConversationMessage,
@@ -254,7 +254,9 @@ def _record_plan_rules(db, record: AnalysisTask, execution, plan) -> None:
     # It runs just before the result is saved, so even the event write is guarded;
     # the write sits in a savepoint and cannot spoil the result's transaction.
     try:
-        facts = extract_question_facts(record.question, business_today())
+        plan = plan if isinstance(plan, dict) else None
+        question, source = rule_question(record.question, plan)
+        facts = extract_question_facts(question, business_today())
         append_workflow_event(
             db,
             attempt=execution.attempt,
@@ -262,7 +264,7 @@ def _record_plan_rules(db, record: AnalysisTask, execution, plan) -> None:
             event_type="plan_rule_shadow",
             node_name="planner",
             status="observed",
-            details=shadow_details(facts, plan if isinstance(plan, dict) else None),
+            details={**shadow_details(facts, plan), "question_source": source},
         )
     except Exception as exc:  # noqa: BLE001 - recording is optional
         logger.warning(

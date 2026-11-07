@@ -2,7 +2,13 @@ from datetime import date
 
 import pytest
 from app.modules.analysis.planner.facts import extract_question_facts
-from app.modules.analysis.planner.rules import matching_rules, shadow_details
+from app.modules.analysis.planner.rules import (
+    PLAN_RULES,
+    arbitrate,
+    matching_rules,
+    rule_question,
+    shadow_details,
+)
 
 TODAY = date(2026, 11, 7)
 
@@ -55,3 +61,56 @@ def test_shadow_details_without_a_plan():
     facts = extract_question_facts("华东区2025年8月销售额是多少？", TODAY)
 
     assert shadow_details(facts, None)["planner"] is None
+
+
+RULE = {rule.rule_id: rule for rule in PLAN_RULES}
+DOCS = "analyze/knowledge_only"
+HYBRID = "analyze/hybrid"
+CLARIFY = "needs_clarification/None"
+
+
+@pytest.mark.parametrize(
+    "hit_ids,decided",
+    [
+        ([], None),  # no rule: the Planner decides
+        (["R4"], CLARIFY),
+        (["R4", "R5"], CLARIFY),  # two hits that agree
+        (["R2", "R5"], DOCS),  # routing beats clarification
+        (["R5", "R2"], DOCS),  # order does not matter
+        (["R3", "R5"], HYBRID),
+        # Two routing rules that disagree: no table row, so abstain. R2 and R3
+        # cannot both fire today; this guards a future rule.
+        (["R2", "R3"], None),
+    ],
+)
+def test_arbitrate(hit_ids, decided):
+    assert arbitrate([RULE[rule_id] for rule_id in hit_ids]) == decided
+
+
+def test_arbitrate_the_two_policy_documents_question():
+    facts = extract_question_facts("比较两份制度文档的区别", TODAY)
+
+    assert arbitrate(matching_rules(facts)) == DOCS
+
+
+@pytest.mark.parametrize(
+    "plan,expected",
+    [
+        (None, ("那华北呢？", "original")),
+        ({"action": "analyze"}, ("那华北呢？", "original")),
+        ({"resolved_question": None}, ("那华北呢？", "original")),
+        ({"resolved_question": ""}, ("那华北呢？", "original")),
+        (
+            {"resolved_question": "华北区销售额是多少？"},
+            ("华北区销售额是多少？", "resolved"),
+        ),
+    ],
+)
+def test_rule_question(plan, expected):
+    assert rule_question("那华北呢？", plan) == expected
+
+
+def test_shadow_details_record_what_the_rules_would_decide():
+    facts = extract_question_facts("比较两份制度文档的区别", TODAY)
+
+    assert shadow_details(facts, None)["decided"] == DOCS

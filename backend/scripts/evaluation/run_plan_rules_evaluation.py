@@ -23,7 +23,9 @@ from app.modules.analysis.planner.facts import extract_question_facts
 from app.modules.analysis.planner.rules import (
     PLAN_RULES,
     RULES_VERSION,
+    arbitrate,
     matching_rules,
+    rule_question,
 )
 
 LABELS = BACKEND_ROOT / "tests/fixtures/evaluation_routing/planner_routes_v1.json"
@@ -91,7 +93,8 @@ def compare_routes(
 ) -> dict:
     """Final route per case with and without the enabled rules.
 
-    Until B2j decides conflicts, rules that disagree change nothing and are listed.
+    Hits are settled by the B2j table (rules.arbitrate); disagreeing hits are listed.
+    A case may carry the Planner's resolved_question for a follow-up turn.
     """
     missing = [case["case_id"] for case in cases if case["case_id"] not in planner]
     if missing:
@@ -102,16 +105,15 @@ def compare_routes(
     }
     changed, conflicts = [], []
     for case in cases:
+        question, _source = rule_question(case["question"], case)
         hits = [
             rule
-            for rule in matching_rules(extract_question_facts(case["question"], today))
+            for rule in matching_rules(extract_question_facts(question, today))
             if enabled is None or rule.rule_id in enabled
         ]
         before = planner[case["case_id"]]
-        after = before
-        if len({rule.suggests for rule in hits}) == 1:
-            after = hits[0].suggests
-        elif hits:
+        after = arbitrate(hits) or before
+        if len({rule.suggests for rule in hits}) > 1:
             conflicts.append(
                 {"case_id": case["case_id"], "rules": [rule.rule_id for rule in hits]}
             )

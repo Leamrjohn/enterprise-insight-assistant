@@ -602,3 +602,8 @@
 - 新增 CLAUDE.md（引用 AGENTS.md）；.claude/settings.json 两个钩子：PreToolUse 用 hooks/guard.py 拦截 AGENTS.md 绝对禁止项（密钥配置文件、删卷和 prune、删 artifacts、非 agent- 容器），PostToolUse 用 hooks/ruff_fix.py 对 backend 下的 .py 先 ruff check --fix 再 format；技能 /ticket、/wrap-ticket；只读子代理 tenant-safety-reviewer；.gitignore 改为只放行这些文件。
 - 验证：guard 26 个用例全过（含中文路径、带参数的 docker exec），本会话实测拦截 1 次；ruff 钩子用临时文件实测修复和报告，临时文件已删；两个技能和子代理未实际调用。
 - 待办：guard 按命令原文匹配，搜索含禁止词的文字也会被拦；.venv 缺失或脚本出错时放行。
+
+## 2026-11-07 B2j 冲突裁决（训练，用户补全 arbitrate / rule_question）
+- 裁决表写在 rules.py：意见一致即采纳；路由规则（R2/R3）优先于反问规则（R5）；其他分歧弃权交 Planner。多轮时规则读 resolved_question，没有则读原始问题。影子记录新增 decided、question_source；评测脚本 compare_routes 改用 arbitrate，题目可带 resolved_question。
+- 验证：针对性 45 通过；tests/scripts + unit/analysis + unit/evaluation + unit/workflow 865 通过 4 跳过；开发集对照（11-01 录音）两模式仍为 30/34、错误反问 1，无冲突题。未跑冒烟（需模型调用）。
+- 待办：tasks.py 的 question_facts 事件（约 234 行）仍用原始问题，与规则读的问题可能不一致；R2+R3 分歧目前不可能出现，只有防御测试。
