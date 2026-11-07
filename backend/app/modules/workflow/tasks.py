@@ -19,6 +19,7 @@ from app.core.settings import get_settings
 from app.db.clock import database_now
 from app.db.errors import is_transient_database_error
 from app.db.session import SessionLocal, set_tenant_scope
+from app.modules.analysis.planner.facts import extract_question_facts
 from app.modules.conversations.models import (  # noqa: F401
     Conversation,
     ConversationMessage,
@@ -42,6 +43,7 @@ from app.modules.input_artifacts.attachment_context import (
 from app.modules.input_artifacts.processing.processing_storage import (
     get_artifact_processing_storage,
 )
+from app.modules.knowledge.rag.validity import business_today
 from app.modules.memory.service import persist_report_memory, select_planner_memories
 from app.modules.organizations.models import BusinessDataSource, SchemaSnapshot
 from app.modules.reporting.validation import validate_report
@@ -223,6 +225,27 @@ def _sync_assistant_message(
     assistant_message.content = content
     if record.conversation_id is not None:
         touch_conversation(db, conversation_id=record.conversation_id)
+
+
+def _record_question_facts(db, record: AnalysisTask, execution) -> None:
+    """Shadow only (B2c): observe the question; a failure here must not fail the task."""
+    try:
+        details = extract_question_facts(record.question, business_today())
+    except Exception as exc:  # noqa: BLE001 - recording is optional
+        logger.warning(
+            "Question facts extraction failed",
+            extra={"error_type": type(exc).__name__},
+        )
+        return
+    append_workflow_event(
+        db,
+        attempt=execution.attempt,
+        company_id=record.company_id,
+        event_type="question_facts",
+        node_name="planner",
+        status="observed",
+        details=details.event_details(),
+    )
 
 
 def _stop_if_cancelled(db, record: AnalysisTask) -> bool:
@@ -625,6 +648,7 @@ def process_analysis_task(self, task_id: int):
                 "attachments": attachment_context.selection_manifest,
             },
         )
+        _record_question_facts(db, record, execution)
         db.commit()
         workflow_kwargs: dict[str, Any] = {
             "conversation_context": record.context_snapshot,

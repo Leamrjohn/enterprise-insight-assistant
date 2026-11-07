@@ -69,7 +69,7 @@ def _months(year: int, first: int, last: int) -> tuple[date, date]:
     )
 
 
-def _explicit_periods(question: str, today: date) -> list[tuple[date, date]]:
+def explicit_periods(question: str, today: date) -> list[tuple[date, date]]:
     periods: list[tuple[date, date]] = []
 
     def consume(pattern: re.Pattern, build) -> None:
@@ -111,7 +111,7 @@ def resolve_validity_window(question: str, today: date) -> ValidityWindow:
     """The period to keep documents for, widened rather than guessed when unclear."""
     if _ANY_VERSION.search(question):
         return ValidityWindow(date.min, today)
-    periods = _explicit_periods(question, today)
+    periods = explicit_periods(question, today)
     if not periods:
         return ValidityWindow(today, today)
     start = min(period[0] for period in periods)
