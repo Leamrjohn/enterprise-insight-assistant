@@ -29,7 +29,15 @@ build/
 Thumbs.db
 .kilo/
 .agents/
-.claude/
+# Claude Code：共享的钩子、技能、子代理进版本库；本机设置（settings.local.json 等）仍忽略。
+.claude/*
+!.claude/settings.json
+!.claude/hooks/
+!.claude/agents/
+!.claude/skills/
+.claude/skills/*
+!.claude/skills/ticket/
+!.claude/skills/wrap-ticket/
 .codex/
 tmp/
 evaluation-runs/
