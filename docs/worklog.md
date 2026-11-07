@@ -576,3 +576,8 @@
 - 新增 docs/design/adr/0001-gateway-observability-build-or-buy.md：按 5 条不变量逐项对照 LiteLLM、Langfuse、OpenTelemetry 和 G1/G2/G4/G6/G8/G9/O1/O2；用户选方案 D（LiteLLM SDK + Router，I1 改为调用后记账加软上限，保留 I2，不用 Proxy 和 Langfuse），理由由用户写。
 - 验证：只读代码和网上资料，未安装组件、未运行测试、未调用模型；V1～V5 验证尚未做。
 - 待办：V 验证（要先批准引入 litellm 到单独虚拟环境，且先完成 E2）；V 通过后按 ADR 第 8.3 节改网关设计、总计划和学习路线；B13 前重算软上限超出量。
+
+## 2026-11-07 计划文件进 git
+- 提交企业级总计划、docs/design/enterprise/ 15 份实现设计、改造与学习路线、教学计划（此前均未跟踪，ADR-0001 的链接因此失效）；内容未改。
+- 验证：只做密钥模式扫描，命中 2 处均为设计稿里的示例代码，不是密钥；未运行测试。
+- 待办：06_security_identity.md 写有 A11 凭据漏洞细节，推送前按路线先完成 E1 扫描和 A11b。
