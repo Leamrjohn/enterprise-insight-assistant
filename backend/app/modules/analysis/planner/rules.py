@@ -12,7 +12,7 @@ from dataclasses import dataclass
 
 from app.modules.analysis.planner.facts import FACTS_VERSION, QuestionFacts
 
-RULES_VERSION = "rules/1"
+RULES_VERSION = "rules/2"
 
 
 @dataclass(frozen=True)
@@ -27,12 +27,14 @@ def _has_time(facts: QuestionFacts) -> bool:
     return bool(facts.periods) or facts.period_is_relative
 
 
+# rules/1 split on asks_quantity and was wrong on tasks 861/863/864: a number can come
+# from a document (计提比例, 周转天数), and "请给出…销售额" asks for data without 多少.
 def _document_only(facts: QuestionFacts) -> bool:
-    return facts.wants_document and not facts.asks_quantity
+    return facts.wants_document and not facts.asks_business_metric
 
 
-def _document_and_number(facts: QuestionFacts) -> bool:
-    return facts.wants_document and facts.asks_quantity
+def _document_and_metric(facts: QuestionFacts) -> bool:
+    return facts.wants_document and facts.asks_business_metric
 
 
 def _number_without_time(facts: QuestionFacts) -> bool:
@@ -47,7 +49,7 @@ def _comparison_without_time(facts: QuestionFacts) -> bool:
 
 PLAN_RULES: tuple[PlanRule, ...] = (
     PlanRule("R2", "analyze/knowledge_only", _document_only),
-    PlanRule("R3", "analyze/hybrid", _document_and_number),
+    PlanRule("R3", "analyze/hybrid", _document_and_metric),
     PlanRule("R4", "needs_clarification/None", _number_without_time),
     PlanRule("R5", "needs_clarification/None", _comparison_without_time),
 )

@@ -111,3 +111,19 @@ def test_event_details_carry_no_question_text():
 
     assert details["periods"] == [["2025-08-01", "2025-08-31"]]
     assert "华东" not in str(details)
+
+
+@pytest.mark.parametrize(
+    "question,asks_metric",
+    [
+        ("华东区2025年8月销售额是多少？", True),
+        ("请给出华东区2025年8月的订单销售额", True),
+        ("比较华东区2025年7月与8月已交付订单销售额。", True),
+        ("传动控制毛利压力有哪些被资料支持的因素？", False),
+        ("某新产品在2024年3月销量下降的原因有哪些资料支持？", False),
+        ("根据应收风险提示，对客户067建议按什么比例计提坏账准备？", False),
+        ("根据库存物流简报，2025年6月电气自动化类的周转天数是多少？", False),
+    ],
+)
+def test_asks_business_metric(question, asks_metric):
+    assert extract_question_facts(question, TODAY).asks_business_metric is asks_metric

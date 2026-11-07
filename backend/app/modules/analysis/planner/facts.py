@@ -13,7 +13,7 @@ from datetime import date
 
 from app.modules.knowledge.rag.validity import explicit_periods
 
-FACTS_VERSION = "facts/1"
+FACTS_VERSION = "facts/2"
 
 # Precision over coverage: a missing word only leaves the Planner unchecked, a wrong
 # one makes a rule overrule a correct plan. Matching is by substring, so no bare
@@ -72,6 +72,23 @@ RELATIVE_PERIOD_WORDS: tuple[str, ...] = (
     "近半年",
 )
 
+# Metrics kept in the business database. Document titles share words with them
+# ("应收风险提示", "库存物流简报"), so only the specific metric names are listed.
+METRIC_WORDS: tuple[str, ...] = (
+    "销售额",
+    "销量",
+    "订单",
+    "毛利",
+    "回款额",
+    "回款金额",
+    "应收账款",
+    "退货",
+    "成本",
+    "库存量",
+    "库存金额",
+)
+VALUE_REQUEST_WORDS: tuple[str, ...] = ("请给出", "查询", "统计", "计算")
+
 # "2025年7月与8月": the second month inherits the year stated for the first.
 _FOLLOWING_MONTH = re.compile(
     r"(20\d{2})年(\d{1,2})月(?:与|和|及|以及|、|至|到|-)(\d{1,2})月"
@@ -86,6 +103,8 @@ class QuestionFacts:
     wants_document: bool
     is_comparison: bool
     is_causal: bool
+    # Mentioning a metric is not enough: "毛利压力有哪些因素" asks for documents.
+    asks_business_metric: bool
 
     def event_details(self) -> dict:
         """Dates and flags only; the question text never enters the event."""
@@ -99,6 +118,7 @@ class QuestionFacts:
             "wants_document": self.wants_document,
             "is_comparison": self.is_comparison,
             "is_causal": self.is_causal,
+            "asks_business_metric": self.asks_business_metric,
         }
 
 
@@ -110,6 +130,15 @@ def _month(year: int, month: int) -> tuple[date, date]:
     return date(year, month, 1), date(year, month, calendar.monthrange(year, month)[1])
 
 
+def _asks_business_metric(
+    question: str, *, asks_quantity: bool, is_comparison: bool
+) -> bool:
+    # Both: a metric named, and its value wanted. A metric alone is often the topic.
+    return _mentions(question, METRIC_WORDS) and (
+        asks_quantity or is_comparison or _mentions(question, VALUE_REQUEST_WORDS)
+    )
+
+
 def extract_question_facts(question: str, today: date) -> QuestionFacts:
     periods = set(explicit_periods(question, today))
     for match in _FOLLOWING_MONTH.finditer(question):
@@ -117,11 +146,16 @@ def extract_question_facts(question: str, today: date) -> QuestionFacts:
             periods.add(_month(int(match[1]), int(match[3])))
         except ValueError:  # 2025年7月与13月 is not a month
             continue
+    asks_quantity = _mentions(question, QUANTITY_WORDS)
+    is_comparison = _mentions(question, COMPARISON_WORDS)
     return QuestionFacts(
         periods=tuple(sorted(periods)),
         period_is_relative=_mentions(question, RELATIVE_PERIOD_WORDS),
-        asks_quantity=_mentions(question, QUANTITY_WORDS),
+        asks_quantity=asks_quantity,
         wants_document=_mentions(question, DOCUMENT_WORDS),
-        is_comparison=_mentions(question, COMPARISON_WORDS),
+        is_comparison=is_comparison,
         is_causal=_mentions(question, CAUSAL_WORDS),
+        asks_business_metric=_asks_business_metric(
+            question, asks_quantity=asks_quantity, is_comparison=is_comparison
+        ),
     )
