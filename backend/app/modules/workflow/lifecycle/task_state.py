@@ -2,7 +2,8 @@
 
 TASK_TRANSITIONS: dict[str, frozenset[str]] = {
     "queued": frozenset({"running", "cancelled"}),
-    "retrying": frozenset({"running", "cancelled"}),
+    # failed: delivery dead letter, the task never reached a Worker again.
+    "retrying": frozenset({"running", "cancelled", "failed"}),
     "running": frozenset(
         {
             "retrying",

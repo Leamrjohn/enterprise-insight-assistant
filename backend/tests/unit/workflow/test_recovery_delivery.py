@@ -5,6 +5,9 @@ class _Session:
     def close(self):
         pass
 
+    def commit(self):
+        pass
+
 
 def _fake_recovery(monkeypatch, *, recovered_ids, failing_ids=()):
     """Patch DB and broker; return the list of task ids the broker accepted."""
@@ -49,8 +52,11 @@ def test_reconcile_redelivers_stranded_tasks(monkeypatch):
     monkeypatch.setattr(
         outbox_tasks, "stranded_retrying_task_ids", lambda db, **_: [21, 22]
     )
+    monkeypatch.setattr(
+        outbox_tasks, "settle_stranded_task", lambda db, **_: "redeliver"
+    )
 
     result = outbox_tasks.reconcile_stranded_analysis_tasks()
 
     assert delivered == [21]
-    assert result == {"stranded": 2, "delivered": 1}
+    assert result == {"stranded": 2, "exhausted": 0, "delivered": 1}

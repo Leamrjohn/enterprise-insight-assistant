@@ -4,11 +4,13 @@ import hashlib
 import json
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from typing import Literal
 from uuid import uuid4
 
 from app.core.settings import EXECUTION_LEASE_SECONDS
 from app.db.clock import database_now
 from app.modules.workflow.audit.events import append_workflow_event
+from app.modules.workflow.audit.events_models import WorkflowEvent
 from app.modules.workflow.audit.model_call import ModelCallRecord
 from app.modules.workflow.lifecycle.checkpoint import (
     CHECKPOINT_SCHEMA_VERSION,
@@ -857,3 +859,83 @@ def stranded_retrying_task_ids(
         .limit(limit)
         .all()
     ]
+
+
+STRANDED_REDELIVERY_EVENT = "stranded_redelivery"
+
+
+def settle_stranded_task(
+    db: Session,
+    *,
+    task_id: int,
+    max_redeliveries: int,
+    max_stranded: timedelta,
+    now: datetime | None = None,
+) -> Literal["redeliver", "exhausted", "claimed"]:
+    """Count one more redelivery, or fail a task that stayed stranded too long.
+
+    The row lock uses the Worker claim's own condition, so a task claimed meanwhile
+    is left alone and a task failed here can no longer be claimed. Caller commits.
+    """
+    current = now or database_now(db)
+    task = (
+        db.query(AnalysisTask)
+        .filter(
+            AnalysisTask.id == task_id,
+            AnalysisTask.status == "retrying",
+            AnalysisTask.active_execution_id.is_(None),
+        )
+        .with_for_update()
+        .one_or_none()
+    )
+    if task is None:
+        return "claimed"
+    attempt = (
+        db.query(TaskExecutionAttempt)
+        .filter(TaskExecutionAttempt.task_id == task_id)
+        .order_by(TaskExecutionAttempt.id.desc())
+        .first()
+    )
+    redeliveries = 0
+    if attempt is not None:
+        redeliveries = (
+            db.query(func.count(WorkflowEvent.id))
+            .filter(
+                WorkflowEvent.execution_attempt_id == attempt.id,
+                WorkflowEvent.event_type == STRANDED_REDELIVERY_EVENT,
+            )
+            .scalar()
+        )
+    # Redelivery never writes the task row, so updated_at still marks entry to retrying.
+    stranded_for = current - task.updated_at
+    exhausted = redeliveries >= max_redeliveries or stranded_for >= max_stranded
+    if not exhausted:
+        if attempt is not None:
+            append_workflow_event(
+                db,
+                attempt=attempt,
+                company_id=task.company_id,
+                event_type=STRANDED_REDELIVERY_EVENT,
+                node_name="reconcile_stranded",
+                status="redelivering",
+                details={"redelivery": redeliveries + 1},
+            )
+        return "redeliver"
+    require_task_transition(task.status, "failed")
+    task.status = "failed"
+    task.stage = "completed"
+    task.completed_at = current
+    task.error_type = "DeliveryExhausted"
+    task.error_message = "任务多次投递失败，已停止重试。"
+    if attempt is not None:
+        append_workflow_event(
+            db,
+            attempt=attempt,
+            company_id=task.company_id,
+            event_type="delivery_exhausted",
+            node_name="reconcile_stranded",
+            status="failed",
+            error_code="delivery_exhausted",
+            details={"redeliveries": redeliveries},
+        )
+    return "exhausted"
