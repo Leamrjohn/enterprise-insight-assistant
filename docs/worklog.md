@@ -605,5 +605,5 @@
 
 ## 2026-11-07 B2j 冲突裁决（训练，用户补全 arbitrate / rule_question）
 - 裁决表写在 rules.py：意见一致即采纳；路由规则（R2/R3）优先于反问规则（R5）；其他分歧弃权交 Planner。多轮时规则读 resolved_question，没有则读原始问题。影子记录新增 decided、question_source；评测脚本 compare_routes 改用 arbitrate，题目可带 resolved_question。
-- 验证：针对性 45 通过；tests/scripts + unit/analysis + unit/evaluation + unit/workflow 865 通过 4 跳过；开发集对照（11-01 录音）两模式仍为 30/34、错误反问 1，无冲突题。未跑冒烟（需模型调用）。
-- 待办：tasks.py 的 question_facts 事件（约 234 行）仍用原始问题，与规则读的问题可能不一致；R2+R3 分歧目前不可能出现，只有防御测试。
+- 验证：针对性 45 通过；tests/scripts + unit/analysis + unit/evaluation + unit/workflow 865 通过 4 跳过；开发集对照（11-01 录音）两模式仍为 30/34、错误反问 1，无冲突题。部署 api/worker/report-worker 后冒烟 b2j-arbitration（任务 875–884，$0.025）：8 成功 + 比较题结果错误（876 列名“已交付订单销售额”，同已知判分误判）+ 混合题待复核；10 个任务都有 decided 和 question_source，decided 与 Planner 一致 7/7，冲突 0。
+- 待办：单轮题 Planner 也给 resolved_question，冒烟 9/10 读的是改写后的问题，离线评测读原题，两边可能不一致，需用户决定是否只在多轮时用；tasks.py 的 question_facts 事件（约 234 行）仍用原始问题，与规则读的问题可能不一致；R2+R3 分歧目前不可能出现，只有防御测试。
