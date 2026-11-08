@@ -1,0 +1,26 @@
+{
+  "schema_version": "1.0",
+  "dataset_version": "business-runtime-tool-budget-exhaustion-development-v1",
+  "cases": [
+    {
+      "case_id": "runtime-tool-budget-exhaustion-denial",
+      "evaluation_kind": "runtime_tool_rejection",
+      "scenario": "tool_budget_exhausted",
+      "complexity": "medium",
+      "split": "development",
+      "coverage_tags": ["budget", "tool_runtime", "safety"],
+      "question": "工具调用次数已耗尽后再次调用已登记检索工具。",
+      "company_scope": "disposable-development-tenant",
+      "document_scope": [],
+      "expected_route": null,
+      "expected_entities": ["工具预算"],
+      "expected_period": "not_applicable",
+      "expected_query_requirements": ["在执行前拒绝超出冻结工具调用预算的请求"],
+      "expected_result_fingerprint": {"scenario": "tool_budget_exhausted"},
+      "expected_outcome": "failed",
+      "expected_tool_denial_codes": ["tool_budget_exhausted"],
+      "max_model_calls": 0,
+      "max_tokens": 0
+    }
+  ]
+}

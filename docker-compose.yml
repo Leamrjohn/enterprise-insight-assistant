@@ -1,0 +1,450 @@
+x-backend-environment: &backend-environment
+  APP_ENV: development
+  DATABASE_HOST: postgres
+  DATABASE_PORT: 5432
+  DATABASE_NAME: agent_platform
+  DATABASE_USER: agent_app
+  DATABASE_PASSWORD: changeme_in_production
+  REDIS_URL: redis://redis:6379/0
+  INPUT_ARTIFACT_OBJECT_STORAGE_ENDPOINT_URL: ${INPUT_ARTIFACT_OBJECT_STORAGE_ENDPOINT_URL:-http://localstack:4566}
+  INPUT_ARTIFACT_OBJECT_STORAGE_PUBLIC_ENDPOINT_URL: ${INPUT_ARTIFACT_OBJECT_STORAGE_PUBLIC_ENDPOINT_URL:-http://127.0.0.1:4566}
+  INPUT_ARTIFACT_OBJECT_STORAGE_REGION: ${INPUT_ARTIFACT_OBJECT_STORAGE_REGION:-us-east-1}
+  INPUT_ARTIFACT_OBJECT_STORAGE_BUCKET: ${INPUT_ARTIFACT_OBJECT_STORAGE_BUCKET:-agent-artifacts}
+  INPUT_ARTIFACT_OBJECT_STORAGE_ACCESS_KEY_ID: ${INPUT_ARTIFACT_OBJECT_STORAGE_ACCESS_KEY_ID:-local-artifacts}
+  INPUT_ARTIFACT_OBJECT_STORAGE_SECRET_ACCESS_KEY: ${INPUT_ARTIFACT_OBJECT_STORAGE_SECRET_ACCESS_KEY:-local-artifacts-development-only}
+  ANALYSIS_TASK_CAPACITY_ADMISSION_ENABLED: ${ANALYSIS_TASK_CAPACITY_ADMISSION_ENABLED:-true}
+  ANALYSIS_TASK_CAPACITY_SIGNAL_URL: ${ANALYSIS_TASK_CAPACITY_SIGNAL_URL:-http://capacity-signal:8081/v1/postgres-volume}
+  ANALYSIS_TASK_CAPACITY_SIGNAL_TOKEN: ${ANALYSIS_TASK_CAPACITY_SIGNAL_TOKEN:-local-capacity-signal-development-only}
+  ANALYSIS_TASK_CAPACITY_LOW_WATERMARK_BYTES: ${ANALYSIS_TASK_CAPACITY_LOW_WATERMARK_BYTES:-536870912}
+  ANALYSIS_TASK_CAPACITY_SIGNAL_MAX_AGE_SECONDS: ${ANALYSIS_TASK_CAPACITY_SIGNAL_MAX_AGE_SECONDS:-5}
+  ANALYSIS_TASK_CAPACITY_SIGNAL_TIMEOUT_SECONDS: ${ANALYSIS_TASK_CAPACITY_SIGNAL_TIMEOUT_SECONDS:-1}
+  ACME_DEMO_DATABASE_PASSWORD: acme_demo_readonly_password
+  BETA_DEMO_DATABASE_PASSWORD: beta_demo_readonly_password
+
+x-default-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  postgres:
+    image: pgvector/pgvector:0.8.0-pg16
+    container_name: agent-platform-postgres
+    logging: *default-logging
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: changeme_in_production
+      POSTGRES_DB: agent_platform
+      # Applies only when a new data volume is initialized. C collation avoids
+      # host libc-version drift for future local platform databases.
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --lc-collate=C --lc-ctype=C"
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/scripts/db/bootstrap_postgres.sql:/docker-entrypoint-initdb.d/bootstrap.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U agent_app -d agent_platform"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    deploy:
+      replicas: 1
+      update_config:
+        parallelism: 1
+        delay: 10s
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+
+  capacity-signal:
+    build:
+      context: ./backend
+      dockerfile: docker/api.Dockerfile
+    command: ["python", "scripts/ops/capacity_signal_server.py"]
+    user: "10001:10001"
+    environment:
+      CAPACITY_SIGNAL_TOKEN: ${ANALYSIS_TASK_CAPACITY_SIGNAL_TOKEN:-local-capacity-signal-development-only}
+      CAPACITY_SIGNAL_ROOT: /var/lib/postgresql/data
+    volumes:
+      - postgres_data:/var/lib/postgresql/data:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "from urllib.request import urlopen; assert urlopen('http://127.0.0.1:8081/health/live', timeout=1).status == 200"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7
+    container_name: agent-platform-redis
+    logging: *default-logging
+    ports:
+      - "6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    deploy:
+      replicas: 1
+      update_config:
+        parallelism: 1
+        delay: 10s
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 256M
+        reservations:
+          cpus: '0.1'
+          memory: 128M
+
+  clamd:
+    image: clamav/clamav:1.5.4-debian
+    logging: *default-logging
+    volumes:
+      - clamav_database:/var/lib/clamav
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+        reservations:
+          memory: 1G
+
+  localstack:
+    image: localstack/localstack:3.8.1
+    logging: *default-logging
+    environment:
+      SERVICES: s3
+      AWS_DEFAULT_REGION: us-east-1
+      AWS_ACCESS_KEY_ID: local-artifacts
+      AWS_SECRET_ACCESS_KEY: local-artifacts-development-only
+    ports:
+      - "4566:4566"
+    volumes:
+      - localstack_data:/var/lib/localstack
+    restart: unless-stopped
+
+  localstack-init:
+    image: localstack/localstack:3.8.1
+    logging: *default-logging
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >-
+        until awslocal --endpoint-url=http://localstack:4566 s3 ls; do sleep 1; done;
+        awslocal --endpoint-url=http://localstack:4566 s3 mb s3://agent-artifacts || true
+    depends_on:
+      localstack:
+        condition: service_started
+
+  migrate:
+    build:
+      context: ./backend
+      dockerfile: docker/api.Dockerfile
+    command: ["python", "-m", "alembic", "upgrade", "head"]
+    logging: *default-logging
+    env_file:
+      - ./backend/.env
+    environment:
+      <<: *backend-environment
+      DATABASE_USER: agent_migrator
+      DATABASE_PASSWORD: changeme_in_production
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: docker/api.Dockerfile
+    logging: *default-logging
+    env_file:
+      - ./backend/.env
+    environment: *backend-environment
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend/logs:/app/logs
+      - ./backend/storage:/app/storage
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      localstack-init:
+        condition: service_completed_successfully
+      capacity-signal:
+        condition: service_healthy
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: ./backend
+      dockerfile: docker/worker.Dockerfile
+    logging: *default-logging
+    command:
+      [
+        "celery",
+        "-A",
+        "app.core.celery_app:celery_app",
+        "worker",
+        "--loglevel=INFO",
+        "--concurrency=1",
+      ]
+    env_file:
+      - ./backend/.env
+    environment:
+      <<: *backend-environment
+      HF_HOME: /app/storage/huggingface
+    volumes:
+      - ./backend/logs:/app/logs
+      - ./backend/storage:/app/storage
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      clamd:
+        condition: service_healthy
+      localstack-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  frontend:
+    image: node:22-alpine
+    logging: *default-logging
+    working_dir: /app
+    command: ["sh", "-c", "npm ci && npm run dev -- --host 0.0.0.0"]
+    environment:
+      VITE_PROXY_TARGET: http://api:8000
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - frontend_node_modules:/app/node_modules
+    depends_on:
+      api:
+        condition: service_started
+
+  beat:
+    build:
+      context: ./backend
+      dockerfile: docker/api.Dockerfile
+    logging: *default-logging
+    command:
+      [
+        "celery",
+        "-A",
+        "app.core.celery_app:celery_app",
+        "beat",
+        "--loglevel=INFO",
+      ]
+    env_file:
+      - ./backend/.env
+    environment: *backend-environment
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      localstack-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  worker-test:
+    profiles: ["test"]
+    build:
+      context: ./backend
+      dockerfile: docker/worker.Dockerfile
+    logging: *default-logging
+    command:
+      [
+        "celery",
+        "-A",
+        "app.core.celery_app:celery_app",
+        "worker",
+        "--loglevel=INFO",
+        "--queues=test",
+        "--concurrency=1",
+        "--hostname=worker-test@%h",
+      ]
+    env_file:
+      - ./backend/.env
+    environment:
+      <<: *backend-environment
+      APP_ENV: test
+      DATABASE_NAME: agent_platform_test
+      LOG_LEVEL: WARNING
+    volumes:
+      - ./backend/logs:/app/logs
+      - ./backend/storage:/app/storage
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  evaluation:
+    profiles: ["evaluation"]
+    build:
+      context: ./backend
+      dockerfile: docker/evaluation.Dockerfile
+    logging: *default-logging
+    env_file:
+      - ./backend/.env
+    environment:
+      <<: *backend-environment
+      APP_ENV: test
+      DATABASE_NAME: agent_platform_test
+      LOG_LEVEL: WARNING
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+
+  report-worker:
+    build:
+      context: ./backend
+      dockerfile: docker/api.Dockerfile
+    logging: *default-logging
+    command:
+      [
+        "celery",
+        "-A",
+        "app.core.celery_app:celery_app",
+        "worker",
+        "--loglevel=INFO",
+        "--queues=reports",
+        "--concurrency=1",
+        "--hostname=report-worker@%h",
+      ]
+    env_file:
+      - ./backend/.env
+    environment: *backend-environment
+    volumes:
+      - ./backend/logs:/app/logs
+      - ./backend/storage:/app/storage
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+
+  business_db:
+    image: pgvector/pgvector:0.8.0-pg16
+    container_name: agent-platform-business-db
+    environment:
+      POSTGRES_USER: business_app
+      POSTGRES_PASSWORD: business_password
+      POSTGRES_DB: business_data
+    ports:
+      - "5434:5432"
+    volumes:
+      - business_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U business_app -d business_data"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  demo_business_acme:
+    image: pgvector/pgvector:0.8.0-pg16
+    environment:
+      POSTGRES_USER: business_owner
+      POSTGRES_PASSWORD: acme_owner_password
+      POSTGRES_DB: acme_business
+    ports:
+      - "5435:5432"
+    volumes:
+      - demo_acme_business_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U business_owner -d acme_business"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  demo_business_beta:
+    image: pgvector/pgvector:0.8.0-pg16
+    environment:
+      POSTGRES_USER: business_owner
+      POSTGRES_PASSWORD: beta_owner_password
+      POSTGRES_DB: beta_business
+    ports:
+      - "5436:5432"
+    volumes:
+      - demo_beta_business_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U business_owner -d beta_business"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  demo_seed_acme:
+    build:
+      context: ./backend
+      dockerfile: docker/api.Dockerfile
+    command: ["python", "scripts/data/seed_demo_business_database.py"]
+    environment:
+      BUSINESS_DB_HOST: demo_business_acme
+      BUSINESS_DB_PORT: 5432
+      BUSINESS_DB_NAME: acme_business
+      BUSINESS_DB_USER: business_owner
+      BUSINESS_DB_PASSWORD: acme_owner_password
+      DEMO_READONLY_USER: acme_readonly
+      DEMO_READONLY_PASSWORD: acme_demo_readonly_password
+      DEMO_COMPANY_LABEL: Acme 演示公司
+    depends_on:
+      demo_business_acme:
+        condition: service_healthy
+
+  demo_seed_beta:
+    build:
+      context: ./backend
+      dockerfile: docker/api.Dockerfile
+    command: ["python", "scripts/data/seed_demo_business_database.py"]
+    environment:
+      BUSINESS_DB_HOST: demo_business_beta
+      BUSINESS_DB_PORT: 5432
+      BUSINESS_DB_NAME: beta_business
+      BUSINESS_DB_USER: business_owner
+      BUSINESS_DB_PASSWORD: beta_owner_password
+      DEMO_READONLY_USER: beta_readonly
+      DEMO_READONLY_PASSWORD: beta_demo_readonly_password
+      DEMO_COMPANY_LABEL: Beta 演示公司
+    depends_on:
+      demo_business_beta:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  business_data:
+  demo_acme_business_data:
+  demo_beta_business_data:
+  clamav_database:
+  localstack_data:
+  frontend_node_modules:
+
+networks:
+  default:
+    driver: bridge

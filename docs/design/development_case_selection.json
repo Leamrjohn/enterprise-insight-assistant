@@ -1,0 +1,174 @@
+{
+  "selection_version": "development-candidate-v1",
+  "status": "proposed_not_frozen",
+  "scope": "development_only",
+  "expected_case_count": 23,
+  "notes": [
+    "Selection is based on boundary coverage, not historical pass rate.",
+    "All business oracles and execution sources require fresh verification before baseline use.",
+    "Excluded variants remain supplementary regressions; this is not a heldout manifest."
+  ],
+  "cases": [
+    {
+      "file": "business_data_revenue_development_v1.json",
+      "case_id": "data-east-delivered-revenue-2025-08",
+      "purpose": "已交付销售额正常结果",
+      "observation_source": "persisted_task",
+      "oracle_review": "pending"
+    },
+    {
+      "file": "business_data_east_sales_comparison_repair_development_v2.json",
+      "case_id": "data-east-sales-comparison-repair-v2",
+      "purpose": "跨月比较与语义投影",
+      "observation_source": "persisted_task",
+      "oracle_review": "pending"
+    },
+    {
+      "file": "business_data_no_match_development_v7.json",
+      "case_id": "data-known-region-empty-month-v7",
+      "purpose": "已知实体但时间窗口无数据",
+      "observation_source": "persisted_task",
+      "oracle_review": "pending"
+    },
+    {
+      "file": "business_knowledge_development_v1_7.json",
+      "case_id": "knowledge-quality-batch-evidence",
+      "purpose": "纯知识路线的支持证据",
+      "observation_source": "persisted_task",
+      "oracle_review": "pending"
+    },
+    {
+      "file": "business_knowledge_development_v1_4.json",
+      "case_id": "knowledge-margin-two-factors",
+      "purpose": "多因素与禁止单一归因",
+      "observation_source": "persisted_task",
+      "oracle_review": "pending"
+    },
+    {
+      "file": "business_knowledge_development_v1_7.json",
+      "case_id": "knowledge-receivable-risk-boundary",
+      "purpose": "风险结论的证据边界",
+      "observation_source": "persisted_task",
+      "oracle_review": "pending"
+    },
+    {
+      "file": "business_knowledge_development_v1_6.json",
+      "case_id": "knowledge-empty-supplier-certification-evidence",
+      "purpose": "空文档范围与证据不足",
+      "observation_source": "persisted_task",
+      "oracle_review": "pending"
+    },
+    {
+      "file": "business_hybrid_revenue_causality_development_v1.json",
+      "case_id": "hybrid-east-delivered-revenue-causality-boundary",
+      "purpose": "数据与文档联合归因边界",
+      "observation_source": "persisted_task",
+      "oracle_review": "pending"
+    },
+    {
+      "file": "business_hybrid_insufficient_development_v8.json",
+      "case_id": "hybrid-unknown-sku-comparison-cause",
+      "purpose": "混合路线无数据与无资料",
+      "observation_source": "persisted_task",
+      "oracle_review": "pending"
+    },
+    {
+      "file": "business_clarification_development_v4.json",
+      "case_id": "clarification-missing-time-range",
+      "purpose": "缺时间范围应澄清",
+      "observation_source": "persisted_task",
+      "oracle_review": "pending"
+    },
+    {
+      "file": "business_document_scope_rejection_development_v1.json",
+      "case_id": "security-forged-document-id-request",
+      "purpose": "请求伪造文档范围",
+      "observation_source": "request_rejection",
+      "oracle_review": "pending"
+    },
+    {
+      "file": "business_runtime_tool_rejection_development_v1.json",
+      "case_id": "runtime-document-scope-denial",
+      "purpose": "工具越出冻结文档范围",
+      "observation_source": "runtime_tool_rejection",
+      "oracle_review": "pending"
+    },
+    {
+      "file": "business_runtime_empty_document_scope_rejection_development_v1.json",
+      "case_id": "runtime-empty-document-scope-denial",
+      "purpose": "工具空范围拒绝",
+      "observation_source": "runtime_tool_rejection",
+      "oracle_review": "pending"
+    },
+    {
+      "file": "business_runtime_document_visibility_rejection_development_v1.json",
+      "case_id": "runtime-document-current-authorization-denial",
+      "purpose": "工具调用时当前文档授权",
+      "observation_source": "runtime_tool_rejection",
+      "oracle_review": "pending"
+    },
+    {
+      "file": "business_runtime_revoked_user_rejection_development_v1.json",
+      "case_id": "runtime-revoked-user-tool-denial",
+      "purpose": "用户撤权后工具拒绝",
+      "observation_source": "runtime_tool_rejection",
+      "oracle_review": "pending"
+    },
+    {
+      "file": "business_runtime_unknown_tool_rejection_development_v1.json",
+      "case_id": "runtime-unknown-tool-denial",
+      "purpose": "未注册工具拒绝",
+      "observation_source": "runtime_tool_rejection",
+      "oracle_review": "pending"
+    },
+    {
+      "file": "business_runtime_tool_budget_exhaustion_development_v1.json",
+      "case_id": "runtime-tool-budget-exhaustion-denial",
+      "purpose": "工具预算耗尽拒绝",
+      "observation_source": "runtime_tool_rejection",
+      "oracle_review": "pending"
+    },
+    {
+      "file": "business_sql_schema_injection_rejection_development_v1.json",
+      "case_id": "sql-schema-injection-denial",
+      "purpose": "SQL Schema 注入拒绝",
+      "observation_source": "sql_validation_rejection",
+      "oracle_review": "pending"
+    },
+    {
+      "file": "business_sql_timeout_development_v1.json",
+      "case_id": "sql-statement-timeout-is-classified",
+      "purpose": "SQL 超时分类",
+      "observation_source": "sql_timeout",
+      "oracle_review": "pending"
+    },
+    {
+      "file": "business_sql_result_limit_development_v1.json",
+      "case_id": "sql-result-limit-large-request-capped",
+      "purpose": "SQL 结果规模上限",
+      "observation_source": "sql_result_limit",
+      "oracle_review": "pending"
+    },
+    {
+      "file": "business_duplicate_delivery_rejection_development_v1.json",
+      "case_id": "duplicate-delivery-second-claim-rejected",
+      "purpose": "重复消息不重复认领",
+      "observation_source": "duplicate_delivery",
+      "oracle_review": "pending"
+    },
+    {
+      "file": "business_execution_fence_cancellation_development_v1.json",
+      "case_id": "cancelled-task-stale-finish-is-fenced",
+      "purpose": "取消后迟到写入拒绝",
+      "observation_source": "execution_fence",
+      "oracle_review": "pending"
+    },
+    {
+      "file": "business_execution_fence_replacement_development_v1.json",
+      "case_id": "replaced-task-old-finish-cannot-overwrite-fresh-result",
+      "purpose": "旧 Worker 不覆盖替代结果",
+      "observation_source": "execution_fence",
+      "oracle_review": "pending"
+    }
+  ]
+}

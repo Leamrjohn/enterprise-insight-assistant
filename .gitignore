@@ -10,10 +10,12 @@ htmlcov/
 .env
 .env.*
 !.env.example
+!.env.p0.example
 *.db
 *.sqlite3
 *.egg-info/
 *.log
+*.log.[0-9]*
 storage/
 .test-storage/
 .test-logs/
@@ -25,3 +27,30 @@ dist/
 build/
 .DS_Store
 Thumbs.db
+.kilo/
+.agents/
+# Claude Code：共享的钩子、技能、子代理进版本库；本机设置（settings.local.json 等）仍忽略。
+.claude/*
+!.claude/settings.json
+!.claude/hooks/
+!.claude/agents/
+!.claude/skills/
+.claude/skills/*
+!.claude/skills/ticket/
+!.claude/skills/wrap-ticket/
+.codex/
+tmp/
+evaluation-runs/
+artifacts/p0/
+backend/pyright_output.json
+
+# Local evaluation run outputs and agent scratch files (never committed)
+.evaluation-runs/
+--task-map/
+*.err
+
+# Personal files kept outside the repository
+output/
+/artifacts/
+/agent-platform-postgres --tail 40
+/.venv-py313/

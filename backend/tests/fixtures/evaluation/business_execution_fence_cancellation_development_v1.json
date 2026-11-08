@@ -1,0 +1,27 @@
+{
+  "schema_version": "1.0",
+  "dataset_version": "business-execution-fence-cancellation-development-v1",
+  "cases": [
+    {
+      "case_id": "cancelled-task-stale-finish-is-fenced",
+      "evaluation_kind": "execution_fence",
+      "scenario": "cancelled_task_stale_terminal_write",
+      "complexity": "medium",
+      "split": "development",
+      "coverage_tags": ["security_scope", "execution_fence", "cancellation"],
+      "question": "任务取消后，旧执行尝试写入终态结果。",
+      "company_scope": "disposable-development-tenant",
+      "document_scope": [],
+      "expected_route": null,
+      "expected_entities": ["已取消任务", "旧执行"],
+      "expected_period": "not_applicable",
+      "expected_query_requirements": ["拒绝旧执行的终态结果写入"],
+      "expected_result_fingerprint": {"scenario": "cancelled_stale_finish_fenced"},
+      "expected_outcome": "cancelled",
+      "expected_execution_fence_codes": ["execution_fence_lost"],
+      "expected_execution_fence_state": "cancelled_without_result",
+      "max_model_calls": 0,
+      "max_tokens": 0
+    }
+  ]
+}

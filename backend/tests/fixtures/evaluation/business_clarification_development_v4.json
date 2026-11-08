@@ -1,0 +1,26 @@
+{
+  "schema_version": "1.0",
+  "dataset_version": "business-clarification-development-v4",
+  "cases": [
+    {
+      "case_id": "clarification-missing-time-range",
+      "evaluation_kind": "clarification",
+      "scenario": "missing_time_range",
+      "complexity": "simple",
+      "split": "development",
+      "coverage_tags": ["planner", "clarification", "terminal_state"],
+      "question": "华东区销售额是多少？",
+      "company_scope": "acme-demo",
+      "document_scope": [],
+      "expected_route": null,
+      "expected_entities": ["华东"],
+      "expected_period": "not_specified",
+      "expected_clarification_missing_fields": ["time_range"],
+      "expected_query_requirements": ["要求补充时间范围"],
+      "expected_result_fingerprint": {"scenario": "missing_time_range"},
+      "expected_outcome": "needs_clarification",
+      "max_model_calls": 3,
+      "max_tokens": 6000
+    }
+  ]
+}

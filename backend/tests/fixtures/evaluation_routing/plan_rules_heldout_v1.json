@@ -1,0 +1,440 @@
+{
+  "version": "plan-rules-heldout/v1",
+  "written_by": "user",
+  "note": "2026-11-07 用户手写，未参考 facts.py 关键词",
+  "status": "frozen",
+  "frozen_at": "2026-11-07",
+  "content_sha256": "bbf209749a37533bfc2b683a1e4a0793e14fcf179bdaf9a51296ea1e954c083c",
+  "cases": [
+    {
+      "case_id": "heldout-r2-01",
+      "split": "heldout",
+      "question": "把上周经营例会的纪要调出来，我想看看会上对华东区毛利下滑都提了哪些原因。",
+      "acceptable": [
+        "analyze/knowledge_only"
+      ],
+      "target": "R2",
+      "note": "正例：只需要查找并归纳经营例会纪要内容，不涉及查询经营数据。"
+    },
+    {
+      "case_id": "heldout-r2-02",
+      "split": "heldout",
+      "question": "帮我把最近一份库存物流简报里的关键结论摘出来，尤其是仓间调拨和呆滞库存那部分。",
+      "acceptable": [
+        "analyze/knowledge_only"
+      ],
+      "target": "R2",
+      "note": "正例：用户只要阅读并归纳已有文档，处理方式为文档检索。"
+    },
+    {
+      "case_id": "heldout-r2-03",
+      "split": "heldout",
+      "question": "质量报告里对上一批客诉的根因分析是怎么写的？给我复述一下主要结论。",
+      "acceptable": [
+        "analyze/knowledge_only"
+      ],
+      "target": "R2",
+      "note": "正例：问题指向质量报告文档中的已有分析，只需查文档。"
+    },
+    {
+      "case_id": "heldout-r2-04",
+      "split": "heldout",
+      "question": "应收风险提示里点名了哪几家客户？分别提示了什么风险？",
+      "acceptable": [
+        "analyze/knowledge_only"
+      ],
+      "target": "R2",
+      "note": "正例：只需从应收风险提示文档中提取客户和风险描述，不要求查付款数据。"
+    },
+    {
+      "case_id": "heldout-r2-05",
+      "split": "heldout",
+      "question": "供应商通知那份文件说了什么调整？会影响我们哪些采购安排，按通知原文归纳就行。",
+      "acceptable": [
+        "analyze/knowledge_only"
+      ],
+      "target": "R2",
+      "note": "正例：明确要求按通知原文归纳，属于文档阅读任务。"
+    },
+    {
+      "case_id": "heldout-r2-06",
+      "split": "heldout",
+      "question": "销售复盘文档里提到退货率偏高，你帮我查一下上季度各产品线的实际退货率是多少。",
+      "acceptable": [
+        "analyze/data_only"
+      ],
+      "target": "R2",
+      "note": "反例：虽然提到销售复盘文档，但实际要求查询退货经营数据，应走数据查询而非文档检索。"
+    },
+    {
+      "case_id": "heldout-r2-07",
+      "split": "heldout",
+      "question": "经营例会纪要里说预算执行有偏差，你直接算一下今年到目前为止各部门费用超预算多少。",
+      "acceptable": [
+        "analyze/data_only"
+      ],
+      "target": "R2",
+      "note": "反例：表面引用会议纪要，实际任务是计算费用与预算数据，只需查经营数据。"
+    },
+    {
+      "case_id": "heldout-r2-08",
+      "split": "heldout",
+      "question": "毛利复盘里对华南区给了什么评价？顺便把华南区本月实际毛利率算出来对比看看。",
+      "acceptable": [
+        "analyze/data_only"
+      ],
+      "target": "R2",
+      "note": "反例：提到复盘文档，但核心诉求是计算华南区实际毛利率，应查经营数据。"
+    },
+    {
+      "case_id": "heldout-r3-01",
+      "split": "heldout",
+      "question": "上月经营例会上说某供应商交付延迟，你结合采购订单到货情况和供应商通知，帮我确认延迟影响了哪些物料。",
+      "acceptable": [
+        "analyze/hybrid"
+      ],
+      "target": "R3",
+      "note": "正例：既要查采购订单到货数据，又要读供应商通知，属于混合查询。"
+    },
+    {
+      "case_id": "heldout-r3-02",
+      "split": "heldout",
+      "question": "应收风险提示里列了几家高风险客户，请对照付款记录核实这些客户当前还有多少逾期未回款。",
+      "acceptable": [
+        "analyze/hybrid"
+      ],
+      "target": "R3",
+      "note": "正例：需要读应收风险提示文档并结合付款数据核实，两个来源都必要。"
+    },
+    {
+      "case_id": "heldout-r3-03",
+      "split": "heldout",
+      "question": "质量报告提到某批次产品有缺陷，帮我查一下该批次对应的销售订单和退货情况，评估实际影响范围。",
+      "acceptable": [
+        "analyze/hybrid"
+      ],
+      "target": "R3",
+      "note": "正例：需从质量报告定位批次，再查销售订单和退货数据评估影响。"
+    },
+    {
+      "case_id": "heldout-r3-04",
+      "split": "heldout",
+      "question": "库存物流简报里说某个仓库爆仓，结合当前库存变动和发货记录，看看是哪些产品积压导致的。",
+      "acceptable": [
+        "analyze/hybrid"
+      ],
+      "target": "R3",
+      "note": "正例：既要读库存物流简报定位仓库，又要查库存变动和发货数据找原因。"
+    },
+    {
+      "case_id": "heldout-r3-05",
+      "split": "heldout",
+      "question": "销售复盘里指出某产品线毛利异常，请调出该产品线的销售订单和发票数据，核对收入与成本口径是否一致。",
+      "acceptable": [
+        "analyze/hybrid"
+      ],
+      "target": "R3",
+      "note": "正例：需读销售复盘定位问题产品线，再查销售订单和发票数据核对。"
+    },
+    {
+      "case_id": "heldout-r3-06",
+      "split": "heldout",
+      "question": "销售复盘文档里对第三季度毛利率的分析结论是什么？直接告诉我文档里的说法就行。",
+      "acceptable": [
+        "analyze/knowledge_only"
+      ],
+      "target": "R3",
+      "note": "反例：虽然涉及毛利，但明确只要文档已有结论，不需要查经营数据。"
+    },
+    {
+      "case_id": "heldout-r3-07",
+      "split": "heldout",
+      "question": "帮我统计一下本季度服务工单的数量和平均处理时长，按产品分类汇总。",
+      "acceptable": [
+        "analyze/data_only"
+      ],
+      "target": "R3",
+      "note": "反例：问题只涉及服务工单经营数据统计，没有要求查阅任何文档。"
+    },
+    {
+      "case_id": "heldout-r3-08",
+      "split": "heldout",
+      "question": "供应商通知和采购订单我都提到了，这次只想看通知里对交货期的调整说明，不用查订单数据。",
+      "acceptable": [
+        "analyze/knowledge_only"
+      ],
+      "target": "R3",
+      "note": "反例：虽同时提到文档和数据，但用户明确只要通知内容，只需查文档。"
+    },
+    {
+      "case_id": "heldout-r4-01",
+      "split": "heldout",
+      "question": "帮我算一下客户流失情况，看看有多少老客户不再下单了。",
+      "acceptable": [
+        "needs_clarification/None"
+      ],
+      "target": "R4",
+      "note": "正例：查询客户流失指标缺少时间范围，且无法从问题中推断统计周期。"
+    },
+    {
+      "case_id": "heldout-r4-02",
+      "split": "heldout",
+      "question": "现在库存周转率是多少？我想知道整体周转情况好不好。",
+      "acceptable": [
+        "needs_clarification/None"
+      ],
+      "target": "R4",
+      "note": "正例：库存周转率需要明确统计期间，问题未给出且无法合理推断。"
+    },
+    {
+      "case_id": "heldout-r4-03",
+      "split": "heldout",
+      "question": "帮我看看应收账款回收得怎么样，逾期比例高不高。",
+      "acceptable": [
+        "needs_clarification/None"
+      ],
+      "target": "R4",
+      "note": "正例：应收回收和逾期比例缺少时间范围，无法确定统计口径。"
+    },
+    {
+      "case_id": "heldout-r4-04",
+      "split": "heldout",
+      "question": "我们产品的毛利率水平如何？跟行业比算不算健康。",
+      "acceptable": [
+        "needs_clarification/None"
+      ],
+      "target": "R4",
+      "note": "正例：毛利率查询缺少时间范围，且未指定产品范围，无法推断。"
+    },
+    {
+      "case_id": "heldout-r4-05",
+      "split": "heldout",
+      "question": "帮我统计一下供应商准时交货率，看看哪些供应商需要约谈。",
+      "acceptable": [
+        "needs_clarification/None"
+      ],
+      "target": "R4",
+      "note": "正例：准时交货率必须指定统计期间，问题未提供且无法推断。"
+    },
+    {
+      "case_id": "heldout-r4-06",
+      "split": "heldout",
+      "question": "最近三个月费用支出比预算超了多少？按部门列一下。",
+      "acceptable": [
+        "analyze/data_only"
+      ],
+      "target": "R4",
+      "note": "反例：时间范围“最近三个月”是可解析的相对时间，可直接查数据。"
+    },
+    {
+      "case_id": "heldout-r4-07",
+      "split": "heldout",
+      "question": "上个月的库存物流简报里写的期末库存金额是多少？把那个数字摘给我。",
+      "acceptable": [
+        "analyze/knowledge_only"
+      ],
+      "target": "R4",
+      "note": "反例：用户只想摘取文档中已有的数字，不要求查询经营数据。"
+    },
+    {
+      "case_id": "heldout-r4-08",
+      "split": "heldout",
+      "question": "本季度销售订单的按期交付率是多少？按区域拆分一下。",
+      "acceptable": [
+        "analyze/data_only"
+      ],
+      "target": "R4",
+      "note": "反例：时间范围“本季度”可解析，可直接查询销售订单交付数据。"
+    },
+    {
+      "case_id": "heldout-r4-09",
+      "split": "heldout",
+      "question": "今年上半年退货金额占销售收入的比例是多少？分产品线看一下。",
+      "acceptable": [
+        "analyze/data_only"
+      ],
+      "target": "R4",
+      "note": "反例：时间范围“今年上半年”明确可解析，可直接查退货和销售数据。"
+    },
+    {
+      "case_id": "heldout-r5-01",
+      "split": "heldout",
+      "question": "华东和华南两个区域的销售额哪个高？帮我比较一下。",
+      "acceptable": [
+        "needs_clarification/None"
+      ],
+      "target": "R5",
+      "note": "正例：比较两个区域销售额但缺少比较的时间范围，无法推断。"
+    },
+    {
+      "case_id": "heldout-r5-02",
+      "split": "heldout",
+      "question": "A产品和B产品哪个毛利贡献更大？我想做个对比。",
+      "acceptable": [
+        "needs_clarification/None"
+      ],
+      "target": "R5",
+      "note": "正例：比较两个产品毛利贡献但未给出时间范围，无法确定比较期间。"
+    },
+    {
+      "case_id": "heldout-r5-03",
+      "split": "heldout",
+      "question": "直营渠道和经销渠道的费用率谁更低？对比一下。",
+      "acceptable": [
+        "needs_clarification/None"
+      ],
+      "target": "R5",
+      "note": "正例：渠道费用率比较缺少时间范围，无法合理推断。"
+    },
+    {
+      "case_id": "heldout-r5-04",
+      "split": "heldout",
+      "question": "比较一下两个供应商的采购单价和交货表现，看哪个更划算。",
+      "acceptable": [
+        "needs_clarification/None"
+      ],
+      "target": "R5",
+      "note": "正例：供应商比较未指定时间范围，且未明确供应商，缺少必要信息。"
+    },
+    {
+      "case_id": "heldout-r5-05",
+      "split": "heldout",
+      "question": "新客户和老客户的复购率哪个高？帮我对比看看。",
+      "acceptable": [
+        "needs_clarification/None"
+      ],
+      "target": "R5",
+      "note": "正例：复购率比较缺少统计时间范围，无法推断。"
+    },
+    {
+      "case_id": "heldout-r5-06",
+      "split": "heldout",
+      "question": "比较一下华东和华南上个月的销售订单金额，看哪个区域表现更好。",
+      "acceptable": [
+        "analyze/data_only"
+      ],
+      "target": "R5",
+      "note": "反例：两个区域共用“上个月”这一可解析时间范围，已足以完成比较。"
+    },
+    {
+      "case_id": "heldout-r5-07",
+      "split": "heldout",
+      "question": "A产品和B产品在本季度的退货率哪个更高？直接比一下。",
+      "acceptable": [
+        "analyze/data_only"
+      ],
+      "target": "R5",
+      "note": "反例：两个产品共用“本季度”时间范围，比较所需信息完整。"
+    },
+    {
+      "case_id": "heldout-r5-08",
+      "split": "heldout",
+      "question": "今年上半年直营和经销渠道的费用率对比如何？哪个更省。",
+      "acceptable": [
+        "analyze/data_only"
+      ],
+      "target": "R5",
+      "note": "反例：两个渠道共用“今年上半年”时间范围，已足以完成比较。"
+    },
+    {
+      "case_id": "heldout-r5-09",
+      "split": "heldout",
+      "question": "上周两个主力供应商的准时交货率谁更好？用同一周的数据比。",
+      "acceptable": [
+        "analyze/data_only"
+      ],
+      "target": "R5",
+      "note": "反例：明确用“上周”同一时间范围比较两个供应商，时间信息完整。"
+    },
+    {
+      "case_id": "heldout-none-01",
+      "split": "heldout",
+      "question": "帮我查一下上个月销售订单总额，按客户排名前十列出来。",
+      "acceptable": [
+        "analyze/data_only"
+      ],
+      "target": "none",
+      "note": "普通题：标准经营数据查询，时间范围明确，规则不应误判。"
+    },
+    {
+      "case_id": "heldout-none-02",
+      "split": "heldout",
+      "question": "本周有哪些服务工单还没关闭？按优先级列一下。",
+      "acceptable": [
+        "analyze/data_only"
+      ],
+      "target": "none",
+      "note": "普通题：服务工单状态查询，时间范围可解析，正常走数据查询。"
+    },
+    {
+      "case_id": "heldout-none-03",
+      "split": "heldout",
+      "question": "把最近一次经营例会纪要发我看看。",
+      "acceptable": [
+        "analyze/knowledge_only"
+      ],
+      "target": "none",
+      "note": "普通题：单纯要求查看文档，正常走文档检索。"
+    },
+    {
+      "case_id": "heldout-none-04",
+      "split": "heldout",
+      "question": "上季度各产品线的销售收入和毛利情况怎么样？给我汇总一下。",
+      "acceptable": [
+        "analyze/data_only"
+      ],
+      "target": "none",
+      "note": "普通题：时间范围明确的数据汇总查询，不应触发澄清。"
+    },
+    {
+      "case_id": "heldout-none-05",
+      "split": "heldout",
+      "question": "帮我对比一下今年第一季度和第二季度的费用支出，看增长是否合理。",
+      "acceptable": [
+        "analyze/data_only"
+      ],
+      "target": "none",
+      "note": "普通题：两个季度时间范围都明确，正常数据比较。"
+    },
+    {
+      "case_id": "heldout-none-06",
+      "split": "heldout",
+      "question": "库存物流简报里提到的那个调拨方案，具体执行步骤是什么？",
+      "acceptable": [
+        "analyze/knowledge_only"
+      ],
+      "target": "none",
+      "note": "普通题：阅读文档中的方案步骤，正常文档查询。"
+    },
+    {
+      "case_id": "heldout-none-07",
+      "split": "heldout",
+      "question": "本月采购订单里有哪些还没到货？按供应商整理一下。",
+      "acceptable": [
+        "analyze/data_only"
+      ],
+      "target": "none",
+      "note": "普通题：采购订单到货状态查询，时间范围明确。"
+    },
+    {
+      "case_id": "heldout-none-08",
+      "split": "heldout",
+      "question": "最近有哪些客户发票逾期了？把逾期金额和天数列出来。",
+      "acceptable": [
+        "analyze/data_only"
+      ],
+      "target": "none",
+      "note": "普通题：发票逾期查询，虽未写具体日期但“最近”在业务上可解析为当前逾期状态。"
+    },
+    {
+      "case_id": "heldout-none-09",
+      "split": "heldout",
+      "question": "帮我写一份下周部门团建的活动方案，预算控制在人均两百以内。",
+      "acceptable": [
+        "scope_exit/None"
+      ],
+      "target": "none",
+      "note": "普通题：请求超出经营洞察助手业务范围，应走范围外处理。"
+    }
+  ]
+}

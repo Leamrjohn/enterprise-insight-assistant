@@ -1,72 +1,50 @@
-# 项目文档
+# 文档索引
 
-本目录保存项目设计、学习记录、架构决策、评测和部署说明。设计目标与当前实现
-必须分开维护，避免把规划中的能力包装成已经完成。
+## 当前入口（每次只读当前工单）
 
-## 执行与教学主线
+| 顺序 | 文档 | 回答什么 |
+|---|---|---|
+| 1 | [协作规则](../AGENTS.md) | 范围、授权、禁止事项与验收流程 |
+| 2 | [完整改造计划](design/complete_plan_2026-11-07.md) | 唯一的执行计划：终点、每段做到什么程度、每个工单怎么验收；只读当前段 |
+| 3 | 当前工单所在模块的设计（`design/enterprise/`） | 代码位置和草案；只读和工单有关的段落 |
+| 4 | [工作日志](worklog.md) | 本次做了什么、实际验证结果与遗留问题 |
 
-[Enterprise Insight Agent：项目实施与工程能力学习指南](project_implementation_learning_guide.md)
+`roadmap/` 下的旧计划（阶段 0～9）已被完整改造计划取代，仅作历史参考。
 
-这份文档是当前项目唯一的实施和教学主线，包含：
+## 目录
 
-- 当前代码的真实基线
-- 筛选后的项目范围
-- 分阶段开发顺序
-- Agent上下文从内存Demo到生产治理的演进路线
-- 每阶段学习目标和验收门槛
-- 项目变更规则
-- 工程能力毕业标准
+| 目录 | 内容 |
+|---|---|
+| `roadmap/` | 当前执行计划：00 总览、01 阶段 0～2、02 阶段 3～5、03 阶段 6～9 |
+| `history/plans/` | 历史计划、设计范围路线图和架构需求，仅在用户点名时阅读 |
+| `architecture/` | 目录结构、已确认的目标设计契约 |
+| `design/` | 每个模块的生产级设计稿（按 12 问模板，见 [design/README.md](design/README.md)） |
+| `operations/` | 单机运行、故障恢复、备份恢复手册 |
+| `evaluation/` | 评测前预测模板等评测方法文档 |
+| `audits/` | 带日期的代码审计与外部评审材料（快照，不代表当前状态） |
+| `history/evidence.md` | 已冻结的历史证据，不再追加 |
+| `worklog.md` | 当前工作记录，每个工单最多 5 行 |
 
-两份设计文档用于提供方案参考；发生范围或进度冲突时，以实际源码、测试和这份
-实施指南为准。
+## 全部文档
 
-学习过程与每一步掌握证据记录在：
+| 文档 | 用途 |
+|---|---|
+| [history/plans/improvement_and_learning_plan.md](history/plans/improvement_and_learning_plan.md) | 历史改进与学习计划，已由 00～03 计划替代 |
+| [history/plans/single_node_production_style_ai_application_roadmap.md](history/plans/single_node_production_style_ai_application_roadmap.md) | 最终设计范围与验收门禁（查询用） |
+| [history/plans/agent_architecture_refactor_requirements.md](history/plans/agent_architecture_refactor_requirements.md) | 架构重构需求与上线蓝图 |
+| [history/plans/history/agent_core_first_execution_plan.md](history/plans/history/agent_core_first_execution_plan.md) | 已被取代的“核心优先”计划 |
+| [architecture/modular_monolith_structure.md](architecture/modular_monolith_structure.md) | 目录结构与依赖规则 |
+| [architecture/confirmed_production_design.md](architecture/confirmed_production_design.md) | 已确认的目标设计契约 |
+| [design/README.md](design/README.md) | 模块设计稿模板 |
+| [operations/single_node_runbook.md](operations/single_node_runbook.md) | 启动、任务检查、队列、备份与恢复 |
+| [evaluation/baseline_prediction_template.md](evaluation/baseline_prediction_template.md) | 评测前预测模板 |
+| [audits/project_core_audit_20260915.md](audits/project_core_audit_20260915.md) | 2026-09-15 代码审计快照 |
+| [audits/for_external_review.md](audits/for_external_review.md) | 外部评审材料 |
 
-[学习进度与掌握证据](learning_notes.md)
+根目录：[README](../README.md)（总览与启动）、[PRODUCT](../PRODUCT.md)（产品边界）、[AGENTS](../AGENTS.md)（协作规则）、[CONTRIBUTING](../CONTRIBUTING.md)、[SECURITY](../SECURITY.md)、[DESIGN](../DESIGN.md)（前端设计系统）。演示语料在 [`data/business_knowledge_base/`](../data/business_knowledge_base/README.md)。
 
-## 设计文档
+## 规则
 
-### 1. 推荐实现版
-
-[企业级风格多模态多 Agent 工作流系统](design/enterprise_style_multimodal_multi_agent_system.md)
-
-用途：
-
-- 当前项目的主要实现参考
-- 控制初版开发范围
-- 拆分后端、RAG、Agent、工作流和部署阶段
-
-其中部分内容仍超过当前代码能力。具体实现顺序以源码测试和后续教学计划为准。
-
-### 2. 完整平台参考版
-
-[企业级 AI Multi-Agent Workflow Platform 完整版](design/full_enterprise_ai_multi_agent_platform_design.md)
-
-用途：
-
-- 理解生产系统可能涉及的完整模块
-- 记录安全、可靠性、治理和运维方面的长期方向
-- 为架构讨论和面试扩展问题提供参考
-
-这份文档不是当前版本的全部开发清单。多租户、复杂控制平面、Kubernetes、
-基础设施即代码等能力只有在实际需要时才进入实施范围。
-
-## 后续文档规划
-
-随着代码推进，再按实际内容增加：
-
-```text
-docs/
-├── architecture.md       # 当前已实现架构和数据流
-├── learning_notes.md     # 每一步学习记录
-├── error-handling.md     # 异常分类、重试和恢复
-├── security.md           # 安全边界和验证
-├── evaluation.md         # 标准数据集和评测结果
-├── deployment.md         # 部署、备份、恢复和回滚
-├── operations-runbook.md # 常见故障和运维处置
-├── requirements-traceability.md # 需求、代码和测试对应关系
-├── interview-notes.md    # 基于已实现代码的面试问答
-└── adr/                  # 重要技术选型记录
-```
-
-没有真实内容时不提前创建空文件。
+- 规则冲突时按 AGENTS.md 优先级处理；当前代码与测试决定实现事实。
+- 审计与评审材料是带日期的快照，不自动适用于之后的提交。
+- 新记录只写入 `worklog.md`；`history/evidence.md` 冻结为历史记录，不再追加。

@@ -1,0 +1,26 @@
+{
+  "schema_version": "1.0",
+  "dataset_version": "business-runtime-unknown-tool-rejection-development-v1",
+  "cases": [
+    {
+      "case_id": "runtime-unknown-tool-denial",
+      "evaluation_kind": "runtime_tool_rejection",
+      "scenario": "unknown_tool",
+      "complexity": "simple",
+      "split": "development",
+      "coverage_tags": ["security_scope", "tool_runtime", "unknown_tool"],
+      "question": "运行时拒绝未登记工具调用。",
+      "company_scope": "disposable-development-tenant",
+      "document_scope": [],
+      "expected_route": null,
+      "expected_entities": ["未登记工具"],
+      "expected_period": "not_applicable",
+      "expected_query_requirements": ["在执行前拒绝未登记工具"],
+      "expected_result_fingerprint": {"scenario": "unknown_tool_denied"},
+      "expected_outcome": "failed",
+      "expected_tool_denial_codes": ["tool_not_allowlisted"],
+      "max_model_calls": 0,
+      "max_tokens": 0
+    }
+  ]
+}

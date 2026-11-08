@@ -1,0 +1,28 @@
+{
+  "schema_version": "1.0",
+  "dataset_version": "business-hybrid-insufficient-development-v8",
+  "cases": [
+    {
+      "case_id": "hybrid-unknown-sku-comparison-cause",
+      "scenario": "insufficient_evidence",
+      "complexity": "complex",
+      "split": "development",
+      "coverage_tags": ["data_sql", "knowledge_rag", "insufficient_refusal"],
+      "question": "产品 SKU-UNKNOWN-2024 在2024年3月相较2024年2月销售额下降的业务原因是什么？若经营数据或资料无记录，请明确说明证据不足。",
+      "company_scope": "acme-demo",
+      "document_scope": [],
+      "expected_route": "hybrid",
+      "expected_entities": ["SKU-UNKNOWN-2024"],
+      "expected_period": "2024-03 compared_to 2024-02",
+      "expected_query_requirements": ["按产品与月份比较销售额", "无匹配记录时拒绝确定归因"],
+      "expected_result_fingerprint": {
+        "algorithm": "sha256",
+        "value": "4012d5a713b509655890e39fbc864ab4054cbd784178f3a0485e882309860ded"
+      },
+      "expected_outcome": "insufficient_evidence",
+      "expected_limitations": ["缺少能够支持原因判断的文档证据"],
+      "max_model_calls": 6,
+      "max_tokens": 12000
+    }
+  ]
+}

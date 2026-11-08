@@ -1,0 +1,32 @@
+{
+  "schema_version": "1.0",
+  "dataset_version": "business-data-revenue-development-v1",
+  "cases": [
+    {
+      "case_id": "data-east-delivered-revenue-2025-08",
+      "scenario": "regional_delivered_revenue",
+      "complexity": "simple",
+      "split": "development",
+      "coverage_tags": ["data_sql", "normal_result", "metric_contract"],
+      "question": "区域名称为“华东”的2025年8月、状态为 delivered 的订单销售额是多少？",
+      "company_scope": "acme-demo",
+      "document_scope": [],
+      "expected_route": "data_only",
+      "expected_entities": ["华东"],
+      "expected_period": "2025-08",
+      "expected_query_requirements": [
+        "按区域名称过滤",
+        "固定筛选 sales_orders.status = delivered",
+        "聚合 sales_orders.total_amount"
+      ],
+      "expected_result_fingerprint": {
+        "algorithm": "sha256",
+        "value": "7c587b5fb455ebe3e3a51ecfe11a23325708b41653cd4eb012798489a1bb46cd"
+      },
+      "expected_outcome": "completed",
+      "expected_limitations": [],
+      "max_model_calls": 6,
+      "max_tokens": 12000
+    }
+  ]
+}

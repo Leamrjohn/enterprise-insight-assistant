@@ -1,0 +1,37 @@
+{
+  "version": "version-traps-v1",
+  "status": "draft_pending_user_review",
+  "note": "评测专用的虚构制度文档，只在回滚的测试事务里建索引，不写入 data/ 语料。每组同一主题有旧版和新版，内容相近、数字不同。问当前规定时应取新版；问历史时期时应取旧版。",
+  "documents": [
+    {"key": "travel-v1", "group": "travel", "version": 1, "effective_from": "2023-01-01", "effective_to": "2024-12-31", "title": "差旅住宿报销标准（2023版）", "content": "# 差旅住宿报销标准（2023版）\n\n本制度自2023年1月1日起执行。员工出差住宿费报销上限为每晚450元，一线城市每晚600元。超出部分由个人承担。"},
+    {"key": "travel-v2", "group": "travel", "version": 2, "effective_from": "2025-01-01", "effective_to": null, "title": "差旅住宿报销标准（2025版）", "content": "# 差旅住宿报销标准（2025版）\n\n本制度自2025年1月1日起执行，原2023版同时废止。员工出差住宿费报销上限为每晚520元，一线城市每晚720元。超出部分由个人承担。"},
+    {"key": "credit-v1", "group": "credit", "version": 1, "effective_from": "2023-03-01", "effective_to": "2025-02-28", "title": "客户信用额度审批规定（2023版）", "content": "# 客户信用额度审批规定（2023版）\n\n自2023年3月起执行。单一客户信用额度超过200万元时，须由财务总监审批；账期不得超过60天。"},
+    {"key": "credit-v2", "group": "credit", "version": 2, "effective_from": "2025-03-01", "effective_to": null, "title": "客户信用额度审批规定（2025版）", "content": "# 客户信用额度审批规定（2025版）\n\n自2025年3月起执行，替代2023版。单一客户信用额度超过150万元时，须由财务总监审批；账期不得超过45天。"},
+    {"key": "discount-v1", "group": "discount", "version": 1, "effective_from": "2024-01-01", "effective_to": "2025-06-30", "title": "销售折扣权限规定（2024版）", "content": "# 销售折扣权限规定（2024版）\n\n自2024年1月起执行。区域销售经理可批准的最高折扣为12%，超过部分须报销售总监。"},
+    {"key": "discount-v2", "group": "discount", "version": 2, "effective_from": "2025-07-01", "effective_to": null, "title": "销售折扣权限规定（2025年修订）", "content": "# 销售折扣权限规定（2025年修订）\n\n自2025年7月起执行，替代2024版。区域销售经理可批准的最高折扣为8%，超过部分须报销售总监。"},
+    {"key": "return-v1", "group": "return", "version": 1, "effective_from": "2023-06-01", "effective_to": "2025-05-31", "title": "产品退货处理时限规定（2023版）", "content": "# 产品退货处理时限规定（2023版）\n\n自2023年6月起执行。客户可在收货后30天内申请退货，公司须在10个工作日内完成退款。"},
+    {"key": "return-v2", "group": "return", "version": 2, "effective_from": "2025-06-01", "effective_to": null, "title": "产品退货处理时限规定（2025版）", "content": "# 产品退货处理时限规定（2025版）\n\n自2025年6月起执行，替代2023版。客户可在收货后15天内申请退货，公司须在5个工作日内完成退款。"},
+    {"key": "safety-stock-v1", "group": "safety-stock", "version": 1, "effective_from": "2024-01-01", "effective_to": "2025-03-31", "title": "安全库存管理办法（2024版）", "content": "# 安全库存管理办法（2024版）\n\n自2024年1月起执行。A类物料安全库存天数为30天，B类物料为20天。"},
+    {"key": "safety-stock-v2", "group": "safety-stock", "version": 2, "effective_from": "2025-04-01", "effective_to": null, "title": "安全库存管理办法（2025版）", "content": "# 安全库存管理办法（2025版）\n\n自2025年4月起执行，替代2024版。A类物料安全库存天数为21天，B类物料为14天。"},
+    {"key": "supplier-v1", "group": "supplier", "version": 1, "effective_from": "2023-01-01", "effective_to": "2024-12-31", "title": "供应商准入评分规则（2023版）", "content": "# 供应商准入评分规则（2023版）\n\n自2023年起执行。新供应商综合评分达到70分方可准入，质量权重占40%。"},
+    {"key": "supplier-v2", "group": "supplier", "version": 2, "effective_from": "2025-01-01", "effective_to": null, "title": "供应商准入评分规则（2025版）", "content": "# 供应商准入评分规则（2025版）\n\n自2025年起执行，替代2023版。新供应商综合评分达到80分方可准入，质量权重占50%。"},
+    {"key": "invoice-v1", "group": "invoice", "version": 1, "effective_from": "2023-01-01", "effective_to": "2025-08-31", "title": "发票开具时限规定（2023版）", "content": "# 发票开具时限规定（2023版）\n\n自2023年起执行。订单交付后须在7个工作日内开具发票。"},
+    {"key": "invoice-v2", "group": "invoice", "version": 2, "effective_from": "2025-09-01", "effective_to": null, "title": "发票开具时限规定（2025版）", "content": "# 发票开具时限规定（2025版）\n\n自2025年9月起执行，替代2023版。订单交付后须在3个工作日内开具发票。"},
+    {"key": "complaint-v1", "group": "complaint", "version": 1, "effective_from": "2024-01-01", "effective_to": "2025-09-30", "title": "客诉响应时限规定（2024版）", "content": "# 客诉响应时限规定（2024版）\n\n自2024年1月起执行。高严重度客诉须在48小时内响应。"},
+    {"key": "complaint-v2", "group": "complaint", "version": 2, "effective_from": "2025-10-01", "effective_to": null, "title": "客诉响应时限规定（2025版）", "content": "# 客诉响应时限规定（2025版）\n\n自2025年10月起执行，替代2024版。高严重度客诉须在24小时内响应。"}
+  ],
+  "cases": [
+    {"case_id": "trap-travel-current", "kind": "current", "question": "现在出差住宿费每晚报销上限是多少？", "fresh": "travel-v2", "stale": "travel-v1", "answer": "每晚520元"},
+    {"case_id": "trap-credit-current", "kind": "current", "question": "目前单一客户信用额度超过多少需要财务总监审批？", "fresh": "credit-v2", "stale": "credit-v1", "answer": "150万元"},
+    {"case_id": "trap-discount-current", "kind": "current", "question": "区域销售经理现在最高能批多少折扣？", "fresh": "discount-v2", "stale": "discount-v1", "answer": "8%"},
+    {"case_id": "trap-return-current", "kind": "current", "question": "客户现在收货后多少天内可以申请退货？", "fresh": "return-v2", "stale": "return-v1", "answer": "15天"},
+    {"case_id": "trap-stock-current", "kind": "current", "question": "当前A类物料安全库存天数是多少？", "fresh": "safety-stock-v2", "stale": "safety-stock-v1", "answer": "21天"},
+    {"case_id": "trap-supplier-current", "kind": "current", "question": "新供应商现在综合评分要达到多少分才能准入？", "fresh": "supplier-v2", "stale": "supplier-v1", "answer": "80分"},
+    {"case_id": "trap-invoice-current", "kind": "current", "question": "现行规定要求交付后几个工作日内开发票？", "fresh": "invoice-v2", "stale": "invoice-v1", "answer": "3个工作日"},
+    {"case_id": "trap-complaint-current", "kind": "current", "question": "高严重度客诉现在要在多长时间内响应？", "fresh": "complaint-v2", "stale": "complaint-v1", "answer": "24小时"},
+    {"case_id": "trap-travel-history", "kind": "as_of", "as_of": "2024-06-01", "question": "2024年6月时，出差住宿费每晚报销上限是多少？", "fresh": "travel-v1", "stale": "travel-v2", "answer": "每晚450元"},
+    {"case_id": "trap-credit-history", "kind": "as_of", "as_of": "2024-05-01", "question": "2024年5月时，单一客户信用额度超过多少需要财务总监审批？", "fresh": "credit-v1", "stale": "credit-v2", "answer": "200万元"},
+    {"case_id": "trap-discount-history", "kind": "as_of", "as_of": "2024-10-01", "question": "2024年10月时，区域销售经理最高能批多少折扣？", "fresh": "discount-v1", "stale": "discount-v2", "answer": "12%"},
+    {"case_id": "trap-invoice-history", "kind": "as_of", "as_of": "2024-03-01", "question": "2024年3月时，交付后几个工作日内要开发票？", "fresh": "invoice-v1", "stale": "invoice-v2", "answer": "7个工作日"}
+  ]
+}

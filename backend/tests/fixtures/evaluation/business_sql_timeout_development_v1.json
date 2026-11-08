@@ -1,0 +1,26 @@
+{
+  "schema_version": "1.0",
+  "dataset_version": "business-sql-timeout-development-v1",
+  "cases": [
+    {
+      "case_id": "sql-statement-timeout-is-classified",
+      "evaluation_kind": "sql_timeout",
+      "scenario": "statement_timeout",
+      "complexity": "simple",
+      "split": "development",
+      "coverage_tags": ["sql", "timeout", "failure_classification"],
+      "question": "执行超过冻结语句时限的只读 SQL。",
+      "company_scope": "disposable-development-tenant",
+      "document_scope": [],
+      "expected_route": null,
+      "expected_entities": ["sales_orders"],
+      "expected_period": "not_applicable",
+      "expected_query_requirements": ["超时必须分类且无业务结果"],
+      "expected_result_fingerprint": {"scenario": "statement_timeout"},
+      "expected_outcome": "failed",
+      "expected_sql_timeout_codes": ["sql_statement_timeout"],
+      "max_model_calls": 0,
+      "max_tokens": 0
+    }
+  ]
+}

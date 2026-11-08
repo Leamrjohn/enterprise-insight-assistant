@@ -1,0 +1,36 @@
+{
+  "version": "memory-scenarios-v1",
+  "status": "draft_pending_user_review",
+  "note": "评测专用的虚构记忆，只在回滚的测试事务里写入。age_days 是创建距今天数。business_valid_until 是事实的业务有效期，和保留期限不同。flagged、superseded 是计划新增的状态，现有代码没有这些状态，基线里按普通记忆存入。",
+  "memories": [
+    {"key": "new-1", "owner": "self", "age_days": 1, "status": "active", "fact": "2025年9月华南区客户拜访计划已排期"},
+    {"key": "new-2", "owner": "self", "age_days": 1, "status": "active", "fact": "2025年9月市场活动预算使用过半"},
+    {"key": "new-3", "owner": "self", "age_days": 2, "status": "active", "fact": "2025年9月检测仪表品类新增两家客户"},
+    {"key": "new-4", "owner": "self", "age_days": 2, "status": "active", "fact": "2025年9月物流仓储费用环比持平"},
+    {"key": "new-5", "owner": "self", "age_days": 3, "status": "active", "fact": "2025年9月安全防护产品订单数稳定"},
+    {"key": "new-6", "owner": "self", "age_days": 3, "status": "active", "fact": "2025年9月人力与行政费用无明显变化"},
+    {"key": "new-7", "owner": "self", "age_days": 4, "status": "active", "fact": "2025年9月工业自动化品类价格未调整"},
+    {"key": "new-8", "owner": "self", "age_days": 4, "status": "active", "fact": "2025年9月销售差旅费用略有上升"},
+    {"key": "receivable-0280", "owner": "self", "age_days": 20, "status": "active", "fact": "西部客户CUST-0280已纳入重点催收，已到期未收余额56178.14元"},
+    {"key": "supplier-003", "owner": "self", "age_days": 25, "status": "active", "fact": "供应商SUP-003的传感器批次曾记录稳定性异常"},
+    {"key": "east-cust-0001", "owner": "self", "age_days": 22, "status": "active", "fact": "华东客户CUST-0001合同于2025年7月到期，暂停常规采购"},
+    {"key": "margin-oct", "owner": "self", "age_days": 18, "status": "active", "fact": "传动控制品类2025年10月毛利率为16.54%"},
+    {"key": "revoked-fact", "owner": "self", "age_days": 1, "status": "revoked", "fact": "CUST-0280已全额回款（已撤销的错误记忆）"},
+    {"key": "expired-fact", "owner": "self", "age_days": 40, "status": "expired", "fact": "CUST-0280账期为60天（已过保留期限）"},
+    {"key": "flagged-fact", "owner": "self", "age_days": 1, "status": "flagged", "fact": "CUST-0280被认定为坏账（被标记可疑，等待审核）"},
+    {"key": "superseded-margin", "owner": "self", "age_days": 1, "status": "superseded", "fact": "传动控制品类2025年10月毛利率为26.48%（已被替代的旧值）"},
+    {"key": "business-expired", "owner": "self", "age_days": 2, "status": "active", "business_valid_until": "2025-06-30", "fact": "销售折扣上限为12%（2025年6月底已失效）"},
+    {"key": "other-company", "owner": "other_company", "age_days": 1, "status": "active", "fact": "CUST-0280信用额度为100万元（其他公司的记忆）"},
+    {"key": "other-user", "owner": "other_user", "age_days": 1, "status": "active", "fact": "CUST-0280由同事负责跟进（同公司其他用户的记忆）"}
+  ],
+  "cases": [
+    {"case_id": "relevant-old-receivable", "split": "development", "question": "CUST-0280的回款风险怎么样？", "must_select": ["receivable-0280"], "must_not_select": ["revoked-fact", "expired-fact", "flagged-fact", "other-company", "other-user"]},
+    {"case_id": "relevant-old-supplier", "split": "development", "question": "SUP-003最近有什么质量问题？", "must_select": ["supplier-003"], "must_not_select": ["other-company"]},
+    {"case_id": "relevant-old-east", "split": "development", "question": "CUST-0001为什么暂停采购？", "must_select": ["east-cust-0001"], "must_not_select": ["other-company"]},
+    {"case_id": "superseded-margin-value", "split": "development", "question": "传动控制品类2025年10月毛利率是多少？", "must_select": ["margin-oct"], "must_not_select": ["superseded-margin"]},
+    {"case_id": "business-validity", "split": "development", "question": "现在销售折扣上限是多少？", "must_select": [], "must_not_select": ["business-expired"]},
+    {"case_id": "flagged-not-used", "split": "heldout", "question": "CUST-0280是坏账吗？", "must_select": ["receivable-0280"], "must_not_select": ["flagged-fact", "revoked-fact"]},
+    {"case_id": "irrelevant-question", "split": "heldout", "question": "你好，你能做什么？", "must_select": [], "must_not_select": ["receivable-0280", "supplier-003", "east-cust-0001", "margin-oct"]},
+    {"case_id": "isolation", "split": "heldout", "question": "CUST-0280的信用额度和跟进人是什么？", "must_select": [], "must_not_select": ["other-company", "other-user"]}
+  ]
+}

@@ -1,109 +1,219 @@
-# Enterprise Insight Agent
+# Enterprise Insight Assistant（企业经营洞察助手）
 
-面向企业内部经营分析场景的 AI Agent 平台学习项目。项目以 FastAPI 和
-PostgreSQL 为后端基础，按可测试、可恢复、可审计的方式逐步实现文档知识库、
-数据分析、Multi-Agent 工作流和人工审核。
+本仓库用于个人软件工程与 Agent 开发学习，按生产级工程要求设计和验证。仓库随附的经营样例使用固定 seed 的合成数据；其中公司、客户、员工、地区及金额用于业务建模和评测，不代表真实客户关系、企业委托或真实信用评价。这里的“公司”也是系统的租户与权限隔离概念，不能据此判断实际使用者的企业归属。
 
-> 当前仓库仍处于基础工程阶段。设计文档描述的是目标能力，不代表相关功能已经实现。
+面向中小型公司的证据驱动经营分析系统。用户用自然语言提出经营问题，系统在当前公司授权范围内查询只读经营数据库、检索内部文档，并生成可追溯的结构化报告。
 
-## 当前状态
+本项目目标是全模块符合明确适用范围的生产级设计与工程要求，并在单电脑与存储服务环境完成真实验证，不要求上线。当前实现尚未通过整体生产级验收；目标与进度分开记录。
 
-已经实现：
+**当前执行从 [计划总览](docs/roadmap/00_overview.md) 开始，进度与验证见 [工作日志](docs/worklog.md)。每次只读当前工单；其他资料见 [文档索引](docs/README.md)。**
 
-- FastAPI 应用、健康检查和依赖注入
-- PostgreSQL、SQLAlchemy 与 Alembic 迁移
-- 文档和聊天记录的基础 CRUD
-- 文件落盘、大小限制、文件类型校验和 SHA256 去重服务
-- 请求 ID、结构化日志和数据库连接检查
-- 基础集成测试
+## 已有模块与能力基础
 
-正在建设：
+以下是实现构成，不代表各项已通过完整生产级门禁；当前缺口与验证范围见 [项目审计](docs/audits/project_core_audit_20260915.md)。
 
-- 文件上传 API、文档解析与分块
-- Embedding、向量检索和带引用的 RAG
-- 安全 SQL 数据分析工具
-- Multi-Agent 工作流、任务恢复和人工审核
-- 评测、可观测性、权限和生产部署
+- 公司级身份与权限：JWT 登录、成员角色、资源隔离和管理审批。
+- 文档知识库：TXT、Markdown、PDF 上传，异步解析、分块、向量化和 pgvector 检索。
+- 受控经营查询：Schema 快照、查询契约、`sqlglot` AST 校验、只读事务和结果约束。
+- Agent 工作流：Planner → Data / Knowledge → Reviewer，支持条件路由、澄清和证据不足分支。
+- 可信报告：事实、假设、建议、数据证据、文档引用和限制分别建模并交叉校验。
+- 异步可靠性：Celery、Redis、Outbox、执行租约、Checkpoint、分类重试、取消和幂等发布。
+- 人工审核与治理：待审核报告、模型调用记录、Tool 调用审计、任务事件和运行指标。
+- React 工作台：经营问答、证据范围、文档库、数据源、成员管理和任务状态展示。
+
+## 系统边界
+
+系统只接受经营问题，不接受用户提交的原始 SQL，也不允许 LLM 决定权限或写入经营数据库。
+
+```text
+React / TypeScript
+        │ HTTP + JWT
+        ▼
+FastAPI ── PostgreSQL + pgvector
+        │ commit + Outbox
+        ▼
+Redis ── Celery Worker ── LangGraph
+                           ├─ Planner
+                           ├─ Data Agent ── 只读经营数据库
+                           ├─ Knowledge Agent ── 当前公司文档
+                           └─ Reviewer + 确定性校验器
+                                      │
+                                      ▼
+                              持久化结构化报告
+```
+
+关键约束：
+
+- API 只负责校验、鉴权、持久化和任务投递，不在 HTTP 请求中执行长分析。
+- Worker 只接收 `task_id`，从数据库恢复冻结的公司、数据源、Schema 和文档范围。
+- Data Agent 生成的候选 SQL 必须通过查询契约、Schema、AST 和只读执行边界。
+- Knowledge Agent 只能引用本次任务允许访问的文档分块。
+- Reviewer 只能组织已验证证据，最终发布仍由确定性校验和持久化门控制。
+- 数据确认的是事实；文档支持的是原因假设。证据不足时返回限制或澄清，不伪造归因。
+
+## 技术栈
+
+| 模块 | 技术 |
+| --- | --- |
+| API | Python 3.10+、FastAPI、Pydantic |
+| 数据与迁移 | PostgreSQL、SQLAlchemy 2、Alembic、pgvector |
+| 异步执行 | Celery、Redis、Outbox |
+| Agent 编排 | LangGraph、结构化模型输出 |
+| 检索 | sentence-transformers、向量检索、Reranker |
+| 经营查询 | `sqlglot`、Schema Snapshot、只读 PostgreSQL |
+| 认证 | JWT、Argon2、角色权限 |
+| 前端 | React、TypeScript、Vite |
+| 本地部署 | Docker Compose、PowerShell 运维脚本 |
+
+## 快速开始
+
+### 前置条件
+
+- Docker Desktop（推荐）
+- 或 Python 3.10+、Node.js 20+、PostgreSQL、Redis
+
+### Docker Compose
+
+```powershell
+Copy-Item backend/.env.example backend/.env
+# 编辑 backend/.env：至少设置模型 Provider/API Key，并更换生产环境密码与 JWT_SECRET。
+
+docker compose up -d --build
+docker compose ps
+```
+
+Compose uses a lightweight core image for the API, migrations, Beat, and report
+Worker. The analysis Worker uses a separate CPU-only local-model image because
+document embedding and reranking require PyTorch. A GPU embedding service is
+not enabled by default; it requires a separately versioned internal call
+contract and is not substituted by `gpus: all`.
+
+服务入口：
+
+- 前端：http://localhost:5173
+- API：http://localhost:8000
+- OpenAPI：http://localhost:8000/docs
+- 平台 PostgreSQL：`localhost:5433`
+- Redis：`localhost:6380`
+- 演示经营库：`localhost:5434`、`5435`、`5436`
+
+首次使用可通过 `POST /auth/bootstrap-owner` 创建首个公司所有者；请求结构以 OpenAPI 页面为准。
+
+已有容器的日常启停与检查（从项目根目录执行）：
+
+```powershell
+.\scripts\ops\up.ps1
+.\scripts\ops\status.ps1
+.\scripts\ops\down.ps1
+```
+
+这些命令只操作当前目录所属 `agent` 项目的 13 个常驻服务，保留容器和数据卷，不启动迁移、种子或测试任务。`up` 最多等待 120 秒检查容器健康与 API 就绪；`status` 检查失败会返回错误。缺少容器时停止并提示核对初始化流程，不自动创建环境。`up`、`down` 支持 `-WhatIf` 预览。
+
+Worker 的本地检索模型缓存保存在 `backend/storage/huggingface/`，通过 `HF_HOME` 复用已有持久化目录，重建容器后仍保留。首次没有缓存时仍需下载模型，API 就绪检查不代表模型已经加载；首次冒烟前应确认模型准备完成。缓存属于本机运行数据，不提交 Git。
+
+`down` 使用 Docker stop；禁止使用 `docker compose down -v` 删除数据卷。首次初始化或数据库迁移仍须按 AGENTS.md 获得授权。隔离自检：`.\scripts\ops\test-stack.ps1`，仅使用模拟 Docker 与 HTTP。
+
+### 本地开发
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+
+Set-Location backend
+pip install -r requirements/base.txt
+pip install -e ".[dev]"
+# 仅在本机运行真实 RAG/slow 测试时安装本地 CPU 模型依赖；普通 API
+# 开发和测试不需要它。
+pip install --index-url https://download.pytorch.org/whl/cpu torch==2.6.0
+pip install -r requirements/ml.txt
+Copy-Item .env.example .env
+python -m alembic upgrade head
+python -m uvicorn app.main:app --reload
+```
+
+新终端启动 Worker：
+
+```powershell
+Set-Location backend
+..\.venv\Scripts\python.exe -m celery -A app.core.celery_app:celery_app worker --loglevel=INFO
+```
+
+新终端启动前端：
+
+```powershell
+Set-Location frontend
+npm ci
+npm run dev
+```
+
+## 验证
+
+```powershell
+Set-Location backend
+..\.venv\Scripts\python.exe -m ruff check app tests
+..\.venv\Scripts\python.exe -m pytest tests -q -m "not e2e and not slow"
+
+Set-Location ..\frontend
+npm test
+npm run build
+
+Set-Location ..
+docker compose config --quiet
+```
+
+普通单元/集成测试不能证明真实 Redis、独立 Celery Worker、经营数据库和模型 Provider 的完整链路。需要真实依赖时，按测试标记和 [单机运行与恢复 Runbook](docs/operations/single_node_runbook.md) 执行对应 E2E。
+
+## 主要 API
+
+- `/auth/*`：登录、当前用户、密码和成员申请。
+- `/documents/*`：文档上传、编辑、处理状态和分块查询。
+- `/conversations/*`：会话、消息、分析任务创建与结果读取。
+- 任务操作位于会话主链；旧 `/tasks/*` 路由当前未在 `backend/app/api/router.py` 挂载。
+- 附件输入接口由 `input_artifacts` 模块提供，实际路径以 OpenAPI 为准。
+- `/company/*`：公司、成员、邀请、数据源和 Schema 快照。
+- `/review-requests/*`：报告审核。
+- `/observability/*`：任务指标。
+- `/health/live`、`/health/ready`：存活与就绪检查。
+
+完整契约以运行时 OpenAPI 为准。
 
 ## 仓库结构
 
 ```text
-.
-├── backend/              # FastAPI 后端、迁移、测试和脚本
-│   ├── app/
-│   │   ├── api/          # HTTP 接口
-│   │   ├── core/         # 配置、日志、中间件和异常
-│   │   ├── db/           # 数据库会话与 ORM 基类
-│   │   ├── models/       # SQLAlchemy 模型
-│   │   ├── repositories/ # 数据访问
-│   │   ├── schemas/      # API 输入输出结构
-│   │   └── services/     # 业务逻辑
-│   ├── migrations/       # Alembic 数据库迁移
-│   ├── scripts/          # 本地基础设施脚本
-│   └── tests/            # 自动化测试
-├── docs/
-│   └── design/           # 推荐实现方案与长期完整架构参考
-├── .gitignore
-└── README.md
+backend/
+  app/
+    api/ core/ db/      路由组合、配置/网关/Celery、数据库会话
+    modules/<领域>/     业务领域：api / schemas / service / repository / models / tasks
+                        大模块按职责分子包，如 workflow/{orchestration,lifecycle,delivery,audit}
+  migrations/           Alembic 迁移链
+  tests/{unit,integration,scripts,fixtures}
+  scripts/{data,evaluation,ops,db}
+  docker/               api / worker / evaluation 镜像定义
+  requirements/         base / ml / evaluation 依赖
+frontend/src/           React 工作台
+data/business_knowledge_base/  可复现演示语料
+docs/                   计划、架构、设计稿、运维、审计、证据（见 docs/README.md）
+scripts/ops/            备份、恢复、队列和权限检查
+docker-compose.yml      本地服务编排
 ```
 
-## 设计文档
+完整说明见 [目录结构与模块边界](docs/architecture/modular_monolith_structure.md)。
 
-设计文档入口见 [docs/README.md](docs/README.md)。
+## 项目文档
 
-- 推荐实现版用于指导当前项目逐步落地。
-- 完整平台版用于理解生产系统的长期能力边界。
-- 实际进度以源码、测试和本 README 的“当前状态”为准。
+- [文档索引](docs/README.md)
+- [当前执行计划：阶段 0～9 总览](docs/roadmap/00_overview.md)
+- [当前工单：阶段 0～2](docs/roadmap/01_stages_0-2.md)
+- [工作日志](docs/worklog.md)
+- [目录结构与模块边界](docs/architecture/modular_monolith_structure.md)
+- [历史证据（冻结）](docs/history/evidence.md)
+- [历史设计范围路线图（仅供查询）](docs/history/plans/single_node_production_style_ai_application_roadmap.md)
+- [产品定义与边界](PRODUCT.md)
+- [前端设计系统](DESIGN.md)
+- [单机运行与故障恢复](docs/operations/single_node_runbook.md)
+- [贡献指南](CONTRIBUTING.md)
+- [安全策略](SECURITY.md)
 
-## 本地运行
+## 许可证
 
-环境要求：
-
-- Python 3.10+
-- PostgreSQL
-
-安装开发依赖：
-
-```powershell
-cd backend
-..\.venv\Scripts\python.exe -m pip install -e ".[dev]"
-```
-
-复制并填写本地配置：
-
-```powershell
-Copy-Item .env.example .env
-```
-
-初始化数据库后执行迁移：
-
-```powershell
-..\.venv\Scripts\python.exe -m alembic upgrade head
-```
-
-启动 API：
-
-```powershell
-..\.venv\Scripts\python.exe -m uvicorn app.main:app --reload
-```
-
-运行测试：
-
-```powershell
-..\.venv\Scripts\python.exe -m pytest -q
-```
-
-运行代码检查：
-
-```powershell
-..\.venv\Scripts\python.exe -m ruff check app tests
-```
-
-## 开发原则
-
-- 每项能力先定义输入、输出、状态和失败路径，再编写实现。
-- 所有数据库结构变化使用 Alembic，不手工修改生产表。
-- LLM 只负责理解和归纳；数字由受控工具计算。
-- 所有结论必须能够追溯到文档证据或查询结果。
-- 暂时性故障才重试，确定性错误应终止或进入人工处理。
-- README 只记录已验证能力，规划内容必须明确标记为未实现。
+当前仓库尚未声明开源许可证。除非仓库所有者补充 LICENSE，否则默认不授予复制、修改或分发许可。

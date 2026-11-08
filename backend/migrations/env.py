@@ -1,12 +1,29 @@
+import os
 from logging.config import fileConfig
 
 from alembic import context
+from sqlalchemy import create_engine
 from app.db.base import Base
-from app.db.session import database_url, engine
-from app.models.chat_record import ChatRecord  # noqa: F401
-from app.models.documents import Documents  # noqa: F401
-
-from app.models.document_chunk import DocumentChunk  # noqa: F401
+from app.db.session import database_url
+from app.modules.identity.models import User  # noqa: F401
+from app.modules.documents.models import Documents  # noqa: F401
+from app.modules.documents.chunks import DocumentChunk  # noqa: F401
+from app.modules.workflow.models import AnalysisTask, AnalysisTaskDocument  # noqa: F401
+from app.modules.conversations.models import Conversation, ConversationMessage  # noqa: F401
+from app.modules.organizations import models as company  # noqa: F401
+from app.modules.workflow.delivery.outbox_models import AnalysisTaskOutboxEvent  # noqa: F401
+from app.modules.workflow.lifecycle.execution_attempt import TaskExecutionAttempt  # noqa: F401
+from app.modules.workflow.lifecycle.checkpoint import WorkflowCheckpoint  # noqa: F401
+from app.modules.reviews.models import ReviewRequest  # noqa: F401
+from app.modules.memory.models import AnalysisMemory  # noqa: F401
+from app.modules.workflow.audit.events_models import WorkflowEvent  # noqa: F401
+from app.modules.input_artifacts.models import (  # noqa: F401
+    ArtifactParseResult,
+    ArtifactProcessingJob,
+    ArtifactProcessingOutboxEvent,
+    InputArtifact,
+    InputArtifactVersion,
+)
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -18,6 +35,12 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 target_metadata = Base.metadata
+migration_database_user = os.getenv("MIGRATION_DATABASE_USER")
+migration_database_url = (
+    database_url.set(username=migration_database_user)
+    if migration_database_user
+    else database_url
+)
 
 
 def run_migrations_offline() -> None:
@@ -32,7 +55,7 @@ def run_migrations_offline() -> None:
     script output.
 
     """
-    url = database_url.render_as_string(hide_password=False)
+    url = migration_database_url.render_as_string(hide_password=False)
     context.configure(
         url=url,
         target_metadata=target_metadata,
@@ -52,7 +75,7 @@ def run_migrations_online() -> None:
     and associate a connection with the context.
 
     """
-    with engine.connect() as connection:
+    with create_engine(migration_database_url).connect() as connection:
         context.configure(
             connection=connection,
             target_metadata=target_metadata,

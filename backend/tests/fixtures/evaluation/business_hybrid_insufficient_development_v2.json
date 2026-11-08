@@ -1,0 +1,28 @@
+{
+    "schema_version": "1.0",
+    "dataset_version": "business-hybrid-insufficient-development-v2",
+    "cases": [
+        {
+            "case_id": "hybrid-no-matching-product-cause",
+            "scenario": "insufficient_evidence",
+            "complexity": "complex",
+            "split": "development",
+            "coverage_tags": ["data_sql", "knowledge_rag", "insufficient_refusal"],
+            "question": "某新产品在2024年3月销量下降的业务原因是什么？",
+            "company_scope": "acme-demo",
+            "document_scope": [],
+            "expected_route": "hybrid",
+            "expected_entities": ["某新产品"],
+            "expected_period": "2024-03",
+            "expected_query_requirements": ["查询销量", "无匹配记录时拒绝确定归因"],
+            "expected_result_fingerprint": {
+                "algorithm": "sha256",
+                "value": "4012d5a713b509655890e39fbc864ab4054cbd784178f3a0485e882309860ded"
+            },
+            "expected_outcome": "insufficient_evidence",
+            "expected_limitations": ["缺少能够支持原因判断的文档证据"],
+            "max_model_calls": 5,
+            "max_tokens": 10000
+        }
+    ]
+}

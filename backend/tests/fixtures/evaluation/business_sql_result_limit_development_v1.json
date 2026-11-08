@@ -1,0 +1,26 @@
+{
+  "schema_version": "1.0",
+  "dataset_version": "business-sql-result-limit-development-v1",
+  "cases": [
+    {
+      "case_id": "sql-result-limit-large-request-capped",
+      "evaluation_kind": "sql_result_limit",
+      "scenario": "oversized_sql_result",
+      "complexity": "medium",
+      "split": "development",
+      "coverage_tags": ["security", "sql", "result_limit"],
+      "question": "请求 100000 行 SQL 结果时，工具必须返回不超过 1000 行。",
+      "company_scope": "disposable-development-tenant",
+      "document_scope": [],
+      "expected_route": null,
+      "expected_entities": ["sales_orders"],
+      "expected_period": "not_applicable",
+      "expected_query_requirements": ["强制 SQL 结果行数上限"],
+      "expected_result_fingerprint": {"scenario": "sql_result_limit"},
+      "expected_outcome": "completed",
+      "expected_sql_result_max_rows": 1000,
+      "max_model_calls": 0,
+      "max_tokens": 0
+    }
+  ]
+}

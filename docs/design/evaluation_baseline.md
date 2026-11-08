@@ -1,0 +1,164 @@
+# 评测基线设计
+
+- 状态：设计与开发验证进行中，尚未冻结/验收为统一基线；最新执行证据见 `../evidence.md`。不代表阶段 1 学习验收完成。
+- 依据：`docs/plans/improvement_and_learning_plan.md` 阶段 2，保持 23 开发 + 7 仓库外密封留出，不修改原计划。
+- 作者：模型示范；案例业务预期与独立留出由用户负责。
+
+## 现状与调用链
+
+`prepare_business_evaluation.build_preparation_plan` → 读取 `EvaluationFixture` → `_select_cases` → 校验语料 hash → `PreparationPlan`。准备入口默认拒绝 heldout，但读取发生在筛选前。
+
+`run_business_evaluation.main` → 读取整个 fixture → `_select_cases` → 载入实际任务/拒绝/保存的 Observation → `evaluate_run` → `EvaluationRun` 与报告。未指定 case ID 时选择全部案例；现有 CLI 不是盲测边界。split 标签和文件 hash 均不能证明持有人独立。
+
+保留现有 Schema、Observation 适配器、确定性评测器与阈值契约；不重写业务 Agent，不新增 LLM 裁判。已暴露的旧 Gold 不再作为独立留出证明。
+
+准备工具的 `_upload_documents` 名称不能代替调用链核对：它实际向 `POST /documents` 发送 JSON 文本，由 `create_document` 保存并投递文档处理任务，不调用 multipart 文件上传或会话附件接口。
+
+2026-10-25 源码审查发现冻结要求尚未落实：`app/api/router.py` 仍挂载文件上传与附件路由，`documents/api.py` 的 `/documents/upload` 和 `input_artifacts/api.py` 的三项 POST 路由没有冻结门禁，`main.py` 与请求中间件也没有对应拦截；前端仍提供文件/附件上传控件。现有 `test_document_upload.py` 要求正常上传返回 202。以上是源码与测试期望，不是当前运行中的部署探测。不得据此运行文件上传或把“入口已关闭”作为基线事实。
+
+后续修正：提交 `89a19e96` 已将四个上传入口从生产应用路由移除并撤下前端控件；旧模块契约仅在独立测试应用中验证。源码冻结已落实，已有运行服务是否更新仍未证明。2026-10-26 补充准备工具 HTTP 契约测试，使用合成文档确认 JSON POST `/documents` 和 GET 状态轮询，不发送答案键；这不是实际 Worker 摄取或检索证据。
+
+## 12 项设计约束
+
+| 项 | 约束 |
+|---|---|
+| 1 职责 | 衡量真实业务结果、权限、恢复、时延与成本；不得由测试数量或模拟输出代替真实评测。 |
+| 2 生命周期 | 开发案例独立版本化；7 例新留出由用户在仓库及优化上下文之外保存。运行清单、代码/数据/配置 hash 与结果不可覆盖；失效结果保留原因。 |
+| 3 契约 | 复用 EvaluationCase、EvaluationObservation、EvaluationRun。缺失、重复、额外观测拒绝；unknown 不计通过。外部结果接收契约待持有人工作方式确定后设计。 |
+| 4 状态 | 准备 → 冻结 → 执行 → 验证 → 采用/拒绝/继续；准备、模拟、部分运行不自动晋升为基线。 |
+| 5 权限 | 开发者可读开发案例；独立持有人可读留出答案。优化方仅接收脱敏汇总、版本/hash、执行来源与持有人确认；不得回传题目、答案或可反推单例的明细。 |
+| 6 失败 | 数据/模型不可用、超时、观测缺失、成本未知分别记录，不能生成符合答案的替代观测。失败运行保留，不反复跑留出直到通过。 |
+| 7 资源 | 复用现有案例 Token/调用预算与提交成本门禁；本机串行。真实模型运行前明确总预算、截止时间、服务与授权，未明确不提交。 |
+| 8 一致性 | 基线与候选使用相同冻结案例、数据与测量口径；一次改变一个主要变量。持久化结果与报告来源一致，重跑建立新记录。 |
+| 9 可观测 | 保存 run/commit/版本/hash、来源、耗时、费用状态与失败类别；不公开令牌、原始敏感数据或留出题目。 |
+| 10 测试 | 先合成契约与异常测试，再真实 PG/Worker 开发评测，最后持有人独立留出。未知硬门禁不得通过；案例混入、重复 ID、观测不匹配须拒绝。 |
+| 11 运维 | 首切片不新增业务表，无迁移适用；代码按提交回退，冻结报告不回写。临时租户只按本次清单清理，不清空共享数据库。 |
+| 12 安全 | 答案键不进入 Agent 输入；模型和文档内容不决定评分授权。文件位置、加密或布尔开关本身不证明盲测独立性。 |
+
+## 实施前仍需解决
+
+普通准备入口仅适用于 analysis / clarification：这两类通过用户消息创建真实任务。runtime 拒绝、SQL 验证/超时/限额、重复投递和执行权隔离需要专用执行器，不能把案例中的故障描述当成普通问题交给模型。2026-10-26 新增准备阶段的类型白名单，六类专用案例在读取语料/创建资源前拒绝；保留 security_rejection 的独立 HTTP 拒绝提示。此处不重写专用执行器，也不承诺旧的或手工修改的 prepared manifest 已被重新验真；真实运行必须从当前候选重新准备。
+
+1. 阶段 1 的学习验收保持待办；本文件不批准跨阶段宣称完成。
+2. 确定新留出的独立持有人与执行环境；不能让同一优化上下文读完整 fixture 后再声称盲测。
+3. 从允许访问的开发材料建立独立的 23 例开发集，并核对覆盖、业务预期和真实执行途径；本轮未读取或统计旧 Gold 内容。
+4. 开发入口需有防止混入留出的明确契约；外部持有人评分流程单独定义，不用一个开关冒充隔离。
+5. 冻结适用指标与阈值后，才运行成本受控的真实开发基线；不能根据候选结果反向放宽阈值。
+   - 当前 `--max-cost-usd` 检查的是服务端单任务上限是否不超过该值，不是跨案例共享的总预算，也不是人民币金额。2026-10-26 已补齐有限值校验，拒绝 NaN/sNaN/Infinity；仍不得把该参数直接解释为用户授权的整轮费用上限。真实运行前须明确计价币种、案例数、单任务上限及整轮限制；本轮未实施费用兑换或全局预算机制。
+6. 保持 `89a19e96` 的上传冻结边界；不因评测重新挂载文件/附件路由。真实评测前核对目标运行版本与 JSON 文档准备能力；源码路由和 HTTP 模拟测试不能代替运行服务检查。
+
+## 未证明范围
+
+### 知识评测运行前：离线模型预检
+
+2026-10-26 真实准备超时后的诊断：新建 agent-worker 容器未挂载 Hugging Face 缓存，网络禁用时 LocalEmbeddingProvider 退出 1（LocalEntryNotFoundError）；主机对应模型快照已存在。只读挂载该模型目录后，同一镜像、当前源码、禁用网络，实际生成两条 384 维有限向量通过，模型初始化和计算共 6.97 秒。无需修改业务代码、放宽轮询超时或使用假向量。
+
+后续临时评测 Worker 和需要本地模型的评测进程均应使用已核验缓存；先在不携带 API 密钥且无网络的独立容器运行下列预检，再启动付费评测窗口。只挂载所需模型目录，不挂载整个用户缓存或令牌目录；以当次核验的模型快照和镜像 ID 记录版本。以下为本机示例，路径不同须先核验，不能直接创建空目录冒充缓存：
+
+```powershell
+$modelCache = 'C:/Users/qyf21/.cache/huggingface/hub/models--sentence-transformers--paraphrase-multilingual-MiniLM-L12-v2'
+if (-not (Test-Path -LiteralPath "$modelCache/refs/main")) { throw '模型缓存缺失' }
+$backendPath = (Resolve-Path backend).Path
+docker run --rm --network none `
+  -e HF_HUB_OFFLINE=1 -e TRANSFORMERS_OFFLINE=1 -e HF_HUB_CACHE=/model-cache `
+  --mount "type=bind,source=$modelCache,target=/model-cache/models--sentence-transformers--paraphrase-multilingual-MiniLM-L12-v2,readonly" `
+  --mount "type=bind,source=$backendPath,target=/app,readonly" `
+  agent-worker python -c "import math; from app.modules.knowledge.rag.embeddings_local import LocalEmbeddingProvider; v=LocalEmbeddingProvider().embed_batch(['合成测试：华东销售额','合成测试：缺少时间范围']); assert len(v)==2 and all(len(x)==384 and all(math.isfinite(n) for n in x) for x in v); print('offline embedding preflight passed')"
+if ($LASTEXITCODE -ne 0) { throw '离线向量预检失败，不启动知识评测' }
+```
+
+本预检只覆盖 embedding，不覆盖 JSON 文档摄取、检索质量、权限或真实知识回答。实际知识链仍需预检 reranker 及摄取，再运行已授权的新一轮开发评测；原 30 分钟窗口不自动续期。不要把本次离线向量成功回填成上次准备成功。
+
+补充 reranker 预检：以相同镜像、禁网及只读源码方式，仅挂载主机 `models--BAAI--bge-reranker-base` 到 `/model-cache/models--BAAI--bge-reranker-base`，保留上述三个 HF 环境变量；调用 `LocalCrossEncoderReranker('BAAI/bge-reranker-base').score` 对问题“华东区销售额是多少？”和两条合成文本“华东区销售额为100元。”、“仓库设备需要维修。”评分。快照 `2cfc18c9415c912f9d8155881c133215df768a70` 实测 8.02 秒，分数约 0.997833 与 0.0000374，长度与有限值断言通过。未来知识评测进程需同时挂载这两个独立模型目录，不能只带 embedding 缓存。这个简单正反例不构成真实检索准确率证明。
+
+### 开发材料盘点（2026-10-26）
+
+仅读取 `backend/tests/fixtures/evaluation/business_*_development_v*.json`，不读取 Gold、heldout 或阈值文件。30 份文件全部通过当前 `EvaluationFixture` 校验，42 条记录全部标为 development；共有 30 个不同 case_id、20 个文件系列。文件系列不是场景数，case_id 不同也不自动代表独立场景。
+
+| 契约类型 | 记录数（含修订，不是验收案例数） |
+|---|---:|
+| analysis | 28 |
+| clarification | 1 |
+| security_rejection | 1 |
+| runtime_tool_rejection | 6 |
+| sql_validation_rejection / sql_timeout / sql_result_limit | 各 1 |
+| duplicate_delivery | 1 |
+| execution_fence | 2 |
+
+选择 23 例前必须处理的版本关系：
+
+- knowledge v1_1–v1_4 重复包含相同的四个 case_id，预期终态曾从 partial 改为 completed；须审查业务依据，不能因更新版本更容易通过就选它。
+- knowledge v1_5 是前缀变体，v1_6 是空范围证据不足场景；只取最大版本会丢失原四类支持/冲突/边界案例。
+- data_no_match v3 是无匹配地区，v5–v7 是已知地区空月份及其修订；不能只按文件系列合并，也不能按版本后缀充数。
+- east_sales_comparison_repair v1/v2 增加了语义结果投影约束；hybrid_insufficient v2/v8 的提问也不同。定稿须逐例核对数据、预期与测量口径，保留取舍原因。
+
+下一切片产出应是逐例的 23 项候选清单（原始文件、case_id、选择理由、预期来源、执行适配器），而不是把全部开发文件拼接或自动选择最新版本。当前盘点没有冻结案例或批准基线晋升。
+
+### 候选选择（待业务预期复核）
+
+见同目录 `development_case_selection.json`：明确列出 23 项原文件/case_id、覆盖理由及 Observation 来源，状态为 `proposed_not_frozen`。来源文件只作为待核验的预期来源，不视为正确答案已经证明；每项 `oracle_review=pending`。
+
+- 10 项任务类：SQL 正常/跨月/空月份，知识支持/多因素/风险边界/空范围，混合正常/不足，以及澄清。
+- 13 项权限与可靠性：请求范围拒绝 1、工具范围/当前授权/撤权/预算/未知工具拒绝 6、SQL 注入/超时/结果上限 3、重复投递 1、执行权隔离 2。
+- 纯知识支持选质量批次；华东合同支持保留为补充回归，华东资料还用于混合路线。措辞前缀变体不占独立名额。不存在地区与空月份不是同一业务问题，本候选选空月份保留已知实体来观察“数据确实缺失”；不存在地区保留为补充回归，不能宣称其已被本候选覆盖。
+- 选修订版本仅作为契约审查起点，不按历史通过率选择；必须核对版本间预期变化、源数据或文档、实际业务口径后才能冻结。若发现覆盖或预期不合理，应调整候选并记录原因，不能修改结果使候选通过。
+- 机器校验只证明 23 项引用存在、ID 唯一、split 为 development、观测类型匹配；未执行 Agent，也未确认当前数据与旧 hash 相同。不得将这份清单直接当作已冻结基线或盲测输入。
+- 上述结构约束已固化到 `test_development_case_selection.py`，随现有 unit CI 执行；读取前限制为同目录显式开发文件，再校验整个引用文件的 split。它仅保护候选清单的结构，不是运行器的留出隔离机制，也不把 pending 业务预期自动批准。
+
+### 原文限制复核：质量与回款
+
+2026-10-26 对照 `events/2025-05-06-quality-review.md` 与 `events/2025-q4-west-receivable-risk.md`，确认来源明确限制结论：质量事件不能推广到所有产品/客户，未付款和逾期不等于坏账。原 v1_4 的这两例只检查正向 claim；合成观测漏掉这些限制仍通过，不能据此声称评测已覆盖原文边界。
+
+新增独立 `business_knowledge_development_v1_7.json`，只收录这两例并增加 `expected_document_qualification_terms`，更新候选清单引用；旧 fixture、业务数据、评分器和业务 Agent 均不修改。新测试先证明缺少限制时旧契约误通过，再验证新契约拒绝缺失、接受原文限制，并断言限制语句确实存在于对应源文件。
+
+这是源文本支持关系与确定性契约的局部复核；不验证文档数字可复算性、模型语义质量、实际引用或权限，也不能防住所有矛盾表述。因此两例的完整 oracle_review 仍 pending，后续还须验证真实持久化 Observation。
+
+### 数据预期复算：华东销售额与空月份
+
+2026-10-26 在独立 PostgreSQL 16 临时容器中，以生成器 seed 20260718 调用 `recreate_schema` → `seed_dimensions` → `seed_transactions`；不生成或覆盖语料文件。提交生成事务后，以只读事务查询 `sales_orders → customers → regions`，按区域名称“华东”、状态 delivered、半开月份区间过滤。
+
+| 月份 | 订单数 | 订单 total_amount 合计 | 明细 line_amount 独立合计 |
+|---|---:|---:|---:|
+| 2025-07 | 31 | 2014010.64 | 2014010.64 |
+| 2025-08 | 29 | 1847604.72 | 1847604.72 |
+
+2020-03 用相同区域和半开日期区间、不添加状态条件，订单数为 0；regions 中“华东”恰有 1 行，排除了区域不存在导致空结果的混淆。三个候选的金额/两月语义/空结果指纹均与当前 fixture 相同。这里仅证明输入数据和预期计算的一致性；空结果的业务降级策略仍是待验证的系统契约，不是数据库自动给出的结论。
+
+复算查询（将日期范围替换为待测区间；明细校验再连接 sales_order_items 并汇总 line_amount）：
+
+```sql
+SELECT to_char(o.order_date, 'YYYY-MM') AS month,
+       count(*) AS order_count, sum(o.total_amount) AS revenue
+FROM sales_orders o
+JOIN customers c ON c.id = o.customer_id
+JOIN regions r ON r.code = c.region_code
+WHERE r.name = '华东' AND o.status = 'delivered'
+  AND o.order_date >= DATE '2025-07-01'
+  AND o.order_date < DATE '2025-09-01'
+GROUP BY 1 ORDER BY 1;
+```
+
+单月结果按现有“销售额”单指标序列化；两月结果按 `revenue/v1` 投影；空结果按 no_matching_records 契约序列化后，复用现有指纹函数比较。这些是审查用计算值，不写入实际任务 Observation。真实经营库是否仍与此生成版本一致、Agent 的 SQL/权限/发布链、真实成本和时延仍未验证，因此完整 oracle_review 保持 pending。
+
+此草案不是 30 例已完成、基线已建立或密封流程已可用的证据。确定性测试和合成库复算不替代真实业务质量、独立留出或生产规模验证。
+
+### 空冻结文档范围：失败案例修复契约（2026-10-26，候选验证中）
+
+真实开发案例 `knowledge-empty-supplier-certification-evidence` 的预期为证据不足，实际失败为 `knowledge_denied`。当前链路是 Worker 从 AnalysisTaskDocument 读冻结集合 → 同时注入 WorkflowState.document_ids 与 ToolRuntimeContext.allowed_document_ids → KnowledgeAgent.run 请求 rag_search → Runtime 当前身份复核通过后拒绝空冻结集合 → knowledge_node 写 denied → Router 终止 failed。直接工具调用拒绝是已有安全契约，不应删除；缺少的是业务编排无需发起检索的空范围路径。
+
+| 设计问题 | 本切片契约 |
+|---|---|
+| 1 职责 | 在 KnowledgeAgent 使用的 RuntimeTool 适配器中识别已授权的空冻结范围，不执行检索；Runtime 仍负责当前授权，节点不能自行信任前端字段。 |
+| 2 数据生命周期 | 复用任务冻结文档关系、当前用户/成员关系和现有审计事件；不新增表或永久缓存。空列表不转换为 None，不补全公司全部文档。 |
+| 3 接口 | RuntimeTool.execute 先调用 Runtime.resolve_empty_document_scope(tool, input)：None 表示不适用，ToolOutput 表示已核验空范围或拒绝。不适用时继续原 Runtime.execute；直接 Runtime.execute 的拒绝契约不变。禁止用 truthiness 将缺失范围当空范围。 |
+| 4 状态 | 仅已核验空范围可写 knowledge_result.status=insufficient_evidence、evidences=[]；Reviewer 和既有终态/发布流程继续处理。拒绝保持 denied，不把 tool_document_scope_denied 泛化为成功。 |
+| 5 权限 | 复用现有 rag_search 白名单、当前用户启用状态、approved 成员及角色检查；节点公司必须匹配 Runtime 公司，显式 [] 必须与 Runtime 冻结空集合一致。无 Runtime、范围缺失/冲突或授权依赖异常不得走快捷成功路径。 |
+| 6 失败 | 授权查询失败、撤权、禁用、公司冲突保持 fail closed；不得捕获后降级成“未找到资料”。原始工具错误继续沿用原语义。 |
+| 7 资源 | 空范围不执行检索或 MCP 工具，不加载 embedding/reranker，不调用 Knowledge 模型；允许既有无 I/O 工具对象构造，不消耗工具执行预算，仍产生业务判断审计。后续 Reviewer 的预算仍由原机制管理。 |
+| 8 一致性 | 预检只读取当前授权并记录判定，不改变冻结集合；Checkpoint/终态写入仍受原执行权机制约束。本切片不宣称解决所有发布前撤权竞态。 |
+| 9 可观测 | 记录空范围判定事件及稳定 reason_code，不记录问题正文或原始身份凭据；不得记录成一次真实 rag_search 成功。 |
+| 10 测试 | 正常空范围应零工具/零 Knowledge 模型调用且产生不足结果；None、伪造公司、非空冻结集合却传 []、禁用用户、撤销成员、无工具许可、授权查询异常均不得进入该路径；直接 Runtime.execute 的空范围拒绝测试原样保留。再验证真实 PG→知识节点→Reviewer→终态链，付费对照须在有效授权窗口内。 |
+| 11 运维 | 无迁移；候选代码可整体 revert，原失败报告不可覆盖；配置/模型/fixture 不变，一次只验证空范围处理这一变量。 |
+| 12 安全 | 不扩大资源范围、不伪造引用、不把未检索说成检索命中；不足说明应准确表达没有可用文档证据，不声称已扫描整个公司资料。 |
+
+不采用两个捷径：在 KnowledgeAgent 看到 [] 就直接成功（绕过当前身份复核）；捕获 tool_document_scope_denied 后统一改为不足（混淆非法调用与正常无资源）。候选已实现于现有 RuntimeTool/ToolRuntime，复用 KnowledgeAgent 既有 insufficient_evidence 分支，不新增节点接口；真实 PG、节点链及 2026-10-27 付费 API/Worker 开发对照见 `../evidence.md`。原第四例在新运行中 partial / published_partial，原评分通过；旧失败证据保留，不因此宣称独立留出通过或完整基线已建立。实现由模型示范；用户独立学习证据仍需之后说明“已授权范围为空”和“授权失败”的区别，并为新场景设计反例。

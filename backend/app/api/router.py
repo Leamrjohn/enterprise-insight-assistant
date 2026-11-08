@@ -1,9 +1,21 @@
 from fastapi import APIRouter
-from app.api.chat import router as chat_router
-from app.api.health import router as health_router
-from app.api.document import router as document_router
+
+from app.modules.conversations.api import router as conversations_router
+from app.modules.documents.api import router as document_router
+from app.modules.identity.api import router as auth_router
+from app.modules.memory.api import router as memory_router
+from app.modules.observability.api import router as observability_router
+from app.modules.observability.health_api import router as health_router
+from app.modules.organizations.api import router as companies_router
+from app.modules.reviews.api import router as review_requests_router
 
 router = APIRouter()
-router.include_router(chat_router)
 router.include_router(health_router)
 router.include_router(document_router)
+router.include_router(memory_router)
+router.include_router(auth_router)
+router.include_router(conversations_router)
+router.include_router(companies_router)
+router.include_router(review_requests_router)
+router.include_router(observability_router)
+# Upload routers remain unmounted until the stage-10 redesign is accepted.

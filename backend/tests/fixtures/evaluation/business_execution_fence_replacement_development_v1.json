@@ -1,0 +1,27 @@
+{
+  "schema_version": "1.0",
+  "dataset_version": "business-execution-fence-replacement-development-v1",
+  "cases": [
+    {
+      "case_id": "replaced-task-old-finish-cannot-overwrite-fresh-result",
+      "evaluation_kind": "execution_fence",
+      "scenario": "expired_execution_replacement_stale_terminal_write",
+      "complexity": "complex",
+      "split": "development",
+      "coverage_tags": ["security_scope", "execution_fence", "recovery"],
+      "question": "执行租约过期并被替代后，旧执行尝试写入终态结果。",
+      "company_scope": "disposable-development-tenant",
+      "document_scope": [],
+      "expected_route": null,
+      "expected_entities": ["旧执行", "替代执行"],
+      "expected_period": "not_applicable",
+      "expected_query_requirements": ["拒绝旧执行覆盖替代执行的结果"],
+      "expected_result_fingerprint": {"scenario": "replacement_result_preserved"},
+      "expected_outcome": "completed",
+      "expected_execution_fence_codes": ["execution_fence_lost"],
+      "expected_execution_fence_state": "replacement_result_preserved",
+      "max_model_calls": 0,
+      "max_tokens": 0
+    }
+  ]
+}

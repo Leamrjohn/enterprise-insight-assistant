@@ -1,0 +1,32 @@
+{
+  "schema_version": "1.0",
+  "dataset_version": "business-knowledge-development-v1.5",
+  "cases": [
+    {
+      "case_id": "knowledge-quality-batch-prefixed-evidence",
+      "scenario": "quality_spike",
+      "complexity": "medium",
+      "split": "development",
+      "coverage_tags": ["knowledge_rag", "support"],
+      "question": "请列出资料支持SUP-003传感器批次异常的依据。",
+      "company_scope": "acme-demo",
+      "document_scope": ["events/2025-05-06-quality-review.md"],
+      "expected_route": "knowledge_only",
+      "expected_entities": ["SUP-003"],
+      "expected_period": "2025-05 to 2025-06",
+      "expected_query_requirements": ["检索供应商批次异常"],
+      "expected_result_fingerprint": {"scenario": "quality_batch_evidence"},
+      "expected_document_claim_terms": [
+        {"all_of": ["SUP-003", "传感器", "异常"]}
+      ],
+      "expected_outcome": "completed",
+      "inapplicable_hard_gates": {
+        "entity_scope_correct": "文档路线由冻结文档和引用范围证明授权，问题未声明独立业务期间。",
+        "sql_result_equivalent": "知识库专用路线不执行 SQL。",
+        "numeric_consistent": "知识库专用路线没有 SQL 数值输出。"
+      },
+      "max_model_calls": 4,
+      "max_tokens": 8000
+    }
+  ]
+}
