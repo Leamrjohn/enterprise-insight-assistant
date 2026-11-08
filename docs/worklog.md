@@ -645,3 +645,8 @@
 - 第 2 步：创建数据源只收 {name, connection_id}，别家连接 404、旧的自填地址 422；新增 GET /company/data-connections（不含地址）；运维命令 scripts/db/register_data_connection.py；评测准备脚本为新公司登记连接并在清理时删除；前端改为选择连接。外键改为 NO ACTION。经用户同意，删除 A11a 针对旧创建接口的 3 组测试，其用例补进登记测试。
 - 验证：unit + scripts + integration 1605 通过 31 跳过；ruff 通过；前端 tsc 通过、vitest 7 通过；一次性容器上回填和往返检查通过（RESTRICT 版本）。
 - 待办：本地 agent_platform_test 仍是 RESTRICT 版外键（索引所有者不同，往返检查两次失败后停止）；第 3 步：缺数据源直接失败、模板查询不可达测试、备份后迁移部署、冒烟；推送前需 E1 扫描（gitleaks 未安装）。
+
+## 2026-11-08 A11b 第 3 步、迁移上线和冒烟
+- 第 3 步（409a123）：缺数据源时 _connection_details 拒绝（不再回退平台默认经营库），SQL 工具报 data_source_not_allowed 且不可修复；测试锁住 TemplateQueryTool 未接入主链（结论：模板查询不可达）。
+- 验证：unit + scripts + integration 1608 通过 31 跳过；真实库安全测试在一次性容器 agent-sqltest（agent_default 网络，host.docker.internal）29/29，含 Acme 凭据连不上 Beta。备份 artifacts/backups/a11b-before-20261108.dump（38 表、哈希一致）后迁移 a3b4c5d6e7f8→b4c5d6e7f8a9：167 个数据源全部绑定、跨公司绑定 0、外键 NO ACTION；部署 api/worker/report-worker/beat。冒烟 a11b-platform-connections（任务 885–894，$0.025）9 成功 + 混合题待复核（已知），评测公司的连接由 prepare_business_evaluation 登记。
+- 待办：host.docker.internal 指向平台主机却被 A11a 放行（DNS 别名缺口，需解析后按 IP 检查或网络隔离）；本机 127.0.0.1 被正确拒绝，所以真实库测试只能在容器里跑；旧字段 connection_config、credential_env_var 下个版本删除（需批准）；CI 的迁移往返步骤待推送后验证。
