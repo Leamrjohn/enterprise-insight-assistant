@@ -655,3 +655,8 @@
 - gitleaks v8.18.4（官方镜像，一次性容器 agent-gitleaks，仓库只读挂载，--redact）扫描 --all 共 403 个提交：4 条，全部为误报（version_traps_v1.json 的文档编号 safety-stock-v1/v2、complaint-v1/v2 被 generic-api-key 规则命中）。
 - 补充检查：HEAD 中模型 API key 赋值 0 处；全部提交中 sk- 形式密钥 0 处。结论：0 个真实密钥。报告留在会话临时目录，未入库。
 - 待办：E6 接入 CI 时为该夹具加 gitleaks 允许规则；推送和合并 main 需用户批准。
+
+## 2026-11-08 E1 分支集成完成（用户批准推送和合并）
+- 推送 work/smoke-baseline，PR #2 首次 CI：pyright 26 个历史类型错误（10 个文件），只补类型和 None 检查修复（0fa865a），本地 pyright 0、测试 1608 通过；第二轮 CI 14/14 通过，integration 任务输出 migration round trip ok。
+- 用户选择合并提交（merge commit）合入 main（387d64f），原有提交历史保留；main 现为唯一主线，work/smoke-baseline 相对 main 无多余提交。
+- 此后每个工单从 main 开短分支，CI 全绿后合并（完整计划第 2.7 节）。本条记录在短分支 chore/e1-record 上，未推送。
