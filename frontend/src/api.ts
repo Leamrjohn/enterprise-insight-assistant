@@ -1,4 +1,4 @@
-import type { AssistantDataSource, CompanyInvitation, CompanyMember, Conversation, ConversationMessage, CreatedCompanyInvitation, CurrentUser, DataSource, DocumentChunk, DocumentItem, MembershipApplication, ReviewRequest, Snapshot, Task, TaskMetrics } from "./types";
+import type { AssistantDataSource, CompanyInvitation, CompanyMember, Conversation, ConversationMessage, CreatedCompanyInvitation, CurrentUser, DataConnection, DataSource, DocumentChunk, DocumentItem, MembershipApplication, ReviewRequest, Snapshot, Task, TaskMetrics } from "./types";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL ?? "/api";
 
@@ -64,6 +64,7 @@ export class ApiClient {
   changePassword = (current_password: string, new_password: string) => this.request<void>("/auth/me/password", { method: "POST", body: JSON.stringify({ current_password, new_password }) });
   logout = () => this.request<void>("/auth/logout", { method: "POST" });
   dataSources = () => this.request<DataSource[]>("/company/data-sources");
+  dataConnections = () => this.request<DataConnection[]>("/company/data-connections");
   assistantDataSources = () => this.request<AssistantDataSource[]>("/company/assistant-data-sources");
   documents = () => this.request<DocumentItem[]>("/documents");
   document = (documentId: number) => this.request<DocumentItem>(`/documents/${documentId}`);

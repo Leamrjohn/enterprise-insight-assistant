@@ -639,3 +639,9 @@
 - 新增 backend/scripts/db/check_migration_roundtrip.py：upgrade head → downgrade -1 → upgrade head，比较两次升级后的表结构；只允许 *_test 库；CI 的 integration 任务在迁移后运行。
 - 验证：8 项单元测试（SQLite 临时迁移：可回退通过；downgrade 空操作、抛错、留残表都失败；非 _test 库拒绝）；tests/scripts 全部通过；一次性容器 agent-migration-check（无数据卷，已停止删除）上真实 PostgreSQL：最新迁移 a3b4c5d6e7f8 往返通过；加一个 downgrade 为 pass 的迁移后退出 1（DuplicateColumn）；DATABASE_NAME=agent_platform 时拒绝。
 - 没验证：CI 里的这一步（未推送）；只查最新一个迁移，全量规则留给 R10 的 E7。
+
+## 2026-11-08 A11b 平台连接 第 1、2 步（用户已批准方案和改表）
+- 第 1 步（7b3875b）：platform_data_connections 表（一个连接只属于一家公司），business_data_sources.connection_id，迁移回填完整配置的数据源；resolve_connection 在连接前检查归属、状态、凭据写法和 A11a 规则，SQL 执行和表结构发现都改走它。
+- 第 2 步：创建数据源只收 {name, connection_id}，别家连接 404、旧的自填地址 422；新增 GET /company/data-connections（不含地址）；运维命令 scripts/db/register_data_connection.py；评测准备脚本为新公司登记连接并在清理时删除；前端改为选择连接。外键改为 NO ACTION。经用户同意，删除 A11a 针对旧创建接口的 3 组测试，其用例补进登记测试。
+- 验证：unit + scripts + integration 1605 通过 31 跳过；ruff 通过；前端 tsc 通过、vitest 7 通过；一次性容器上回填和往返检查通过（RESTRICT 版本）。
+- 待办：本地 agent_platform_test 仍是 RESTRICT 版外键（索引所有者不同，往返检查两次失败后停止）；第 3 步：缺数据源直接失败、模板查询不可达测试、备份后迁移部署、冒烟；推送前需 E1 扫描（gitleaks 未安装）。

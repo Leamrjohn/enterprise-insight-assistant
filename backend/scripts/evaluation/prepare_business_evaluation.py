@@ -27,6 +27,7 @@ from app.modules.conversations.models import Conversation
 from app.modules.documents.models import Documents
 from app.modules.evaluation.business_schemas import EvaluationCase, EvaluationFixture
 from app.modules.identity.models import User
+from app.modules.organizations.connections import new_connection
 from app.modules.organizations.models import (
     BusinessDataSource,
     Company,
@@ -320,12 +321,26 @@ def _create_source_snapshot(
     db = SessionLocal()
     try:
         set_tenant_scope(db, company_id)
+        # A11b: this script runs on the platform side, so it registers the demo
+        # connection for its own fresh company the way an operator would.
+        connection = new_connection(
+            company_id=company_id,
+            name=f"p0-evaluation-{run_id}-acme-demo",
+            host=DEFAULT_SOURCE_CONNECTION["host"],
+            port=DEFAULT_SOURCE_CONNECTION["port"],
+            database=DEFAULT_SOURCE_CONNECTION["database"],
+            username=DEFAULT_SOURCE_CONNECTION["user"],
+            schema_name=DEFAULT_SOURCE_CONNECTION["schema"],
+            credential_env_var=DEFAULT_SOURCE_CREDENTIAL_ENV,
+            operator="prepare_business_evaluation",
+        )
         source = BusinessDataSource(
             company_id=company_id,
             name=f"p0-evaluation-{run_id}-acme-readonly",
             dialect="postgresql",
             connection_config=DEFAULT_SOURCE_CONNECTION,
             credential_env_var=DEFAULT_SOURCE_CREDENTIAL_ENV,
+            connection=connection,
             status="pending",
         )
         db.add(source)
@@ -781,7 +796,11 @@ def cleanup(*, manifest_path: Path) -> None:
         if isinstance(source_id, int):
             source = db.get(BusinessDataSource, source_id)
             if source is not None and source.company_id == company_id:
+                connection = source.connection
                 db.delete(source)
+                db.flush()
+                if connection is not None and connection.company_id == company_id:
+                    db.delete(connection)
         db.flush()
         company = db.get(Company, company_id)
         if company is not None:

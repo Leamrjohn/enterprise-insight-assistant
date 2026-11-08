@@ -1,10 +1,8 @@
 """HTTP contracts for tenant data-source setup."""
 
-import re
 from datetime import datetime
 
-from app.modules.organizations.data_source_policy import ensure_data_source_allowed
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class CompanyCreate(BaseModel):
@@ -28,48 +26,29 @@ class CurrentCompanyOut(BaseModel):
     membership_status: str
 
 
-class DataSourceConnectionConfig(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
-
-    host: str = Field(min_length=1, max_length=255)
-    port: int = Field(default=5432, ge=1, le=65535)
-    database: str = Field(min_length=1, max_length=63)
-    user: str = Field(min_length=1, max_length=63)
-    schema_name: str = Field(
-        default="public",
-        alias="schema",
-        serialization_alias="schema",
-        min_length=1,
-        max_length=63,
-    )
-
-
 class BusinessDataSourceCreate(BaseModel):
+    """A11b: admins pick one of their company's platform-registered connections."""
+
+    model_config = ConfigDict(extra="forbid")
+
     name: str = Field(min_length=1, max_length=255)
-    connection: DataSourceConnectionConfig
-    credential_env_var: str = Field(min_length=1, max_length=120)
+    connection_id: int = Field(gt=0)
 
-    @field_validator("credential_env_var")
-    @classmethod
-    def credential_reference_is_safe(cls, value: str) -> str:
-        if not re.fullmatch(r"[A-Z][A-Z0-9_]*", value):
-            raise ValueError("credential_env_var must be an uppercase environment name")
-        return value
 
-    @model_validator(mode="after")
-    def source_stays_outside_platform(self) -> "BusinessDataSourceCreate":
-        ensure_data_source_allowed(
-            credential_env_var=self.credential_env_var, host=self.connection.host
-        )
-        return self
+class DataConnectionOut(BaseModel):
+    """What a company admin may know about a platform connection: not its address."""
+
+    id: int
+    name: str
+    status: str
 
 
 class BusinessDataSourceOut(BaseModel):
     id: int
     name: str
     dialect: str
-    connection: DataSourceConnectionConfig
-    credential_env_var: str
+    connection_id: int | None
+    connection_name: str | None
     status: str
     last_error: str | None
     active_schema_snapshot_id: int | None

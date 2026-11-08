@@ -13,12 +13,18 @@ export interface CurrentUser {
   membership_status: string;
 }
 
+export interface DataConnection {
+  id: number;
+  name: string;
+  status: string;
+}
+
 export interface DataSource {
   id: number;
   name: string;
   dialect: string;
-  connection: { host: string; port: number; database: string; user: string; schema: string };
-  credential_env_var: string;
+  connection_id: number | null;
+  connection_name: string | null;
   status: string;
   last_error: string | null;
   active_schema_snapshot_id: number | null;

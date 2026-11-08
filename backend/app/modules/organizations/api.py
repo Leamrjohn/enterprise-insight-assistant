@@ -25,10 +25,12 @@ from app.modules.organizations.schemas import (
     CompanyMemberUpdate,
     CompanyOut,
     CurrentCompanyOut,
+    DataConnectionOut,
     MembershipApplicationOut,
     SchemaSnapshotOut,
 )
 from app.modules.organizations.service import (
+    DataConnectionNotFound,
     activate_schema_snapshot,
     approve_membership_application,
     create_company,
@@ -38,6 +40,7 @@ from app.modules.organizations.service import (
     get_current_schema_snapshot,
     list_company_invitations,
     list_company_members,
+    list_data_connections,
     list_membership_applications,
     reject_membership_application,
     reset_company_member_password,
@@ -54,8 +57,8 @@ def _source_out(source) -> BusinessDataSourceOut:
         id=source.id,
         name=source.name,
         dialect=source.dialect,
-        connection=source.connection_config,
-        credential_env_var=source.credential_env_var,
+        connection_id=source.connection_id,
+        connection_name=source.connection.name if source.connection else None,
         status=source.status,
         last_error=source.last_error,
         active_schema_snapshot_id=source.active_schema_snapshot_id,
@@ -178,6 +181,17 @@ def list_assistant_data_sources(
     ]
 
 
+@router.get("/company/data-connections", response_model=list[DataConnectionOut])
+def list_data_connections_endpoint(
+    context: CurrentCompanyContext = Depends(require_admin),
+    db: Session = Depends(get_db),
+):
+    return [
+        DataConnectionOut(id=item.id, name=item.name, status=item.status)
+        for item in list_data_connections(db, company_id=context.company.id)
+    ]
+
+
 @router.post(
     "/company/data-sources",
     response_model=BusinessDataSourceOut,
@@ -188,14 +202,18 @@ def create_data_source_endpoint(
     context: CurrentCompanyContext = Depends(require_admin),
     db: Session = Depends(get_db),
 ):
-    source = create_data_source(
-        db,
-        company_id=context.company.id,
-        user_id=context.user.id,
-        name=request.name,
-        connection=request.connection.model_dump(by_alias=True),
-        credential_env_var=request.credential_env_var,
-    )
+    try:
+        source = create_data_source(
+            db,
+            company_id=context.company.id,
+            user_id=context.user.id,
+            name=request.name,
+            connection_id=request.connection_id,
+        )
+    except DataConnectionNotFound:
+        raise HTTPException(
+            status_code=404, detail="data connection not found"
+        ) from None
     if source is None:
         raise HTTPException(status_code=403, detail="administrator permission required")
     return _source_out(source)

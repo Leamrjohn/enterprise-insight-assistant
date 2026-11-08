@@ -123,7 +123,12 @@ def test_schema_discovery_refuses_another_companys_connection_before_connecting(
     [
         {"credential_env_var": "JWT_SECRET"},
         {"credential_env_var": "DATABASE_PASSWORD"},
+        {"credential_env_var": "ACME_OTHER_PASSWORD"},  # not on the allowlist
         {"host": "postgres"},
+        {"host": "REDIS"},
+        {"host": "localhost"},
+        {"host": "127.0.0.1"},
+        {"host": "::1"},
         {"host": "169.254.169.254"},
     ],
 )

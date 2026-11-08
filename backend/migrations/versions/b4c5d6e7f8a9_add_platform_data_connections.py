@@ -54,7 +54,9 @@ def upgrade() -> None:
         sa.Column(
             "connection_id",
             sa.Integer(),
-            sa.ForeignKey("platform_data_connections.id", ondelete="RESTRICT"),
+            # NO ACTION: checked at statement end, so deleting a company that
+            # cascades to both tables works; deleting a connection in use does not.
+            sa.ForeignKey("platform_data_connections.id"),
             nullable=True,
         ),
     )

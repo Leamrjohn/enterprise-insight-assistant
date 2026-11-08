@@ -1,8 +1,6 @@
 import pytest
 from app.modules.analysis.data import sql_executor
 from app.modules.organizations.models import BusinessDataSource, PlatformDataConnection
-from app.modules.organizations.schemas import BusinessDataSourceCreate
-from pydantic import ValidationError
 
 DEMO_CONNECTION = {
     "host": "demo_business_acme",
@@ -34,37 +32,6 @@ def _source(credential_env_var: str, host: str = "demo_business_acme"):
             created_by_operator="test",
         ),
     )
-
-
-@pytest.mark.parametrize(
-    "name", ["JWT_SECRET", "DATABASE_PASSWORD", "ACME_OTHER_PASSWORD"]
-)
-def test_create_rejects_credential_outside_allowlist(name):
-    with pytest.raises(ValidationError):
-        BusinessDataSourceCreate(
-            name="tenant-db", connection=DEMO_CONNECTION, credential_env_var=name
-        )
-
-
-@pytest.mark.parametrize(
-    "host", ["postgres", "REDIS", "localhost", "127.0.0.1", "::1", "169.254.169.254"]
-)
-def test_create_rejects_platform_internal_host(host):
-    with pytest.raises(ValidationError):
-        BusinessDataSourceCreate(
-            name="tenant-db",
-            connection={**DEMO_CONNECTION, "host": host},
-            credential_env_var="ACME_DEMO_DATABASE_PASSWORD",
-        )
-
-
-def test_create_accepts_demo_source():
-    request = BusinessDataSourceCreate(
-        name="tenant-db",
-        connection=DEMO_CONNECTION,
-        credential_env_var="ACME_DEMO_DATABASE_PASSWORD",
-    )
-    assert request.credential_env_var == "ACME_DEMO_DATABASE_PASSWORD"
 
 
 def test_query_time_rejects_stored_platform_secret_before_reading_it(monkeypatch):

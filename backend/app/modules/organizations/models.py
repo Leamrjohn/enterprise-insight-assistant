@@ -163,7 +163,7 @@ class BusinessDataSource(Base):
     # A11b: connections resolve only through this; connection_config and
     # credential_env_var stay one release for rollback and are no longer read.
     connection_id: Mapped[int | None] = mapped_column(
-        ForeignKey("platform_data_connections.id", ondelete="RESTRICT"),
+        ForeignKey("platform_data_connections.id"),
         nullable=True,
         index=True,
     )

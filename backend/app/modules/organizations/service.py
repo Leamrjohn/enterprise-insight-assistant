@@ -2,7 +2,6 @@
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from uuid import uuid4
 
 from app.core.security import (
     generate_api_key,
@@ -12,13 +11,13 @@ from app.core.security import (
 )
 from app.modules.analysis.catalog.schema_discovery import discover_postgres_schema
 from app.modules.identity.models import User
-from app.modules.organizations.connections import new_connection
 from app.modules.organizations.models import (
     BusinessDataSource,
     Company,
     CompanyInvitation,
     CompanyMember,
     MembershipApplication,
+    PlatformDataConnection,
     SchemaSnapshot,
 )
 from app.modules.organizations.repository import (
@@ -315,14 +314,29 @@ def list_membership_applications(
     return get_applications_for_company(db, company_id=company_id, status=status)
 
 
+def list_data_connections(
+    db: Session, *, company_id: int
+) -> list[PlatformDataConnection]:
+    return list(
+        db.scalars(
+            select(PlatformDataConnection)
+            .where(PlatformDataConnection.company_id == company_id)
+            .order_by(PlatformDataConnection.id)
+        )
+    )
+
+
+class DataConnectionNotFound(LookupError):
+    """No connection with this id is registered for the company."""
+
+
 def create_data_source(
     db: Session,
     *,
     company_id: int,
     user_id: int,
     name: str,
-    connection: dict,
-    credential_env_var: str,
+    connection_id: int,
 ) -> BusinessDataSource | None:
     membership = get_membership(db, company_id=company_id, user_id=user_id)
     if (
@@ -331,25 +345,28 @@ def create_data_source(
         or membership.role not in {"owner", "admin"}
     ):
         return None
-    try:
-        # A11b step 1 only: the tenant payload still names the database, so bind it
-        # to this company. Step 2 replaces this with picking a registered connection.
-        platform_connection = new_connection(
-            company_id=company_id,
-            name=f"legacy-api:{name}:{uuid4().hex[:8]}",
-            host=connection["host"],
-            port=connection["port"],
-            database=connection["database"],
-            username=connection["user"],
-            schema_name=connection.get("schema", "public"),
-            credential_env_var=credential_env_var,
-            operator="legacy-tenant-api",
+    # Another company's id looks exactly like an unknown one.
+    platform_connection = db.scalar(
+        select(PlatformDataConnection).where(
+            PlatformDataConnection.id == connection_id,
+            PlatformDataConnection.company_id == company_id,
         )
+    )
+    if platform_connection is None or platform_connection.status != "active":
+        raise DataConnectionNotFound(connection_id)
+    try:
         source = BusinessDataSource(
             company_id=company_id,
             name=name,
-            connection_config=connection,
-            credential_env_var=credential_env_var,
+            # Legacy columns, kept one release for rollback; nothing reads them.
+            connection_config={
+                "host": platform_connection.host,
+                "port": platform_connection.port,
+                "database": platform_connection.database,
+                "user": platform_connection.username,
+                "schema": platform_connection.schema_name,
+            },
+            credential_env_var=platform_connection.credential_ref.removeprefix("env:"),
             connection=platform_connection,
         )
         db.add(source)
