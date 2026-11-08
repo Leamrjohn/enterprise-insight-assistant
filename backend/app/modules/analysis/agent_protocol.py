@@ -24,7 +24,8 @@ class AgentOutput:
     answer: str | None = None
     plan: dict[str, Any] | None = None
     evidence: list[dict[str, Any]] = field(default_factory=list)
-    attempts: dict[str, int] = field(default_factory=dict)
+    # Counts, plus labels such as the reason a tool loop switched routes.
+    attempts: dict[str, Any] = field(default_factory=dict)
     error: str | None = None
     error_code: str | None = None
     retryable: bool = False

@@ -30,6 +30,7 @@ from app.modules.reporting.semantic_review import (
 from app.modules.runtime.context_budget import EVIDENCE_REVIEW, assemble
 from pydantic import ValidationError
 from sqlglot import exp
+from sqlglot.errors import SqlglotError
 
 # Not the 0280 in CUST-0280: that names something, it is not a value to compare.
 _NUMBER = re.compile(r"(?<![A-Za-z0-9-])\d+(?:\.\d+)?")
@@ -84,7 +85,7 @@ def _tables_in_sql(sql: str) -> set[str] | None:
             table.name
             for table in sqlglot.parse_one(sql, read="postgres").find_all(exp.Table)
         }
-    except sqlglot.errors.SqlglotError:
+    except SqlglotError:
         return None
 
 

@@ -95,12 +95,15 @@ def reconcile_stranded_analysis_tasks() -> dict[str, int]:
             if outcome == "redeliver":
                 redeliver.append(task_id)
             elif outcome == "exhausted":
-                _sync_assistant_message(
-                    db,
-                    db.get(AnalysisTask, task_id),
-                    status="failed",
-                    content=GENERIC_WORKER_FAILURE_MESSAGE,
-                )
+                # A task deleted meanwhile has no message to update.
+                record = db.get(AnalysisTask, task_id)
+                if record is not None:
+                    _sync_assistant_message(
+                        db,
+                        record,
+                        status="failed",
+                        content=GENERIC_WORKER_FAILURE_MESSAGE,
+                    )
                 exhausted += 1
                 logger.error(
                     "Analysis task delivery exhausted; task failed",

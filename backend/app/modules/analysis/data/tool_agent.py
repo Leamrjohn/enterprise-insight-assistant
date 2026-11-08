@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 from decimal import Decimal, InvalidOperation
+from typing import cast
 
 from app.core.exceptions import (
     PermanentModelError,
@@ -23,6 +24,7 @@ from app.modules.analysis.catalog.semantic_catalog import (
     BUSINESS_TABLES,
     FILTER_VALUE_DEFINITIONS,
 )
+from app.modules.analysis.catalog.snapshot_catalog import SnapshotCatalog
 from app.modules.analysis.data.data_agent import (
     DataAgent,
     _make_json_safe,
@@ -67,7 +69,8 @@ class DescribeTableArgs(BaseModel):
 
 class RunSqlArgs(SQLCandidate):
     model_config = ConfigDict(extra="forbid")
-    query_contract: QueryContract
+    # Required here although optional on SQLCandidate: the tool needs a contract.
+    query_contract: QueryContract  # pyright: ignore[reportGeneralTypeIssues]
 
 
 class SubmitResultArgs(BaseModel):
@@ -231,13 +234,23 @@ def _table_details_block(catalog, tables: set[str]) -> list[str]:
     ]
 
 
+def _contract(candidate: SQLCandidate) -> QueryContract:
+    """run_sql builds every candidate from RunSqlArgs, which requires a contract."""
+    if candidate.query_contract is None:
+        raise ValueError("run_sql candidate has no query contract")
+    return candidate.query_contract
+
+
 class _DataToolSession:
     """One run's handlers and server-side evidence store."""
 
     def __init__(self, agent: ToolCallingDataAgent, input: AgentInput) -> None:
         self._agent = agent
         self._input = input
-        self._catalog = agent._snapshot_catalog
+        catalog = agent._snapshot_catalog
+        if catalog is None:  # run() takes the fixed route without a catalog
+            raise ValueError("the tool loop needs a schema snapshot")
+        self._catalog: SnapshotCatalog = catalog
         plan = input.context.get("plan")
         self.plan = plan
         self.evaluation_scope = _validated_evaluation_scope(plan)
@@ -294,7 +307,7 @@ class _DataToolSession:
             return None
         if isinstance(self.intent, dict):
             missing, unexpected = self._agent._contract_gaps(
-                self.required, candidate.query_contract
+                self.required, _contract(candidate)
             )
             if missing:
                 return self._refuse(
@@ -385,7 +398,7 @@ class _DataToolSession:
             columns=columns, rows=rows, contract=candidate.query_contract
         )
         claim_assessment = assess_numeric_assertion(
-            candidate.query_contract.numeric_assertion,
+            _contract(candidate).numeric_assertion,
             columns=columns,
             rows=rows,
             metric_status=metric_assessment.status,
@@ -495,9 +508,9 @@ class ToolCallingDataAgent(DataAgent):
     def _seeded_tables(self, input: AgentInput, session: _DataToolSession) -> set[str]:
         if not self._seed_schema:
             return set()
-        entities = (session.evaluation_scope or {}).get("entities") or []
+        entities = cast(list, (session.evaluation_scope or {}).get("entities") or [])
         return select_tables(
-            self._snapshot_catalog,
+            cast(SnapshotCatalog, self._snapshot_catalog),
             [input.question, *session.required, *map(str, entities)],
         )
 

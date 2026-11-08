@@ -55,7 +55,7 @@ def base_report() -> dict:
     }
 
 
-def _mutate(change: Callable[[dict], None]) -> dict:
+def _mutate(change: Callable[[dict], object]) -> dict:
     report = base_report()
     change(report)
     return report

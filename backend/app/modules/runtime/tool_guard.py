@@ -11,7 +11,7 @@ import logging
 import random
 import time
 from collections.abc import Callable
-from typing import Literal, Protocol
+from typing import Literal, Protocol, cast
 
 from app.modules.analysis.tool_protocol import Tool, ToolInput, ToolOutput
 from app.modules.runtime.tool_loop import Outcome
@@ -230,12 +230,16 @@ class FallbackTool(Tool):
         return switched
 
 
-def redis_breaker_store():
+def redis_breaker_store() -> BreakerStore:
     import redis
     from app.core.settings import get_settings
 
-    return redis.Redis.from_url(
-        get_settings().redis_url,
-        socket_timeout=0.2,
-        socket_connect_timeout=0.2,
+    # redis-py's stubs type replies loosely; the client satisfies BreakerStore.
+    return cast(
+        BreakerStore,
+        redis.Redis.from_url(
+            get_settings().redis_url,
+            socket_timeout=0.2,
+            socket_connect_timeout=0.2,
+        ),
     )

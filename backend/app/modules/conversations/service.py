@@ -507,7 +507,7 @@ def build_conversation_context(
     considered_messages = 0
     recent = [m for m in messages[-max_messages:] if (m.content or "").strip()]
     compress_assistant = (
-        sum(estimate_conversation_tokens(m.content.strip()) for m in recent)
+        sum(estimate_conversation_tokens((m.content or "").strip()) for m in recent)
         >= max_tokens * COMPRESS_HISTORY_AT
     )
 

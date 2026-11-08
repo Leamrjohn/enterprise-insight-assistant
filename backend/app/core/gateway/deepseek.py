@@ -1,6 +1,7 @@
 import json
 import time
 from logging import getLogger
+from typing import cast
 
 from openai import (
     APIConnectionError,
@@ -80,7 +81,10 @@ class DeepSeekGateway(ModelGateway):
         json_mode: bool = False,
     ) -> str:
         with fallback_chain_scope(self.model_name):
-            return self._chat_once(prompt, system_prompt, json_mode=json_mode)
+            # Without tools _chat_once returns the text.
+            return cast(
+                str, self._chat_once(prompt, system_prompt, json_mode=json_mode)
+            )
 
     def chat_with_tools(
         self,
@@ -92,11 +96,15 @@ class DeepSeekGateway(ModelGateway):
         # The whole request is the "prompt" for the ledger's estimate and hash.
         prompt = json.dumps({"messages": messages, "tools": tools}, ensure_ascii=False)
         with fallback_chain_scope(self.model_name):
-            return self._chat_once(
-                prompt,
-                messages=messages,
-                tools=tools,
-                tool_choice=tool_choice,
+            # With tools _chat_once returns the structured response.
+            return cast(
+                ToolChatResponse,
+                self._chat_once(
+                    prompt,
+                    messages=messages,
+                    tools=tools,
+                    tool_choice=tool_choice,
+                ),
             )
 
     def _chat_once(

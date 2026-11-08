@@ -7,6 +7,13 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 
+def _dated(document: Documents) -> tuple[int, date]:
+    """Every member of a version group was registered with a number and a date."""
+    if document.version_number is None or document.effective_from is None:
+        raise ValueError("document version sibling is missing its number or date")
+    return document.version_number, document.effective_from
+
+
 def register_document_version(
     db: Session,
     *,
@@ -35,17 +42,17 @@ def register_document_version(
         .scalars()
         .all()
     )
-    earlier = [d for d in siblings if d.version_number < version_number]
-    later = [d for d in siblings if d.version_number > version_number]
-    if any(d.version_number == version_number for d in siblings):
+    earlier = [d for d in siblings if _dated(d)[0] < version_number]
+    later = [d for d in siblings if _dated(d)[0] > version_number]
+    if any(_dated(d)[0] == version_number for d in siblings):
         raise ValueError("document version already registered")
-    if (earlier and earlier[-1].effective_from >= effective_from) or (
-        later and later[0].effective_from <= effective_from
+    if (earlier and _dated(earlier[-1])[1] >= effective_from) or (
+        later and _dated(later[0])[1] <= effective_from
     ):
         raise ValueError("document version dates must follow version order")
 
     if later:
-        effective_to = later[0].effective_from - timedelta(days=1)
+        effective_to = _dated(later[0])[1] - timedelta(days=1)
     document.version_group = version_group
     document.version_number = version_number
     document.effective_from = effective_from

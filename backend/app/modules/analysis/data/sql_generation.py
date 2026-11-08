@@ -1,4 +1,5 @@
 import json
+from typing import cast
 
 from app.core.exceptions import StructuredOutputError
 from app.core.gateway.base import ModelGateway
@@ -300,7 +301,7 @@ class SQLGenerationService:
     ) -> set[str] | None:
         if self._catalog is None:
             return None
-        entities = (evaluation_scope or {}).get("entities") or []
+        entities = cast(list, (evaluation_scope or {}).get("entities") or [])
         texts = [question, *(required_concepts or []), *map(str, entities)]
         return select_tables(self._catalog, texts) or None
 
