@@ -650,3 +650,8 @@
 - 第 3 步（409a123）：缺数据源时 _connection_details 拒绝（不再回退平台默认经营库），SQL 工具报 data_source_not_allowed 且不可修复；测试锁住 TemplateQueryTool 未接入主链（结论：模板查询不可达）。
 - 验证：unit + scripts + integration 1608 通过 31 跳过；真实库安全测试在一次性容器 agent-sqltest（agent_default 网络，host.docker.internal）29/29，含 Acme 凭据连不上 Beta。备份 artifacts/backups/a11b-before-20261108.dump（38 表、哈希一致）后迁移 a3b4c5d6e7f8→b4c5d6e7f8a9：167 个数据源全部绑定、跨公司绑定 0、外键 NO ACTION；部署 api/worker/report-worker/beat。冒烟 a11b-platform-connections（任务 885–894，$0.025）9 成功 + 混合题待复核（已知），评测公司的连接由 prepare_business_evaluation 登记。
 - 待办：host.docker.internal 指向平台主机却被 A11a 放行（DNS 别名缺口，需解析后按 IP 检查或网络隔离）；本机 127.0.0.1 被正确拒绝，所以真实库测试只能在容器里跑；旧字段 connection_config、credential_env_var 下个版本删除（需批准）；CI 的迁移往返步骤待推送后验证。
+
+## 2026-11-08 E1 推送前全历史密钥扫描（用户已批准）
+- gitleaks v8.18.4（官方镜像，一次性容器 agent-gitleaks，仓库只读挂载，--redact）扫描 --all 共 403 个提交：4 条，全部为误报（version_traps_v1.json 的文档编号 safety-stock-v1/v2、complaint-v1/v2 被 generic-api-key 规则命中）。
+- 补充检查：HEAD 中模型 API key 赋值 0 处；全部提交中 sk- 形式密钥 0 处。结论：0 个真实密钥。报告留在会话临时目录，未入库。
+- 待办：E6 接入 CI 时为该夹具加 gitleaks 允许规则；推送和合并 main 需用户批准。
