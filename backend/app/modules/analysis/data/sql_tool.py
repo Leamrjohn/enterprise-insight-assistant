@@ -4,6 +4,8 @@ from app.modules.analysis.catalog.semantic_catalog import BUSINESS_TABLES
 from app.modules.analysis.catalog.snapshot_catalog import SnapshotCatalog
 from app.modules.analysis.data.sql_executor import execute_readonly_sql
 from app.modules.analysis.tool_protocol import Tool, ToolInput, ToolOutput
+from app.modules.organizations.connections import ConnectionNotAllowed
+from app.modules.organizations.data_source_policy import DataSourcePolicyError
 from app.modules.organizations.models import BusinessDataSource
 from psycopg import DataError, ProgrammingError
 from psycopg.errors import GroupingError, InsufficientPrivilege, QueryCanceled
@@ -71,6 +73,14 @@ class SQLTool(Tool):
                     timeout_ms=timeout_ms,
                 )
             return ToolOutput(success=True, data={"columns": columns, "rows": rows})
+        except (ConnectionNotAllowed, DataSourcePolicyError):
+            # Not the statement's mistake, and the reason names other companies.
+            return ToolOutput(
+                success=False,
+                error="当前数据源不可用。",
+                error_code="data_source_not_allowed",
+                repairable=False,
+            )
         except ValueError as error:
             return ToolOutput(
                 success=False,

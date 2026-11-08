@@ -8,7 +8,10 @@ import psycopg
 from app.core.settings import get_settings
 from app.modules.analysis.catalog.snapshot_catalog import SnapshotCatalog
 from app.modules.analysis.data.sql_validator import _parse_single_select, validate_sql
-from app.modules.organizations.connections import resolve_connection
+from app.modules.organizations.connections import (
+    ConnectionNotAllowed,
+    resolve_connection,
+)
 from app.modules.organizations.models import BusinessDataSource
 from psycopg import sql as psycopg_sql
 from sqlglot import exp
@@ -171,14 +174,8 @@ def _connection_details(
 ) -> _ConnectionDetails:
     """Resolve a tenant source without persisting or logging its password."""
     if data_source is None:
-        settings = get_settings()
-        return {
-            "host": settings.business_database_host,
-            "port": settings.business_database_port,
-            "dbname": settings.business_database_name,
-            "user": settings.business_database_user,
-            "password": settings.business_database_password.get_secret_value(),
-        }
+        # A11b: no silent fallback to the platform's default business database.
+        raise ConnectionNotAllowed("no company data source for this query")
 
     if data_source.dialect != "postgresql":
         raise ValueError("当前数据源不是受支持的 PostgreSQL 数据库")

@@ -20,7 +20,7 @@ from types import SimpleNamespace
 import psycopg
 import pytest
 from app.modules.analysis.data import sql_executor
-from app.modules.organizations.models import BusinessDataSource
+from app.modules.organizations.models import BusinessDataSource, PlatformDataConnection
 from psycopg import errors
 from pydantic import SecretStr
 
@@ -40,15 +40,24 @@ WRITE_REJECTED = (errors.ReadOnlySqlTransaction, errors.InsufficientPrivilege)
 
 
 def _source() -> BusinessDataSource:
+    # A11b: the connection comes from a platform connection of the same company.
     return BusinessDataSource(
+        company_id=1,
         dialect="postgresql",
         credential_env_var=CREDENTIAL_ENV,
-        connection_config={
-            "host": HOST,
-            "port": ACME_PORT,
-            "database": "acme_business",
-            "user": ROLE,
-        },
+        connection_config={},
+        connection=PlatformDataConnection(
+            company_id=1,
+            name="acme-demo",
+            host=HOST,
+            port=ACME_PORT,
+            database="acme_business",
+            username=ROLE,
+            schema_name="public",
+            credential_ref="env:" + CREDENTIAL_ENV,
+            status="active",
+            created_by_operator="test",
+        ),
     )
 
 
