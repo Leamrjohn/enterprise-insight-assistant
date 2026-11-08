@@ -57,15 +57,19 @@ def test_discovers_columns_and_foreign_keys(monkeypatch) -> None:
         lambda **_: connection,
     )
     source = SimpleNamespace(
+        company_id=1,
         dialect="postgresql",
-        credential_env_var="ACME_DEMO_DATABASE_PASSWORD",
-        connection_config={
-            "host": "db",
-            "port": 5432,
-            "database": "acme",
-            "user": "readonly",
-            "schema": "public",
-        },
+        # A11b: connection details come from the platform connection only.
+        connection=SimpleNamespace(
+            company_id=1,
+            status="active",
+            host="db",
+            port=5432,
+            database="acme",
+            username="readonly",
+            schema_name="public",
+            credential_ref="env:ACME_DEMO_DATABASE_PASSWORD",
+        ),
     )
 
     catalog, fingerprint = discover_postgres_schema(source)

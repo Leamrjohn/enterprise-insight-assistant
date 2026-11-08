@@ -4,32 +4,24 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 
 import psycopg
-from app.modules.organizations.data_source_policy import ensure_data_source_allowed
+from app.modules.organizations.connections import resolve_connection
 from app.modules.organizations.models import BusinessDataSource
 
 
 def discover_postgres_schema(source: BusinessDataSource) -> tuple[dict, str]:
     if source.dialect != "postgresql":
         raise ValueError("Only PostgreSQL discovery is supported")
-    ensure_data_source_allowed(
-        credential_env_var=source.credential_env_var,
-        host=source.connection_config["host"],
-    )
-    password = os.environ.get(source.credential_env_var)
-    if not password:
-        raise ValueError("Configured database credential is unavailable")
-    config = source.connection_config
+    config = resolve_connection(source)
     schema = config["schema"]
     with (
         psycopg.connect(
             host=config["host"],
             port=config["port"],
-            dbname=config["database"],
+            dbname=config["dbname"],
             user=config["user"],
-            password=password,
+            password=config["password"],
             connect_timeout=5,
             options="-c default_transaction_read_only=on",
         ) as connection,

@@ -1,6 +1,6 @@
 import pytest
 from app.modules.analysis.data import sql_executor
-from app.modules.organizations.models import BusinessDataSource
+from app.modules.organizations.models import BusinessDataSource, PlatformDataConnection
 from app.modules.organizations.schemas import BusinessDataSourceCreate
 from pydantic import ValidationError
 
@@ -14,12 +14,25 @@ DEMO_CONNECTION = {
 
 
 def _source(credential_env_var: str, host: str = "demo_business_acme"):
+    # A11b: a stored row as the backfill migration links it to its own connection.
     return BusinessDataSource(
         company_id=1,
         name="tenant-db",
         dialect="postgresql",
         connection_config={**DEMO_CONNECTION, "host": host},
         credential_env_var=credential_env_var,
+        connection=PlatformDataConnection(
+            company_id=1,
+            name="tenant-db",
+            host=host,
+            port=DEMO_CONNECTION["port"],
+            database=DEMO_CONNECTION["database"],
+            username=DEMO_CONNECTION["user"],
+            schema_name=DEMO_CONNECTION["schema"],
+            credential_ref="env:" + credential_env_var,
+            status="active",
+            created_by_operator="test",
+        ),
     )
 
 

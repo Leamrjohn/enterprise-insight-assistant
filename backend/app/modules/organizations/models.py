@@ -17,7 +17,7 @@ from sqlalchemy import (
     func,
 )
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 
 class Company(Base):
@@ -116,6 +116,37 @@ class MembershipApplication(Base):
     )
 
 
+class PlatformDataConnection(Base):
+    """A business database the platform registered for exactly one company (A11b).
+
+    Only operators create these; tenants pick one of their own and never supply an
+    address or a way to read a secret.
+    """
+
+    __tablename__ = "platform_data_connections"
+    __table_args__ = (UniqueConstraint("company_id", "name"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    company_id: Mapped[int] = mapped_column(
+        ForeignKey("companies.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    host: Mapped[str] = mapped_column(String(255), nullable=False)
+    port: Mapped[int] = mapped_column(Integer, nullable=False)
+    database: Mapped[str] = mapped_column(String(63), nullable=False)
+    username: Mapped[str] = mapped_column(String(63), nullable=False)
+    schema_name: Mapped[str] = mapped_column(
+        String(63), nullable=False, default="public"
+    )
+    # "env:NAME"; the scheme leaves room for a secret manager later.
+    credential_ref: Mapped[str] = mapped_column(String(130), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="active")
+    created_by_operator: Mapped[str] = mapped_column(String(120), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
 class BusinessDataSource(Base):
     __tablename__ = "business_data_sources"
 
@@ -129,6 +160,14 @@ class BusinessDataSource(Base):
     )
     connection_config: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     credential_env_var: Mapped[str] = mapped_column(String(120), nullable=False)
+    # A11b: connections resolve only through this; connection_config and
+    # credential_env_var stay one release for rollback and are no longer read.
+    connection_id: Mapped[int | None] = mapped_column(
+        ForeignKey("platform_data_connections.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
+    )
+    connection: Mapped[PlatformDataConnection | None] = relationship()
     status: Mapped[str] = mapped_column(String(30), nullable=False, default="pending")
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     active_schema_snapshot_id: Mapped[int | None] = mapped_column(

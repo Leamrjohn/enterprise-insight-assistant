@@ -1,7 +1,6 @@
 """安全的只读SQL执行器"""
 
 import logging
-import os
 import re
 from typing import LiteralString, TypedDict, cast
 
@@ -9,7 +8,7 @@ import psycopg
 from app.core.settings import get_settings
 from app.modules.analysis.catalog.snapshot_catalog import SnapshotCatalog
 from app.modules.analysis.data.sql_validator import _parse_single_select, validate_sql
-from app.modules.organizations.data_source_policy import ensure_data_source_allowed
+from app.modules.organizations.connections import resolve_connection
 from app.modules.organizations.models import BusinessDataSource
 from psycopg import sql as psycopg_sql
 from sqlglot import exp
@@ -183,18 +182,11 @@ def _connection_details(
 
     if data_source.dialect != "postgresql":
         raise ValueError("当前数据源不是受支持的 PostgreSQL 数据库")
-    ensure_data_source_allowed(
-        credential_env_var=data_source.credential_env_var,
-        host=data_source.connection_config["host"],
-    )
-    password = os.environ.get(data_source.credential_env_var)
-    if not password:
-        raise ValueError("配置的数据源凭据不可用")
-    config = data_source.connection_config
+    details = resolve_connection(data_source)
     return {
-        "host": config["host"],
-        "port": config["port"],
-        "dbname": config["database"],
-        "user": config["user"],
-        "password": password,
+        "host": details["host"],
+        "port": details["port"],
+        "dbname": details["dbname"],
+        "user": details["user"],
+        "password": details["password"],
     }

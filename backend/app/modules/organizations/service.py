@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from uuid import uuid4
 
 from app.core.security import (
     generate_api_key,
@@ -11,6 +12,7 @@ from app.core.security import (
 )
 from app.modules.analysis.catalog.schema_discovery import discover_postgres_schema
 from app.modules.identity.models import User
+from app.modules.organizations.connections import new_connection
 from app.modules.organizations.models import (
     BusinessDataSource,
     Company,
@@ -330,11 +332,25 @@ def create_data_source(
     ):
         return None
     try:
+        # A11b step 1 only: the tenant payload still names the database, so bind it
+        # to this company. Step 2 replaces this with picking a registered connection.
+        platform_connection = new_connection(
+            company_id=company_id,
+            name=f"legacy-api:{name}:{uuid4().hex[:8]}",
+            host=connection["host"],
+            port=connection["port"],
+            database=connection["database"],
+            username=connection["user"],
+            schema_name=connection.get("schema", "public"),
+            credential_env_var=credential_env_var,
+            operator="legacy-tenant-api",
+        )
         source = BusinessDataSource(
             company_id=company_id,
             name=name,
             connection_config=connection,
             credential_env_var=credential_env_var,
+            connection=platform_connection,
         )
         db.add(source)
         db.commit()
