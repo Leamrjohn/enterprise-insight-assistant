@@ -728,6 +728,13 @@
 ## 2026-11-09 E3 修复：check_pins 只查已跟踪文件（分支 fix/e3-check-tracked-files）
 - 症状：主目录里 tmp/ 下的旧评测工作树有 23 处未固定的 Dockerfile，本地 test_repository_has_no_floating_reference 失败（CI 是干净检出所以没暴露）。根因：用 glob 扫目录。改为 git ls-files，非 git 目录才退回扫描；新增未跟踪文件不检查的测试，6 通过；主目录运行通过。
 
+## 2026-11-09 K2 严格校验和示例文件生成（分支 chore/k2-config-catalog）
+- 新增 app/core/config/catalog.py：由 K1 的 11 个域生成配置清单（110 项）和示例配置文件（按域分节，保留原有注释和占位值；密钥一律留空）；--check 供测试和 CI 用，--write 重新生成。
+- get_settings() 启动时检查未知配置名：env 文件里的全部键，以及进程环境里与已声明键同前缀的变量（PATH 等不管）；production 直接启动失败，development/test 只记警告；报错只列键名，不带值。数据源凭据名按白名单放行。
+- 示例文件重新生成：原有键一个不少、值不变（2 个 JSON 列表仅空格不同），新增 33 个此前缺失的配置项。
+- 验证：test_config_catalog 7 通过（示例一致、每项只出现一次、密钥留空、拼错能发现、生产启动失败且不泄露值、开发只告警、正确键通过）；unit+scripts 失败集合与 main 相同。CI 由单元测试里的一致性检查覆盖。
+- 未验证：正式环境的真实配置文件里是否有未声明的键（按规定不读该文件；开发环境只会出警告，部署后看 api/worker 日志里的 “Unknown configuration keys”）。
+
 ## 2026-11-09 O2a 轻量看板（分支 chore/o2a-dashboard）
 - 新增指标导出器 app/modules/observability/metrics_exporter.py（:9108，每次抓取查库：进行中任务、未认领 Outbox 事件及最老年龄、过期租约、卡住任务、账本按结算状态、长时间 reserved、Worker/Beat 心跳年龄；只有计数和年龄，标签不含任务/用户/公司 id）；连接用 agent_app，但强制只读事务（default_transaction_read_only=on）和 5 秒语句超时。prometheus-client 0.22.1 进运行时依赖和锁（其余包不变）。
 - compose observability profile 新增 metrics-exporter、prometheus（v3.5.0，保留 30 天）、grafana（12.0.2，匿名只读、无登录框），镜像按摘要固定，端口只绑 127.0.0.1（9090、3001）；看板和数据源由 ops/observability/ 下文件自动加载。worker、beat 的心跳写入共享卷 heartbeat，导出器只读挂载；镜像预建 /heartbeat 并归 app 用户。
