@@ -7,9 +7,14 @@ Checks that span domains live here; each domain validates its own fields.
 
 from __future__ import annotations
 
+import logging
+import os
+from collections.abc import Mapping
 from functools import lru_cache
+from pathlib import Path
 from typing import TypeVar
 
+from dotenv import dotenv_values
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing_extensions import Self
@@ -45,6 +50,7 @@ DOMAINS: tuple[type[ConfigDomain], ...] = (
 )
 
 DomainT = TypeVar("DomainT", bound=ConfigDomain)
+logger = logging.getLogger(__name__)
 
 
 class Settings(
@@ -143,6 +149,36 @@ class Settings(
         return self
 
 
+def check_known_keys(
+    settings: Settings,
+    *,
+    env_file: Path = BACKEND_DIR / ".env",
+    environ: Mapping[str, str] | None = None,
+) -> list[str]:
+    """K2: refuse (production) or warn about names no setting declares.
+
+    Only names are reported, never values.
+    """
+    from app.core.config.catalog import unknown_keys
+
+    env_keys = list(dotenv_values(env_file)) if env_file.is_file() else []
+    unknown = unknown_keys(
+        env_keys,
+        os.environ if environ is None else environ,
+        credential_names=settings.data_source_credential_env_allowlist,
+    )
+    if unknown:
+        message = "Unknown configuration keys (misspelt or removed): " + ", ".join(
+            unknown
+        )
+        if settings.app_env == "production":
+            raise ValueError(message)
+        logger.warning(message)
+    return unknown
+
+
 @lru_cache
 def get_settings() -> Settings:
-    return Settings()
+    settings = Settings()
+    check_known_keys(settings)
+    return settings
