@@ -719,6 +719,12 @@
 - 测试：test_watchdog 8 通过（新鲜/过期/缺失/旧文件、子进程退出码、卡住子进程被杀、--check、两种心跳）；pyright、ruff 通过。
 - 未验证：持有任务时卡死再恢复的端到端过程（恢复由已有的租约过期恢复负责，见 test_recovery_delivery、test_stranded_tasks）；正式服务尚未用新命令重启（等合入后部署）。
 
+## 2026-11-09 E4 架构规则：import-linter（分支 chore/e4-import-rules）
+- 新增 backend/.importlinter 两条规则：core 不得引用 app.modules；业务模块分四层（workflow → analysis/knowledge/reporting/conversations/evaluation/reviews/memory/input_artifacts → runtime → documents/organizations/identity/observability），同层可互相引用。现存 41 条违规（core 4 条，如 gateway→runtime、middleware→observability；分层 37 条，多为各模块引用 workflow.models）登记在 ignore_imports，只禁止新增。
+- 发现：app/modules、app/utils 没有 __init__.py（命名空间包），grimp 看不到它们，规则会“全部通过”却什么都没查。正式补文件会让 ruff 把 app 改判为第一方包，约 100 个文件的 import 排序要重排（CI ruff 失败 101 处）；改用 known-third-party 又让 core/db/api 下 18 个文件失败；namespace 根包 grimp 不支持。最终 scripts/ci/lint_imports.sh 只在运行期间临时建这两个文件，跑完删除。待我决定：是否正式补 __init__.py 并统一重排 import（机械改动约 100 个文件）。
+- CI Static 矩阵加 import-linter；import-linter 2.3（带 grimp 3.19）进 dev 依赖和 CI 锁，其余包版本不变。
+- 验证：两条规则 KEPT；故意加 identity→workflow.models 和 core→modules.runtime 两条引用后 BROKEN、exit 1，删掉后恢复。
+
 ## 2026-11-09 O2a 轻量看板（分支 chore/o2a-dashboard）
 - 新增指标导出器 app/modules/observability/metrics_exporter.py（:9108，每次抓取查库：进行中任务、未认领 Outbox 事件及最老年龄、过期租约、卡住任务、账本按结算状态、长时间 reserved、Worker/Beat 心跳年龄；只有计数和年龄，标签不含任务/用户/公司 id）；连接用 agent_app，但强制只读事务（default_transaction_read_only=on）和 5 秒语句超时。prometheus-client 0.22.1 进运行时依赖和锁（其余包不变）。
 - compose observability profile 新增 metrics-exporter、prometheus（v3.5.0，保留 30 天）、grafana（12.0.2，匿名只读、无登录框），镜像按摘要固定，端口只绑 127.0.0.1（9090、3001）；看板和数据源由 ops/observability/ 下文件自动加载。worker、beat 的心跳写入共享卷 heartbeat，导出器只读挂载；镜像预建 /heartbeat 并归 app 用户。

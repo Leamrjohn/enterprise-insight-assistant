@@ -20,7 +20,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        check: [ruff, ruff-format, pyright]
+        check: [ruff, ruff-format, pyright, import-linter]
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
@@ -46,6 +46,11 @@ jobs:
         if: matrix.check == 'ruff-format'
         working-directory: backend
         run: python -m ruff format --check app tests scripts
+      # E4: import direction rules in backend/.importlinter.
+      - name: Import rules
+        if: matrix.check == 'import-linter'
+        working-directory: backend
+        run: bash scripts/ci/lint_imports.sh
 
   backend:
     name: Backend (${{ matrix.suite }})
