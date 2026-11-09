@@ -6,6 +6,7 @@ from uuid import uuid4
 from fastapi import Request, Response
 from fastapi.responses import JSONResponse
 
+from app.core import tracing
 from app.core.logging import request_id_context
 from app.core.settings import get_settings
 from app.modules.observability.rejection_audit import record_analysis_request_rejection
@@ -78,7 +79,19 @@ async def request_context_middleware(
     start_time = time.perf_counter()
 
     try:
-        response = await call_next(request)
+        with tracing.span(
+            "http.request",
+            attributes={"http.request.method": request.method},
+        ) as current:
+            response = await call_next(request)
+            route = getattr(request.scope.get("route"), "path", None)
+            if route:
+                # The route template, never the concrete path with ids.
+                current.update_name(f"{request.method} {route}")
+                tracing.set_attributes(current, {"http.route": route})
+            tracing.set_attributes(
+                current, {"http.response.status_code": response.status_code}
+            )
     except Exception:
         duration_ms = round(
             (time.perf_counter() - start_time) * 1000,

@@ -2,6 +2,7 @@ from copy import deepcopy
 
 from app.core.exceptions import TaskAdmissionLimitError
 from app.core.settings import get_settings
+from app.core.tracing import current_traceparent
 from app.db.clock import database_now
 from app.modules.workflow.delivery.outbox import cancel_unclaimed_analysis_task_event
 from app.modules.workflow.lifecycle.capacity import require_task_capacity
@@ -91,6 +92,7 @@ def create_task(
         schema_snapshot_id=schema_snapshot_id,
         parent_task_id=parent_task_id,
         request_id=request_id,
+        trace_context=current_traceparent(),
         workflow_policy_snapshot=workflow_policy_snapshot(
             settings.workflow_release_version
         ),

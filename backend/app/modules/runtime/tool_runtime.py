@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from hashlib import sha256
 from time import perf_counter
 
+from app.core import tracing
 from app.modules.analysis.tool_protocol import Tool, ToolInput, ToolOutput
 from app.modules.documents.models import Documents
 from app.modules.documents.repository import allowed_min_view_roles
@@ -369,6 +370,20 @@ class ToolRuntime:
         return None
 
     def execute(self, tool: Tool, input: ToolInput) -> ToolOutput:
+        with tracing.span(
+            f"tool.{tool.name}",
+            attributes={
+                "tool.name": tool.name,
+                "tool.version": getattr(tool, "version", None),
+            },
+        ) as current:
+            output = self._execute(tool, input)
+            tracing.set_attributes(
+                current, {"tool.outcome": getattr(output, "outcome", None)}
+            )
+            return output
+
+    def _execute(self, tool: Tool, input: ToolInput) -> ToolOutput:
         policy = ToolPolicy.model_validate(self._task().tool_policy_snapshot)
         if tool.name not in policy.allowed_tools:
             return self._deny(tool, "tool_not_allowlisted", {})
