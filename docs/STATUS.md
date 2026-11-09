@@ -124,4 +124,6 @@
 
 - 2026-11-09：K1 配置分 11 个域、20 个常量归入配置，默认值 0 差异；分支 chore/k1-config-domains。
 
+- 2026-11-09：G1 8 个静态提示词迁入 app/prompts（逐字节一致），任务记录 prompt_version；分支 chore/g1-prompt-registry。
+
 - 2026-11-09：修 check_pins 误扫未跟踪的 tmp/ 工作树；分支 fix/e3-check-tracked-files。

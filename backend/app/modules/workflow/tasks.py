@@ -50,6 +50,7 @@ from app.modules.organizations.models import BusinessDataSource, SchemaSnapshot
 from app.modules.reporting.validation import validate_report
 from app.modules.reviews.service import create_review_request
 from app.modules.runtime.model_governance import ModelBudgetExceeded, model_call_scope
+from app.modules.runtime.prompts import get_prompt_registry
 from app.modules.runtime.tool_runtime import ToolRuntime, ToolRuntimeContext
 from app.modules.workflow.audit.events import append_workflow_event
 from app.modules.workflow.lifecycle.execution import (
@@ -717,6 +718,7 @@ def process_analysis_task(self, task_id: int):
                 task=record,
                 attempt=execution.attempt,
                 node_name="workflow",
+                prompt_version=get_prompt_registry().prompt_set_version,
             ),
             _maintain_execution_lease(execution),
         ):
