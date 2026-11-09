@@ -201,6 +201,11 @@ services:
     logging: *default-logging
     command:
       [
+        "python",
+        "-m",
+        "app.core.watchdog",
+        "--heartbeat=worker",
+        "--",
         "celery",
         "-A",
         "app.core.celery_app:celery_app",
@@ -225,6 +230,14 @@ services:
         condition: service_healthy
       localstack-init:
         condition: service_completed_successfully
+    # O4: app.core.watchdog exits on a stale heartbeat so restart: replaces a
+    # hung process; this healthcheck only makes the state visible.
+    healthcheck:
+      test: ["CMD", "python", "-m", "app.core.watchdog", "--check=worker"]
+      interval: 30s
+      timeout: 10s
+      start_period: 180s
+      retries: 3
     restart: unless-stopped
 
   frontend:
@@ -250,11 +263,17 @@ services:
     logging: *default-logging
     command:
       [
+        "python",
+        "-m",
+        "app.core.watchdog",
+        "--heartbeat=beat",
+        "--",
         "celery",
         "-A",
         "app.core.celery_app:celery_app",
         "beat",
         "--loglevel=INFO",
+        "--scheduler=app.core.heartbeat:HeartbeatScheduler",
       ]
     env_file:
       - ./backend/.env
@@ -266,6 +285,14 @@ services:
         condition: service_healthy
       localstack-init:
         condition: service_completed_successfully
+    # O4: app.core.watchdog exits on a stale heartbeat so restart: replaces a
+    # hung process; this healthcheck only makes the state visible.
+    healthcheck:
+      test: ["CMD", "python", "-m", "app.core.watchdog", "--check=beat"]
+      interval: 30s
+      timeout: 10s
+      start_period: 180s
+      retries: 3
     restart: unless-stopped
 
   worker-test:
@@ -328,6 +355,11 @@ services:
     logging: *default-logging
     command:
       [
+        "python",
+        "-m",
+        "app.core.watchdog",
+        "--heartbeat=worker",
+        "--",
         "celery",
         "-A",
         "app.core.celery_app:celery_app",
@@ -348,6 +380,14 @@ services:
         condition: service_completed_successfully
       redis:
         condition: service_healthy
+    # O4: app.core.watchdog exits on a stale heartbeat so restart: replaces a
+    # hung process; this healthcheck only makes the state visible.
+    healthcheck:
+      test: ["CMD", "python", "-m", "app.core.watchdog", "--check=worker"]
+      interval: 30s
+      timeout: 10s
+      start_period: 180s
+      retries: 3
     restart: unless-stopped
 
 
