@@ -696,6 +696,12 @@
 - 踩坑：①多个域都叫 validate_positive_int，多重继承后只剩一个生效，改为带域名前缀并加不重名测试；②Planner 重试次数改读 Settings 后，无数据库的路由门禁作业 43 题全部 ValidationError（本地复现），作业补上与 unit 相同的占位密码，修后本地 32/43、规则 31 与基线一致。
 - 未做：工具目录（超时、熔断）、EVIDENCE_REVIEW 预算按设计属策略文件，留给后续；冒烟待部署后与其他工单一起跑。
 
+## 2026-11-09 G1 提示词注册表（分支 chore/g1-prompt-registry）
+- 8 个静态系统提示词（planner、知识回答、知识工具、证据核对及选项、三个语义复核）从代码迁到 app/prompts/*.md + manifest.json（版本、变量、sha256）；用脚本从源码语法树自动抽取，f-string 变量转 ${name} 模板，不手抄。新增 runtime/prompts.py（加载时校验文件、哈希、变量；渲染缺或多变量报错；CRLF 不影响哈希）。
+- 任务级 model_call_scope 传 prompt_version=prompts@<16 位哈希>，此后每条模型调用记录都有提示词集版本。
+- 验证：迁移前用旧代码渲染 9 种提示词并记下哈希，迁移后经真实调用路径渲染逐个相同（test_prompt_registry 6 通过）；路由门禁回放录音全部命中（32/43、规则 31，与基线同）；unit+scripts 失败集合与 main 相同。
+- 未做：SQL 生成和 Data 工具提示词动态拼接，留在代码里（待 C4）；“新任务 prompt_version 空值率 0”要部署后查库确认；CI 内容改了但版本没升的门禁（设计 3.3）未做。
+
 ## 2026-11-09 O4 探活：心跳和看门狗（分支 chore/o4-watchdog）
 - 新增 app/core/heartbeat.py（Worker 用 bootstep 挂在自身定时器上、即主事件循环里每 30 秒写心跳；Beat 用 HeartbeatScheduler 每次 tick 写）和 app/core/watchdog.py（作为容器主进程启动 celery 子进程、转发停止信号，心跳超过 120 秒或启动 180 秒内没有心跳就杀子进程并退出 1，交给 restart: 重启）；compose 的 worker、beat、report-worker 改用看门狗启动并加 healthcheck（只作展示）。
 - 演练（一次性容器 agent-o4-drill，挂载本分支代码，Redis 15 号库、test 队列，不碰正式服务）：心跳 30 秒一次；kill -STOP celery 主进程后约 40 秒（阈值调成 60 秒）日志出现 watchdog_restart，RestartCount 0→1，重启后心跳恢复、--check 通过。Beat 同样写心跳。演练留下的 4 个 Redis 键已删除。
