@@ -679,6 +679,11 @@
 - 新增 backend/scripts/deps/check_pins.py（镜像要摘要、action 要提交号、工具链和前端版本要 x.y.z）并接入 CI deps 作业；测试 5 通过，含“仓库当前无浮动引用”。
 - 未验证：setup-python 能否装到 3.12.15（推送后 CI 才知道）；compose 重新拉取后的启动（摘要与运行中镜像相同，未重启服务）。
 
+## 2026-11-09 E9 协作规范（分支 chore/e9-collaboration，未推送）
+- 新增 .github/CODEOWNERS（评测基线、迁移、身份权限、数据源策略、SQL 校验、查询登记、工具守卫、.github、AGENTS.md）、.github/pull_request_template.md（工单、改动、验证层、改前改后、没验证到的、需批准的事）、docs/design/adr/README.md（ADR 模板和索引）。
+- 第一批 ADR（模块化单体、记忆分表、RLS 控制角色）未写：决定内容需用户确认，不替用户补。
+- 用户批准后用 gh 设置：默认分支 feature/api-contracts → main；main 分支保护（必须 PR、11 项 CI 检查必过且须跟上 main、管理员同样受限、禁止强推和删除、不要求人工审批）。API 读回规则一致；真实拦截效果在下一个 PR 上确认。
+
 ## 2026-11-09 K1 配置分域和常量归位（分支 chore/k1-config-domains）
 - Settings 拆成 app/core/config/ 下 11 个域（app、infra、security、admission、model、tool、context、memory、rag、flags、artifacts），Settings 多重继承各域；环境变量名和 settings.<字段> 写法不变，app/core/settings.py 保留为转发入口；settings.domain(RagConfig) 取单个域。
 - 20 个代码常量归入配置（限流、Planner/Data 重试次数、会话历史 token、上下文压缩 3 项、记忆 3 项、RRF_K、工具循环 8 项），调用点改为运行时读取；测试引用的 MAX_ROWS_WHEN_COMPRESSED、DEFAULT_MEMORY_TTL 保留为“默认值”别名，测试文件未改。
