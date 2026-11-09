@@ -14,13 +14,16 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
+from app.core.config.context import ContextConfig
+from app.core.settings import get_settings
 from tiktoken import get_encoding
 
 logger = logging.getLogger(__name__)
 
-COMPRESS_AT = 0.8
-MAX_ROWS_WHEN_COMPRESSED = 20
-MAX_CHUNK_CHARS_WHEN_COMPRESSED = 800
+# Defaults only; the running values come from CONTEXT_* settings (K1).
+MAX_ROWS_WHEN_COMPRESSED: int = ContextConfig.model_fields[
+    "context_max_rows_when_compressed"
+].default
 
 
 @dataclass(frozen=True)
@@ -55,14 +58,15 @@ def count_tokens(value: Any) -> int:
 
 def cap_data_rows(data_result: dict) -> dict:
     """Keep the first rows and say how many were dropped; the columns stay."""
+    max_rows = get_settings().context_max_rows_when_compressed
     evidence = []
     for item in data_result.get("evidence") or []:
         rows = item.get("rows") if isinstance(item, dict) else None
-        if isinstance(rows, list) and len(rows) > MAX_ROWS_WHEN_COMPRESSED:
+        if isinstance(rows, list) and len(rows) > max_rows:
             item = {
                 **item,
-                "rows": rows[:MAX_ROWS_WHEN_COMPRESSED],
-                "rows_left_out": len(rows) - MAX_ROWS_WHEN_COMPRESSED,
+                "rows": rows[:max_rows],
+                "rows_left_out": len(rows) - max_rows,
             }
         evidence.append(item)
     return {**data_result, "evidence": evidence}
@@ -70,13 +74,14 @@ def cap_data_rows(data_result: dict) -> dict:
 
 def cap_chunk_text(knowledge_result: dict) -> dict:
     """Shorten long chunks and mark them, so a model can't read absence as fact."""
+    max_chars = get_settings().context_max_chunk_chars_when_compressed
     evidences = []
     for item in knowledge_result.get("evidences") or []:
         content = item.get("content") if isinstance(item, dict) else None
-        if isinstance(content, str) and len(content) > MAX_CHUNK_CHARS_WHEN_COMPRESSED:
+        if isinstance(content, str) and len(content) > max_chars:
             item = {
                 **item,
-                "content": content[:MAX_CHUNK_CHARS_WHEN_COMPRESSED],
+                "content": content[:max_chars],
                 "content_truncated": True,
             }
         evidences.append(item)
@@ -99,7 +104,7 @@ def assemble(
 
     tokens = count_tokens(payload)
     compressed = []
-    threshold = manifest.budget_tokens * COMPRESS_AT
+    threshold = manifest.budget_tokens * get_settings().context_compress_at
     for name, rule in manifest.sections.items():
         if tokens < threshold:
             break

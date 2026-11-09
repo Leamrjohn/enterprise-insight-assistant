@@ -207,8 +207,13 @@ jobs:
     name: Behavior gate (routing)
     runs-on: ubuntu-24.04
     timeout-minutes: 10
+    # No database: the Planner reads its retry count from Settings (K1), whose
+    # required passwords get the same unused placeholders as the unit job.
     env:
       PYTHONUTF8: '1'
+      APP_ENV: test
+      DATABASE_PASSWORD: ci-unused-database-password
+      BUSINESS_DATABASE_PASSWORD: ci-unused-business-password
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
