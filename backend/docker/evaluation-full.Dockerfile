@@ -4,10 +4,14 @@ WORKDIR /app
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
+# C1: tokenizer files baked in, so counting tokens needs no network.
+ENV TIKTOKEN_CACHE_DIR=/opt/tiktoken
 
 COPY requirements/ requirements/
 RUN pip install --require-hashes -r requirements/ci-linux-py312.lock \
     && pip install --require-hashes --extra-index-url https://download.pytorch.org/whl/cpu \
         -r requirements/ml-linux-py312.lock
+
+RUN python -c "import tiktoken; [tiktoken.get_encoding(n) for n in ('o200k_base', 'cl100k_base')]"     && chmod -R a+rX /opt/tiktoken
 
 COPY . .

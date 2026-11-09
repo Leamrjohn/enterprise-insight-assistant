@@ -14,11 +14,11 @@ import json
 from pathlib import Path
 
 import sqlglot
+from app.core.tokenizer import count_tokens as count_text_tokens
 from app.modules.analysis.data.sql_generation import build_sql_generation_system_prompt
 from app.modules.analysis.planner.planning import build_planning_system_prompt
 from scripts.evaluation.run_sql_result_evaluation import demo_source, load_catalog
 from sqlglot import exp
-from tiktoken import get_encoding
 
 SQL_SECTION_HEADERS = (
     "可验证指标契约：",
@@ -29,7 +29,7 @@ SQL_SECTION_HEADERS = (
 
 
 def count_tokens(text: str) -> int:
-    return len(get_encoding("o200k_base").encode(text))
+    return count_text_tokens(text)
 
 
 def split_sections(prompt: str, headers: tuple[str, ...]) -> dict[str, int]:

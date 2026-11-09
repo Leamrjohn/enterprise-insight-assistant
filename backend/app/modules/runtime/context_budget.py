@@ -16,7 +16,7 @@ from typing import Any
 
 from app.core.config.context import ContextConfig
 from app.core.settings import get_settings
-from tiktoken import get_encoding
+from app.core.tokenizer import count_tokens as count_text_tokens
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +53,7 @@ class ContextDecision:
 
 def count_tokens(value: Any) -> int:
     text = value if isinstance(value, str) else json.dumps(value, ensure_ascii=False)
-    return len(get_encoding("o200k_base").encode(text))
+    return count_text_tokens(text)
 
 
 def cap_data_rows(data_result: dict) -> dict:

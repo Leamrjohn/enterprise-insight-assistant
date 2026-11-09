@@ -741,3 +741,8 @@
 - 验证：单元 4 通过；本机连正式库跑真实查询：写操作被拒（read-only）。一次性容器（agent-o2a-*，接 agent_default 网络）里 Prometheus target up，Grafana 看板加载，经数据源查到 stranded=0、expired leases=0、reserved_stale=1、inflight=88（均为 awaiting_review），与直接查库一致；演练容器已删除。
 - 发现（待我决定）：平台库有 1 条模型调用账本 reserved 超过 10 分钟；导出器是否改用专用只读角色（现用 agent_app + 只读事务）。
 - 未验证：正式栈以 profile 启动（等部署）；心跳卷的实际写入（等部署后看面板）。
+
+## 2026-11-09 C1 分词器统一（分支 chore/c1-tokenizer）
+- 新增 app/core/tokenizer.py（编码按进程缓存；DeepSeek 等 tiktoken 不认识的模型用 o200k_base；OpenAI 网关保持“未知模型名报错”的原行为），context_budget、conversations、memory、DeepSeek/OpenAI 网关、measure_context_baseline 共 6 处改走它，代码里不再直接调用 tiktoken。
+- 4 个镜像设置 TIKTOKEN_CACHE_DIR=/opt/tiktoken，构建时预置 o200k_base、cl100k_base。
+- 验证：test_tokenizer 6 通过（与原 o200k 计数逐个相同）；上下文、会话、网关相关测试 48 通过；本分支 api 镜像在 --network none 容器里计数成功（中文问题 12 token，gpt-4 用 cl100k）。
