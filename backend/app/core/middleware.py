@@ -7,14 +7,13 @@ from fastapi import Request, Response
 from fastapi.responses import JSONResponse
 
 from app.core.logging import request_id_context
+from app.core.settings import get_settings
 from app.modules.observability.rejection_audit import record_analysis_request_rejection
 
 logger = logging.getLogger("app.request")
 
 # ── 限流 ──────────────────────────────────
 _rate_limit_store: dict[str, list[float]] = {}
-RATE_LIMIT_MAX = 100  # 每分钟最多 100 次请求
-RATE_LIMIT_WINDOW = 60  # 滑动窗口 60 秒
 _CONVERSATION_MESSAGE_PATH = re.compile(r"^/conversations/\d+/messages$")
 _AUDITED_REJECTION_STATUSES = {403, 404, 409, 422, 429}
 
@@ -40,11 +39,12 @@ def _check_rate_limit(api_key: str) -> JSONResponse | None:
         _rate_limit_store[api_key] = [now]
         return None
 
-    # 清理过期的时间戳（超过 60 秒的）
-    cutoff = now - RATE_LIMIT_WINDOW
+    # 清理滑动窗口（RATE_LIMIT_WINDOW_SECONDS）之外的时间戳
+    settings = get_settings()
+    cutoff = now - settings.rate_limit_window_seconds
     timestamps[:] = [ts for ts in timestamps if ts > cutoff]
 
-    if len(timestamps) >= RATE_LIMIT_MAX:
+    if len(timestamps) >= settings.rate_limit_max_requests:
         return JSONResponse(
             status_code=429,
             content={

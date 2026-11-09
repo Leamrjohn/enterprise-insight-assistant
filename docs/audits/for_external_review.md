@@ -40,11 +40,11 @@
 
 本项目目标是全模块符合明确适用范围的生产级设计与工程要求，并在单电脑与存储服务环境完成真实验证，不要求上线。当前实现尚未通过整体生产级验收；目标与进度分开记录。
 
-**查看计划与进度，从 [文档阅读导航](../docs/README.md) 开始。**
+**查看计划与进度，从 [文档阅读导航](../README.md) 开始。**
 
 ## 已有模块与能力基础
 
-以下是实现构成，不代表各项已通过完整生产级门禁；当前缺口与验证范围见 [项目审计](../docs/audits/project_core_audit_20260915.md)。
+以下是实现构成，不代表各项已通过完整生产级门禁；当前缺口与验证范围见 [项目审计](../audits/project_core_audit_20260915.md)。
 
 - 公司级身份与权限：JWT 登录、成员角色、资源隔离和管理审批。
 - 文档知识库：TXT、Markdown、PDF 上传，异步解析、分块、向量化和 pgvector 检索。
@@ -188,7 +188,7 @@ Set-Location ..
 docker compose config --quiet
 ```
 
-普通单元/集成测试不能证明真实 Redis、独立 Celery Worker、经营数据库和模型 Provider 的完整链路。需要真实依赖时，按测试标记和 [单机运行与恢复 Runbook](../docs/operations/single_node_runbook.md) 执行对应 E2E。
+普通单元/集成测试不能证明真实 Redis、独立 Celery Worker、经营数据库和模型 Provider 的完整链路。需要真实依赖时，按测试标记和 [单机运行与恢复 Runbook](../operations/single_node_runbook.md) 执行对应 E2E。
 
 ## 主要 API
 
@@ -223,16 +223,16 @@ docker-compose.yml      本地服务编排
 
 ## 项目文档
 
-- [阅读导航：目标、计划、当前进度与操作资料](../docs/README.md)
-- [全项目生产级改造路线图](../docs/plans/single_node_production_style_ai_application_roadmap.md)
-- [已确认目标设计](../docs/architecture/confirmed_production_design.md)
-- [当前代码审计与验证边界](../docs/audits/project_core_audit_20260915.md)
+- [阅读导航：目标、计划、当前进度与操作资料](../README.md)
+- [全项目生产级改造路线图](../history/plans/single_node_production_style_ai_application_roadmap.md)
+- [已确认目标设计](../architecture/confirmed_production_design.md)
+- [当前代码审计与验证边界](../audits/project_core_audit_20260915.md)
 
-- [产品定义与边界](../PRODUCT.md)
-- [前端设计系统](../DESIGN.md)
-- [单机运行与故障恢复](../docs/operations/single_node_runbook.md)
-- [贡献指南](../CONTRIBUTING.md)
-- [安全策略](../SECURITY.md)
+- [产品定义与边界](../../PRODUCT.md)
+- [前端设计系统](../../DESIGN.md)
+- [单机运行与故障恢复](../operations/single_node_runbook.md)
+- [贡献指南](../../CONTRIBUTING.md)
+- [安全策略](../../SECURITY.md)
 
 ## 许可证
 
@@ -244,7 +244,7 @@ docker-compose.yml      本地服务编排
 
 # Enterprise Insight Assistant 产品说明
 
-> 本文维护产品用途与业务边界。生产级目标与验收以 [主路线图](../docs/plans/single_node_production_style_ai_application_roadmap.md) 为准；当前实现证据见 [项目审计](../docs/audits/project_core_audit_20260915.md)。
+> 本文维护产品用途与业务边界。生产级目标与验收以 [主路线图](../history/plans/single_node_production_style_ai_application_roadmap.md) 为准；当前实现证据见 [项目审计](../audits/project_core_audit_20260915.md)。
 
 ## 产品定位
 

@@ -1,6 +1,7 @@
 from datetime import date
 
 from app.core.exceptions import EmbeddingError, VectorSearchError
+from app.core.settings import get_settings
 from app.modules.documents.chunks import DocumentChunk
 from app.modules.documents.search_tokens import TOKENIZERS
 from app.modules.documents.vector_repository import (
@@ -13,8 +14,6 @@ from app.modules.knowledge.rag.validity import ValidityWindow
 from app.utils.document_chunk import SUPPORTED_CHUNK_STRATEGIES
 from sqlalchemy import select
 from sqlalchemy.orm import Session
-
-RRF_K = 60  # the standard constant; a larger value flattens rank differences
 
 
 def _iso(value: date | None) -> str | None:
@@ -141,12 +140,13 @@ def _evidence(row: dict, labels: tuple[str, ...]) -> EvidenceRef:
 def _fuse_routes(routes: list[tuple[str, list[dict]]]) -> list[EvidenceRef]:
     """Reciprocal rank fusion: rank position decides, so routes with different
     score scales can be combined.  Text found twice counts as one chunk."""
+    rrf_k = get_settings().rag_rrf_k  # a larger value flattens rank differences
     fused: dict[tuple[int, str], dict] = {}
     for label, rows in routes:
         for rank, row in enumerate(rows, start=1):
             key = (row["document_id"], " ".join(row["content"].split()))
             entry = fused.setdefault(key, {"row": row, "labels": [], "rrf": 0.0})
-            entry["rrf"] += 1 / (RRF_K + rank)
+            entry["rrf"] += 1 / (rrf_k + rank)
             entry["labels"].append(label)
             if float(row["score"]) > float(entry["row"]["score"]):
                 entry["row"] = row
