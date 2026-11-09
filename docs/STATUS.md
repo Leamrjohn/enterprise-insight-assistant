@@ -125,3 +125,5 @@
 - 2026-11-09：K1 配置分 11 个域、20 个常量归入配置，默认值 0 差异；分支 chore/k1-config-domains。
 
 - 2026-11-09：G1 8 个静态提示词迁入 app/prompts（逐字节一致），任务记录 prompt_version；分支 chore/g1-prompt-registry。
+
+- 2026-11-09：E2 镜像改用带哈希锁（uv 生成 ML 锁 607 秒），两次安装 pip freeze 一致，冒烟不变；R1 分工与授权范围已记录。
