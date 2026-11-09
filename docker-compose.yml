@@ -218,7 +218,9 @@ services:
     environment:
       <<: *backend-environment
       HF_HOME: /app/storage/huggingface
+      AGENT_HEARTBEAT_DIR: /heartbeat
     volumes:
+      - heartbeat:/heartbeat
       - ./backend/logs:/app/logs
       - ./backend/storage:/app/storage
     depends_on:
@@ -277,7 +279,11 @@ services:
       ]
     env_file:
       - ./backend/.env
-    environment: *backend-environment
+    environment:
+      <<: *backend-environment
+      AGENT_HEARTBEAT_DIR: /heartbeat
+    volumes:
+      - heartbeat:/heartbeat
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -371,7 +377,10 @@ services:
       ]
     env_file:
       - ./backend/.env
-    environment: *backend-environment
+    environment:
+      <<: *backend-environment
+      # Its own heartbeat directory: the shared volume belongs to the worker.
+      AGENT_HEARTBEAT_DIR: /tmp/agent-heartbeat
     volumes:
       - ./backend/logs:/app/logs
       - ./backend/storage:/app/storage
@@ -476,6 +485,68 @@ services:
       demo_business_beta:
         condition: service_healthy
 
+  # O2a lightweight dashboard: docker compose --profile observability up -d
+  # Reads the platform database (read-only transactions, counts only) and the
+  # worker/beat heartbeat volume; Grafana and Prometheus listen on 127.0.0.1.
+  metrics-exporter:
+    profiles: ["observability"]
+    build:
+      context: ./backend
+      dockerfile: docker/api.Dockerfile
+    logging: *default-logging
+    command: ["python", "-m", "app.modules.observability.metrics_exporter"]
+    env_file:
+      - ./backend/.env
+    environment:
+      <<: *backend-environment
+      AGENT_HEARTBEAT_DIR: /heartbeat
+    volumes:
+      - heartbeat:/heartbeat:ro
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  prometheus:
+    profiles: ["observability"]
+    image: prom/prometheus:v3.5.0@sha256:63805ebb8d2b3920190daf1cb14a60871b16fd38bed42b857a3182bc621f4996
+    logging: *default-logging
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=30d
+    volumes:
+      - ./ops/observability/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "127.0.0.1:9090:9090"
+    depends_on:
+      - metrics-exporter
+    restart: unless-stopped
+
+  grafana:
+    profiles: ["observability"]
+    image: grafana/grafana:12.0.2@sha256:b5b59bfc7561634c2d7b136c4543d702ebcc94a3da477f21ff26f89ffd4214fa
+    logging: *default-logging
+    environment:
+      # Local, read-only viewing: anonymous viewers, no login form; dashboards
+      # and the data source come from files in this repository.
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+      GF_ANALYTICS_REPORTING_ENABLED: "false"
+      GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
+      GF_DASHBOARDS_DEFAULT_HOME_DASHBOARD_PATH: /var/lib/grafana/dashboards/platform.json
+    volumes:
+      - ./ops/observability/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./ops/observability/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "127.0.0.1:3001:3000"
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   business_data:
@@ -484,6 +555,9 @@ volumes:
   clamav_database:
   localstack_data:
   frontend_node_modules:
+  heartbeat:
+  prometheus_data:
+  grafana_data:
 
 networks:
   default:

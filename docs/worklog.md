@@ -718,3 +718,10 @@
 - 演练（一次性容器 agent-o4-drill，挂载本分支代码，Redis 15 号库、test 队列，不碰正式服务）：心跳 30 秒一次；kill -STOP celery 主进程后约 40 秒（阈值调成 60 秒）日志出现 watchdog_restart，RestartCount 0→1，重启后心跳恢复、--check 通过。Beat 同样写心跳。演练留下的 4 个 Redis 键已删除。
 - 测试：test_watchdog 8 通过（新鲜/过期/缺失/旧文件、子进程退出码、卡住子进程被杀、--check、两种心跳）；pyright、ruff 通过。
 - 未验证：持有任务时卡死再恢复的端到端过程（恢复由已有的租约过期恢复负责，见 test_recovery_delivery、test_stranded_tasks）；正式服务尚未用新命令重启（等合入后部署）。
+
+## 2026-11-09 O2a 轻量看板（分支 chore/o2a-dashboard）
+- 新增指标导出器 app/modules/observability/metrics_exporter.py（:9108，每次抓取查库：进行中任务、未认领 Outbox 事件及最老年龄、过期租约、卡住任务、账本按结算状态、长时间 reserved、Worker/Beat 心跳年龄；只有计数和年龄，标签不含任务/用户/公司 id）；连接用 agent_app，但强制只读事务（default_transaction_read_only=on）和 5 秒语句超时。prometheus-client 0.22.1 进运行时依赖和锁（其余包不变）。
+- compose observability profile 新增 metrics-exporter、prometheus（v3.5.0，保留 30 天）、grafana（12.0.2，匿名只读、无登录框），镜像按摘要固定，端口只绑 127.0.0.1（9090、3001）；看板和数据源由 ops/observability/ 下文件自动加载。worker、beat 的心跳写入共享卷 heartbeat，导出器只读挂载；镜像预建 /heartbeat 并归 app 用户。
+- 验证：单元 4 通过；本机连正式库跑真实查询：写操作被拒（read-only）。一次性容器（agent-o2a-*，接 agent_default 网络）里 Prometheus target up，Grafana 看板加载，经数据源查到 stranded=0、expired leases=0、reserved_stale=1、inflight=88（均为 awaiting_review），与直接查库一致；演练容器已删除。
+- 发现（待我决定）：平台库有 1 条模型调用账本 reserved 超过 10 分钟；导出器是否改用专用只读角色（现用 agent_app + 只读事务）。
+- 未验证：正式栈以 profile 启动（等部署）；心跳卷的实际写入（等部署后看面板）。
