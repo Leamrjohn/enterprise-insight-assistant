@@ -1,0 +1,38 @@
+{
+  "_comment": "E5: every test file that is skipped or marked e2e/slow, the layer it belongs to and when it actually runs. scripts/ci/check_test_layers.py fails CI when a skipped test is missing here. trigger: ci (runs on every PR), manual (command below), pending (no run time yet: needs a decision).",
+  "tests/integration/analysis/test_sql_execution_layer.py": {
+    "layer": "integration (demo business database)",
+    "trigger": "manual",
+    "how": "start the demo business databases (docker compose up -d demo_business_acme demo_business_beta) and set ACME_DEMO_DATABASE_PASSWORD; A11b ran it in the one-off container agent-sqltest"
+  },
+  "tests/integration/conversations/test_conversations.py": {
+    "layer": "end-to-end (Compose capacity signal)",
+    "trigger": "manual",
+    "how": "pytest -m e2e with the Compose stack running (capacity-signal service)"
+  },
+  "tests/integration/documents/test_document_tasks.py": {
+    "layer": "slow (real embedding model)",
+    "trigger": "manual",
+    "how": "pytest -m slow tests/integration/documents/test_document_tasks.py in the evaluation image (models cached)"
+  },
+  "tests/integration/input_artifacts/test_local_object_storage_e2e.py": {
+    "layer": "end-to-end (LocalStack)",
+    "trigger": "manual",
+    "how": "RUN_LOCAL_OBJECT_STORAGE_E2E=1 pytest -m e2e with LocalStack up"
+  },
+  "tests/integration/workflow/test_celery_e2e.py": {
+    "layer": "end-to-end (real Celery worker)",
+    "trigger": "manual",
+    "how": "docker compose --profile test up -d worker-test; RUN_REAL_CELERY_E2E=1 pytest -m e2e"
+  },
+  "tests/unit/evaluation/test_full_corpus_retrieval_evaluation.py": {
+    "layer": "slow (full-corpus retrieval evaluation)",
+    "trigger": "manual",
+    "how": "RUN_FULL_CORPUS_RAG_EVAL=1 in the evaluation container; the CI behavior gate runs the same retrieval strategies on every PR"
+  },
+  "tests/unit/analysis/test_sql_executor.py": {
+    "layer": "integration (legacy default business database)",
+    "trigger": "pending",
+    "how": "two tests are skipped unconditionally: they query the default business database through execute_readonly_sql, a path A11b closed. Waiting for a decision: delete them or rewrite against a registered demo connection."
+  }
+}

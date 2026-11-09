@@ -140,4 +140,6 @@
 
 - 2026-11-09：C1 统一分词入口、镜像预置词表，断网容器计数通过；分支 chore/c1-tokenizer。
 
+- 2026-11-09：E5 跳过测试登记表和覆盖率门禁；分支 chore/e5-test-layers。
+
 - 2026-11-09：O1 OpenTelemetry 埋点 + Collector/Tempo，属性白名单两道过滤；分支 chore/o1-tracing。
