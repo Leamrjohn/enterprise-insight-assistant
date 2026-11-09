@@ -678,3 +678,9 @@
 - frontend/package.json 11 个 latest 改为 package-lock.json 里已安装的确切版本，锁文件根节点同步；npm ci --dry-run 通过。
 - 新增 backend/scripts/deps/check_pins.py（镜像要摘要、action 要提交号、工具链和前端版本要 x.y.z）并接入 CI deps 作业；测试 5 通过，含“仓库当前无浮动引用”。
 - 未验证：setup-python 能否装到 3.12.15（推送后 CI 才知道）；compose 重新拉取后的启动（摘要与运行中镜像相同，未重启服务）。
+
+## 2026-11-09 O4 探活：心跳和看门狗（分支 chore/o4-watchdog）
+- 新增 app/core/heartbeat.py（Worker 用 bootstep 挂在自身定时器上、即主事件循环里每 30 秒写心跳；Beat 用 HeartbeatScheduler 每次 tick 写）和 app/core/watchdog.py（作为容器主进程启动 celery 子进程、转发停止信号，心跳超过 120 秒或启动 180 秒内没有心跳就杀子进程并退出 1，交给 restart: 重启）；compose 的 worker、beat、report-worker 改用看门狗启动并加 healthcheck（只作展示）。
+- 演练（一次性容器 agent-o4-drill，挂载本分支代码，Redis 15 号库、test 队列，不碰正式服务）：心跳 30 秒一次；kill -STOP celery 主进程后约 40 秒（阈值调成 60 秒）日志出现 watchdog_restart，RestartCount 0→1，重启后心跳恢复、--check 通过。Beat 同样写心跳。演练留下的 4 个 Redis 键已删除。
+- 测试：test_watchdog 8 通过（新鲜/过期/缺失/旧文件、子进程退出码、卡住子进程被杀、--check、两种心跳）；pyright、ruff 通过。
+- 未验证：持有任务时卡死再恢复的端到端过程（恢复由已有的租约过期恢复负责，见 test_recovery_delivery、test_stranded_tasks）；正式服务尚未用新命令重启（等合入后部署）。
