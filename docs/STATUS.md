@@ -129,3 +129,4 @@
 - 2026-11-09：E2 镜像改用带哈希锁（uv 生成 ML 锁 607 秒），两次安装 pip freeze 一致，冒烟不变；R1 分工与授权范围已记录。
 
 - 2026-11-09：O4 Worker/Beat 心跳和看门狗，卡死演练 40 秒内自动重启；分支 chore/o4-watchdog。
+- 2026-11-09：O2a 导出器 + Prometheus + Grafana 看板，演练中面板数据与查库一致；分支 chore/o2a-dashboard。

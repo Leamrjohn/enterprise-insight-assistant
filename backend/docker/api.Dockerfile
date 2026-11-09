@@ -11,8 +11,8 @@ RUN pip install --require-hashes -r requirements/base-linux-py312.lock
 
 RUN groupadd --gid 10001 app \
     && useradd --uid 10001 --gid app --create-home --shell /usr/sbin/nologin app \
-    && mkdir -p /app/logs /app/storage \
-    && chown -R app:app /app
+    && mkdir -p /app/logs /app/storage /heartbeat \
+    && chown -R app:app /app /heartbeat
 
 COPY --chown=app:app . .
 

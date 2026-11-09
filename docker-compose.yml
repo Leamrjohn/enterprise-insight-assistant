@@ -218,7 +218,9 @@ services:
     environment:
       <<: *backend-environment
       HF_HOME: /app/storage/huggingface
+      AGENT_HEARTBEAT_DIR: /heartbeat
     volumes:
+      - heartbeat:/heartbeat
       - ./backend/logs:/app/logs
       - ./backend/storage:/app/storage
     depends_on:
@@ -277,7 +279,11 @@ services:
       ]
     env_file:
       - ./backend/.env
-    environment: *backend-environment
+    environment:
+      <<: *backend-environment
+      AGENT_HEARTBEAT_DIR: /heartbeat
+    volumes:
+      - heartbeat:/heartbeat
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -371,7 +377,10 @@ services:
       ]
     env_file:
       - ./backend/.env
-    environment: *backend-environment
+    environment:
+      <<: *backend-environment
+      # Its own heartbeat directory: the shared volume belongs to the worker.
+      AGENT_HEARTBEAT_DIR: /tmp/agent-heartbeat
     volumes:
       - ./backend/logs:/app/logs
       - ./backend/storage:/app/storage
