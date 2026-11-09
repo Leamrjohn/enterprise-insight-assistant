@@ -672,3 +672,8 @@
 - 验证：门禁测试 12 个 + tests/scripts 共 243 通过、pyright 0；本地干净容器全流程预演通过；故意改 R2 规则、删 Planner 提示词 1 个字、改 SQL 提示词 1 个字均失败；Knowledge 未做故意改坏验证，CI 机器上重排结果是否与本地完全一致未验证。
 - 检索慢的原因：compose 的 evaluation 服务没设 HF_HOME，每次重新下载约 1.6GB 模型（建索引 265～324 秒，有缓存后 12.7 秒）；另外 8 策略全跑时每个重排策略约 190～225 秒。待办：给 evaluation 服务挂模型缓存（不在本工单）。
 - CI 首跑：gitleaks 把 100 个录音里的请求哈希字段（"key": 64 位十六进制，等于文件名）报为 generic-api-key，逐条登记指纹到 .gitleaksignore（重录后要重新生成）；之后 22 项全绿。CI 上 SQL 21/24、检索各计数与本地完全一致；数据作业首跑约 11 分钟（含模型下载）。
+
+## 2026-11-09 E11 文档整理和链接检查（分支 chore/e11-docs）
+- 新增 backend/scripts/docs/check_links.py：检查所有已跟踪 .md 的相对链接目标存在（跳过网址、页内锚点、代码块、冻结的 docs/history/）；CI 新增 Docs links 作业；测试 4 通过。
+- 首次运行 297 个文件查出 14 处断链，全在 docs/audits/for_external_review.md（从根目录移入后相对路径未改），已修正；docs/README.md 目录表里 roadmap/ 仍写“当前执行计划”，改为历史参考。修正后 0 处。
+- 待办：新作业合入后把 Docs links 加进 main 分支保护的必过检查。
