@@ -719,5 +719,11 @@
 - 测试：test_watchdog 8 通过（新鲜/过期/缺失/旧文件、子进程退出码、卡住子进程被杀、--check、两种心跳）；pyright、ruff 通过。
 - 未验证：持有任务时卡死再恢复的端到端过程（恢复由已有的租约过期恢复负责，见 test_recovery_delivery、test_stranded_tasks）；正式服务尚未用新命令重启（等合入后部署）。
 
+## 2026-11-09 E4 架构规则：import-linter（分支 chore/e4-import-rules）
+- 新增 backend/.importlinter 两条规则：core 不得引用 app.modules；业务模块分四层（workflow → analysis/knowledge/reporting/conversations/evaluation/reviews/memory/input_artifacts → runtime → documents/organizations/identity/observability），同层可互相引用。现存 41 条违规（core 4 条，如 gateway→runtime、middleware→observability；分层 37 条，多为各模块引用 workflow.models）登记在 ignore_imports，只禁止新增。
+- 发现：app/modules、app/utils 没有 __init__.py（命名空间包），grimp 看不到它们，规则会“全部通过”却什么都没查。正式补文件会让 ruff 把 app 改判为第一方包，约 100 个文件的 import 排序要重排（CI ruff 失败 101 处）；改用 known-third-party 又让 core/db/api 下 18 个文件失败；namespace 根包 grimp 不支持。最终 scripts/ci/lint_imports.sh 只在运行期间临时建这两个文件，跑完删除。待我决定：是否正式补 __init__.py 并统一重排 import（机械改动约 100 个文件）。
+- CI Static 矩阵加 import-linter；import-linter 2.3（带 grimp 3.19）进 dev 依赖和 CI 锁，其余包版本不变。
+- 验证：两条规则 KEPT；故意加 identity→workflow.models 和 core→modules.runtime 两条引用后 BROKEN、exit 1，删掉后恢复。
+
 ## 2026-11-09 E3 修复：check_pins 只查已跟踪文件（分支 fix/e3-check-tracked-files）
 - 症状：主目录里 tmp/ 下的旧评测工作树有 23 处未固定的 Dockerfile，本地 test_repository_has_no_floating_reference 失败（CI 是干净检出所以没暴露）。根因：用 glob 扫目录。改为 git ls-files，非 git 目录才退回扫描；新增未跟踪文件不检查的测试，6 通过；主目录运行通过。
