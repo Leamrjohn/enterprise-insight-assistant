@@ -761,3 +761,6 @@
 - 基础设施（observability profile）：otel-collector（contrib 0.130.0，transform 处理器按同一白名单 keep_keys 二次过滤）、tempo（2.8.1，保留 7 天）、Grafana Tempo 数据源；镜像按摘要固定。opentelemetry-sdk、exporter-otlp-proto-http 1.45.1 进依赖和锁（与 fastapi 已带的 api 1.45.1 对齐，新增 9 个包，原有版本不变）。
 - 验证：test_tracing 6 通过（白名单、API→Worker 同一 trace_id 且父子相连、问题原文和手机号不出现在任何 span、异常只记类名不记消息、API span 用路由模板、Collector 白名单与代码一致）；集成测试 test_task_trace_context 由 CI 跑；import 规则 KEPT。
 - 未验证：部署后在 Tempo 里看一个真实任务的完整链路（部署时做）；迁移在 CI 做往返检查。
+
+## 2026-11-09 修复：worker 镜像层顺序（分支 fix/worker-layer-order）
+- 症状：部署时 worker 镜像在 apt 下载处失败（第 3 次；本机代理 198.18.x.x 对 libgpg-error0 返回 404），部署中止，旧容器未变。根因：C1 把 ENV TIKTOKEN_CACHE_DIR 放在 apt 层之前，apt 层缓存失效，每次都要重新下载。修复：ENV 移到 apt 层之后（效果相同），本地构建 apt 层命中缓存（CACHED）。apt 包版本未锁、代理不稳的问题仍在（待我决定）。
