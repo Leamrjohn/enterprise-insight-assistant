@@ -4,8 +4,6 @@ WORKDIR /app
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
-# C1: tokenizer files baked in, so counting tokens needs no network.
-ENV TIKTOKEN_CACHE_DIR=/opt/tiktoken
 
 RUN apt-get update \
     && apt-get install --no-install-recommends --yes \
@@ -14,6 +12,11 @@ RUN apt-get update \
         tesseract-ocr-eng \
         poppler-utils \
     && rm -rf /var/lib/apt/lists/*
+
+# After the apt layer, so a tokenizer change never invalidates the system
+# packages (the apt mirror is the flakiest download in this build).
+# C1: tokenizer files baked in, so counting tokens needs no network.
+ENV TIKTOKEN_CACHE_DIR=/opt/tiktoken
 
 COPY requirements/ requirements/
 

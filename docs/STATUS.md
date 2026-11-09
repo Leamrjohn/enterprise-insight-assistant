@@ -143,3 +143,4 @@
 - 2026-11-09：E5 跳过测试登记表和覆盖率门禁；分支 chore/e5-test-layers。
 
 - 2026-11-09：O1 OpenTelemetry 埋点 + Collector/Tempo，属性白名单两道过滤；分支 chore/o1-tracing。
+- 2026-11-09：worker 镜像 ENV 移到 apt 层后，恢复 apt 缓存；分支 fix/worker-layer-order。
