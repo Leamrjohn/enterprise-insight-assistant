@@ -764,3 +764,19 @@
 
 ## 2026-11-09 修复：worker 镜像层顺序（分支 fix/worker-layer-order）
 - 症状：部署时 worker 镜像在 apt 下载处失败（第 3 次；本机代理 198.18.x.x 对 libgpg-error0 返回 404），部署中止，旧容器未变。根因：C1 把 ENV TIKTOKEN_CACHE_DIR 放在 apt 层之前，apt 层缓存失效，每次都要重新下载。修复：ENV 移到 apt 层之后（效果相同），本地构建 apt 层命中缓存（CACHED）。apt 包版本未锁、代理不稳的问题仍在（待我决定）。
+
+## 2026-11-09 R1 部署（main 96424a8）和冒烟
+- 部署前备份 artifacts/backups/agent_platform_20261109_135728.dump（另有 131010 一份）；compose 重建 migrate/api/worker/beat/report-worker，启用 observability profile（导出器、Prometheus、Grafana、Collector、Tempo），OTEL_EXPORTER_OTLP_ENDPOINT 仅本次以 shell 变量设置。迁移到 c5d6e7f8a9b0；api readiness 4 项 ok；未出现未知配置名警告（正式配置文件的键都已声明）；worker/beat 心跳进看板。
+- 首次部署失败：worker 镜像 apt 下载被本机代理返回 404（第 3 次），旧容器未变；修复见 fix/worker-layer-order（#19）。#19 首次 CI 在 GitHub 侧启动失败（0 个作业），重跑和空提交后正常。
+- 冒烟 r1-deploy（任务 905–914，$0.025044，126 秒）：9 成功 + 混合题 awaiting_review，与 E2、A11b 相同。10/10 任务有 trace_context，60/60 模型调用记录有 prompt_version（prompts@8292c80de2c3f24e）。Tempo 中任务 909 一条 trace 15 个 span（API 请求→analysis_task→5 个节点→rag_search→5 次 gen_ai.chat），属性键均在白名单，敏感词扫描 0 命中。
+- 待办：API 进程里 FastAPI 自带的 span 标成 agent-celery（API 也 import celery_app，全局 provider 先被设置）；改为只在 celery 启动信号里设置服务名。OTEL 端点要写进配置文件才能长期开启（需用户决定是否默认开启）。
+
+## 待我决定（R1 代做期间积累，2026-11-09）
+1. 指标导出器用 agent_app + 只读事务；是否改建专用只读监控角色（改权限，需批准）。
+2. 平台库 1 条模型调用账本 reserved 超过 10 分钟（看板 agent_reserved_billing_stale=1），是否排查。
+3. tests/unit/analysis/test_sql_executor.py 两个永远不跑的测试（调用 A11b 后已拒绝的默认业务库路径）：删除或改写（改测试，需批准）。
+4. app/modules、app/utils 是否正式补 __init__.py 并统一 import 排序（约 100 个文件的机械改动）；现在 import-linter 运行时临时补。
+5. 第一批 ADR（模块化单体、记忆分表、RLS 控制角色）的决定内容。
+6. 前端 4 个审计例外 12-08 到期，需升级 vite/vitest（依赖升级）。
+7. worker 镜像 apt 包未锁版本，本机代理下载不稳；是否改用固定快照源（snapshot.debian.org）。
+8. OTEL_EXPORTER_OTLP_ENDPOINT 是否默认开启（需 observability profile 常驻）。
