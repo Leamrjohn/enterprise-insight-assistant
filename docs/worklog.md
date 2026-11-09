@@ -672,3 +672,9 @@
 - 验证：门禁测试 12 个 + tests/scripts 共 243 通过、pyright 0；本地干净容器全流程预演通过；故意改 R2 规则、删 Planner 提示词 1 个字、改 SQL 提示词 1 个字均失败；Knowledge 未做故意改坏验证，CI 机器上重排结果是否与本地完全一致未验证。
 - 检索慢的原因：compose 的 evaluation 服务没设 HF_HOME，每次重新下载约 1.6GB 模型（建索引 265～324 秒，有缓存后 12.7 秒）；另外 8 策略全跑时每个重排策略约 190～225 秒。待办：给 evaluation 服务挂模型缓存（不在本工单）。
 - CI 首跑：gitleaks 把 100 个录音里的请求哈希字段（"key": 64 位十六进制，等于文件名）报为 generic-api-key，逐条登记指纹到 .gitleaksignore（重录后要重新生成）；之后 22 项全绿。CI 上 SQL 21/24、检索各计数与本地完全一致；数据作业首跑约 11 分钟（含模型下载）。
+
+## 2026-11-09 E3 版本固定（分支 chore/e3-pin-versions，未推送）
+- 4 个 Dockerfile 的 python:3.12-slim、compose 和 CI 的全部镜像加 @sha256 摘要（摘要取自本机正在用的镜像，行为不变）；redis:7 → 7.4.9、node:22-alpine → 22.23.1-alpine；CI 的 python-version 3.12 → 3.12.15、node-version 22 → 22.23.1（与镜像内版本一致）。
+- frontend/package.json 11 个 latest 改为 package-lock.json 里已安装的确切版本，锁文件根节点同步；npm ci --dry-run 通过。
+- 新增 backend/scripts/deps/check_pins.py（镜像要摘要、action 要提交号、工具链和前端版本要 x.y.z）并接入 CI deps 作业；测试 5 通过，含“仓库当前无浮动引用”。
+- 未验证：setup-python 能否装到 3.12.15（推送后 CI 才知道）；compose 重新拉取后的启动（摘要与运行中镜像相同，未重启服务）。
