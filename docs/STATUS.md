@@ -120,4 +120,6 @@
 
 - 2026-11-09：E9 CODEOWNERS、PR 模板、ADR 索引已在 chore/e9-collaboration 提交；默认分支改为 main，main 分支保护已设置。
 
+- 2026-11-09：E11 链接检查脚本和 CI 作业完成，修正 14 处断链；分支 chore/e11-docs。
+
 - 2026-11-09：K1 配置分 11 个域、20 个常量归入配置，默认值 0 差异；分支 chore/k1-config-domains。

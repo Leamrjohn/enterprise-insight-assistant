@@ -684,6 +684,11 @@
 - 第一批 ADR（模块化单体、记忆分表、RLS 控制角色）未写：决定内容需用户确认，不替用户补。
 - 用户批准后用 gh 设置：默认分支 feature/api-contracts → main；main 分支保护（必须 PR、11 项 CI 检查必过且须跟上 main、管理员同样受限、禁止强推和删除、不要求人工审批）。API 读回规则一致；真实拦截效果在下一个 PR 上确认。
 
+## 2026-11-09 E11 文档整理和链接检查（分支 chore/e11-docs）
+- 新增 backend/scripts/docs/check_links.py：检查所有已跟踪 .md 的相对链接目标存在（跳过网址、页内锚点、代码块、冻结的 docs/history/）；CI 新增 Docs links 作业；测试 4 通过。
+- 首次运行 297 个文件查出 14 处断链，全在 docs/audits/for_external_review.md（从根目录移入后相对路径未改），已修正；docs/README.md 目录表里 roadmap/ 仍写“当前执行计划”，改为历史参考。修正后 0 处。
+- 待办：新作业合入后把 Docs links 加进 main 分支保护的必过检查。
+
 ## 2026-11-09 K1 配置分域和常量归位（分支 chore/k1-config-domains）
 - Settings 拆成 app/core/config/ 下 11 个域（app、infra、security、admission、model、tool、context、memory、rag、flags、artifacts），Settings 多重继承各域；环境变量名和 settings.<字段> 写法不变，app/core/settings.py 保留为转发入口；settings.domain(RagConfig) 取单个域。
 - 20 个代码常量归入配置（限流、Planner/Data 重试次数、会话历史 token、上下文压缩 3 项、记忆 3 项、RRF_K、工具循环 8 项），调用点改为运行时读取；测试引用的 MAX_ROWS_WHEN_COMPRESSED、DEFAULT_MEMORY_TTL 保留为“默认值”别名，测试文件未改。
