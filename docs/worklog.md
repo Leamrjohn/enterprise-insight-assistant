@@ -740,3 +740,4 @@
 - 覆盖率：CI unit、integration 作业加 --cov=app 生成 coverage.json，scripts/ci/check_coverage.py 与 tests/coverage_baseline.json 比较，低于基线 0.5 个百分点以上失败；基线只记实测值，不定目标。pytest-cov 6.2.1（带 coverage 7.17.2）进 dev 依赖和 CI 锁。
 - 待我决定：tests/unit/analysis/test_sql_executor.py 有 2 个无条件 skip 的测试，调用的默认业务库路径 A11b 后已拒绝（data_source 为空即 ConnectionNotAllowed），登记为 pending：删除还是改写成用登记的演示连接。
 - 验证：check_test_layers、check_coverage 测试 8 通过；本仓库 7 个跳过文件全部登记。
+- 基线（首次 CI 实测，提交 c665716）：unit 83.46%、integration 51.89%。同一提交另一次运行中 test_app_startup（子进程导入应用，30 秒上限）超时一次，那次 unit 作业整体也慢（83 秒对 66 秒）；未改测试，CI 改用 COVERAGE_CORE=sysmon 降低覆盖率开销。偶发情况需继续观察。

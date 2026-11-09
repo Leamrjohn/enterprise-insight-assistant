@@ -1,3 +1,5 @@
 {
-  "_comment": "E5: measured line coverage per CI suite (scripts/ci/check_coverage.py). Raise freely; lowering needs approval."
+  "_comment": "E5: measured line coverage per CI suite (scripts/ci/check_coverage.py). Raise freely; lowering needs approval.",
+  "unit": 83.46,
+  "integration": 51.89
 }

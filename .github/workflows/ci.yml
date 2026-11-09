@@ -124,6 +124,9 @@ jobs:
         working-directory: backend
         env:
           TEST_PATHS: ${{ matrix.paths }}
+          # Python 3.12 sys.monitoring: lower tracing overhead, also in the
+          # subprocesses some tests start (test_app_startup has a 30 s limit).
+          COVERAGE_CORE: sysmon
         run: |
           read -r -a test_paths <<< "$TEST_PATHS"
           python -m pytest "${test_paths[@]}" -m 'not e2e and not slow' -q --junitxml=test-results/results.xml             --cov=app --cov-report=json:test-results/coverage.json
