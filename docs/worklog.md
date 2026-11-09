@@ -678,3 +678,8 @@
 - frontend/package.json 11 个 latest 改为 package-lock.json 里已安装的确切版本，锁文件根节点同步；npm ci --dry-run 通过。
 - 新增 backend/scripts/deps/check_pins.py（镜像要摘要、action 要提交号、工具链和前端版本要 x.y.z）并接入 CI deps 作业；测试 5 通过，含“仓库当前无浮动引用”。
 - 未验证：setup-python 能否装到 3.12.15（推送后 CI 才知道）；compose 重新拉取后的启动（摘要与运行中镜像相同，未重启服务）。
+
+## 2026-11-09 E9 协作规范（分支 chore/e9-collaboration，未推送）
+- 新增 .github/CODEOWNERS（评测基线、迁移、身份权限、数据源策略、SQL 校验、查询登记、工具守卫、.github、AGENTS.md）、.github/pull_request_template.md（工单、改动、验证层、改前改后、没验证到的、需批准的事）、docs/design/adr/README.md（ADR 模板和索引）。
+- 第一批 ADR（模块化单体、记忆分表、RLS 控制角色）未写：决定内容需用户确认，不替用户补。
+- 用户批准后用 gh 设置：默认分支 feature/api-contracts → main；main 分支保护（必须 PR、11 项 CI 检查必过且须跟上 main、管理员同样受限、禁止强推和删除、不要求人工审批）。API 读回规则一致；真实拦截效果在下一个 PR 上确认。

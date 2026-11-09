@@ -1,0 +1,14 @@
+# E9: changes to these paths need the repository owner's review before they
+# merge into main (branch protection requires code-owner review).  They hold
+# the behavior baselines, schema migrations, permission checks, SQL validation
+# and tool access: the parts AGENTS.md says must not change without approval.
+/backend/tests/fixtures/evaluation_gate/   @Leamrjohn
+/backend/scripts/evaluation/check_behavior_gate.py @Leamrjohn
+/backend/migrations/                       @Leamrjohn
+/backend/app/modules/identity/             @Leamrjohn
+/backend/app/modules/organizations/data_source_policy.py @Leamrjohn
+/backend/app/modules/analysis/data/sql_validator.py @Leamrjohn
+/backend/app/modules/analysis/data/query_registry.py @Leamrjohn
+/backend/app/modules/runtime/tool_guard.py @Leamrjohn
+/.github/                                  @Leamrjohn
+/AGENTS.md                                 @Leamrjohn

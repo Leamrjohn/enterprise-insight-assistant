@@ -117,3 +117,5 @@
 - 2026-11-09：E6 完成，PR #3 合入 main（a413116）。
 - 2026-11-09：E10a 完成，PR #4 以合并提交合入 main（e46bc03），CI 22 项全绿、计数与本地一致；R1 下一步 E2/E3 锁依赖（E6 例外 12-08 到期）。
 - 2026-11-09：E3 镜像摘要、工具链和前端版本全部固定，check_pins.py 接入 CI，测试 5 通过；分支 chore/e3-pin-versions 未推送。
+
+- 2026-11-09：E9 CODEOWNERS、PR 模板、ADR 索引已在 chore/e9-collaboration 提交；默认分支改为 main，main 分支保护已设置。
