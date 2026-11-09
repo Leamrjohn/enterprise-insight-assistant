@@ -138,4 +138,6 @@
 
 - 2026-11-09：O2a 导出器 + Prometheus + Grafana 看板，演练中面板数据与查库一致；分支 chore/o2a-dashboard。
 
+- 2026-11-09：C1 统一分词入口、镜像预置词表，断网容器计数通过；分支 chore/c1-tokenizer。
+
 - 2026-11-09：E5 跳过测试登记表和覆盖率门禁；分支 chore/e5-test-layers。

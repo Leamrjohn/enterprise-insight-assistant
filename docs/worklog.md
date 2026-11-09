@@ -742,6 +742,11 @@
 - 发现（待我决定）：平台库有 1 条模型调用账本 reserved 超过 10 分钟；导出器是否改用专用只读角色（现用 agent_app + 只读事务）。
 - 未验证：正式栈以 profile 启动（等部署）；心跳卷的实际写入（等部署后看面板）。
 
+## 2026-11-09 C1 分词器统一（分支 chore/c1-tokenizer）
+- 新增 app/core/tokenizer.py（编码按进程缓存；DeepSeek 等 tiktoken 不认识的模型用 o200k_base；OpenAI 网关保持“未知模型名报错”的原行为），context_budget、conversations、memory、DeepSeek/OpenAI 网关、measure_context_baseline 共 6 处改走它，代码里不再直接调用 tiktoken。
+- 4 个镜像设置 TIKTOKEN_CACHE_DIR=/opt/tiktoken，构建时预置 o200k_base、cl100k_base。
+- 验证：test_tokenizer 6 通过（与原 o200k 计数逐个相同）；上下文、会话、网关相关测试 48 通过；本分支 api 镜像在 --network none 容器里计数成功（中文问题 12 token，gpt-4 用 cl100k）。
+
 ## 2026-11-09 E5 分层门禁和覆盖率基线（分支 chore/e5-test-layers）
 - backend/tests/test_layers.json 登记 7 个带 skip/skipif/e2e/slow 的测试文件：层、触发方式（ci/manual/pending）、怎么跑；scripts/ci/check_test_layers.py 用语法树识别跳过（字符串里的不算），未登记或登记了却不再跳过都失败；单元测试和 CI unit 作业都会跑。
 - 覆盖率：CI unit、integration 作业加 --cov=app 生成 coverage.json，scripts/ci/check_coverage.py 与 tests/coverage_baseline.json 比较，低于基线 0.5 个百分点以上失败；基线只记实测值，不定目标。pytest-cov 6.2.1（带 coverage 7.17.2）进 dev 依赖和 CI 锁。
