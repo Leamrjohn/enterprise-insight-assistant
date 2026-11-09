@@ -695,3 +695,20 @@
 - 验证：迁移前后 90 个原字段默认值逐个比对 0 差异；新增 test_config_domains 13 通过（含旧常量值、每个字段只属一个域、各域方法不重名、各域校验在 Settings 上生效）；本地 unit+scripts 与 main 对照失败集合完全相同（260 个均为本地无库连接或已有失败），CI 跑数据库测试。
 - 踩坑：①多个域都叫 validate_positive_int，多重继承后只剩一个生效，改为带域名前缀并加不重名测试；②Planner 重试次数改读 Settings 后，无数据库的路由门禁作业 43 题全部 ValidationError（本地复现），作业补上与 unit 相同的占位密码，修后本地 32/43、规则 31 与基线一致。
 - 未做：工具目录（超时、熔断）、EVIDENCE_REVIEW 预算按设计属策略文件，留给后续；冒烟待部署后与其他工单一起跑。
+
+## 2026-11-09 G1 提示词注册表（分支 chore/g1-prompt-registry）
+- 8 个静态系统提示词（planner、知识回答、知识工具、证据核对及选项、三个语义复核）从代码迁到 app/prompts/*.md + manifest.json（版本、变量、sha256）；用脚本从源码语法树自动抽取，f-string 变量转 ${name} 模板，不手抄。新增 runtime/prompts.py（加载时校验文件、哈希、变量；渲染缺或多变量报错；CRLF 不影响哈希）。
+- 任务级 model_call_scope 传 prompt_version=prompts@<16 位哈希>，此后每条模型调用记录都有提示词集版本。
+- 验证：迁移前用旧代码渲染 9 种提示词并记下哈希，迁移后经真实调用路径渲染逐个相同（test_prompt_registry 6 通过）；路由门禁回放录音全部命中（32/43、规则 31，与基线同）；unit+scripts 失败集合与 main 相同。
+- 未做：SQL 生成和 Data 工具提示词动态拼接，留在代码里（待 C4）；“新任务 prompt_version 空值率 0”要部署后查库确认；CI 内容改了但版本没升的门禁（设计 3.3）未做。
+
+## 2026-11-09 R1 分工和授权范围（用户决定）
+- 分工：R1 除 C2（测量）、O3（告警）外由 Claude 代做；C2、O3 是训练工单，放到最后由用户亲手做；R1 段验收等这两个做完后一起过。O1 里依赖 C2 的部分（如每次模型调用的 token 分布）先留占位，注明“待 C2 补”。
+- 授权（用户 2026-11-09 上班前给出，只对 R1 剩余工单有效，R2 起恢复 AGENTS.md 原规则）：可直接新增依赖和工具（锁版本、过 E6 扫描）、新增 agent- 容器、改表迁移（先备份到 artifacts/backups/，E7a 往返通过才部署，部署后冒烟）、单次超过 10 个文件或 400 行、推送分支开 PR 并在 CI 全绿后用合并提交合入 main。
+- 仍不做（遇到就跳过、记入“待我决定”）：删库删卷；改测试或评测期望值；改主链结构、权限逻辑、SQL 校验；批量调用模型；改写 git 历史；AGENTS.md 绝对禁止项。同一思路失败 2 次就记录并换下一个工单。
+- 另：用户批准新增 uv 作为锁文件生成工具；默认分支改为 main、main 分支保护（11 项必过检查、须跟上 main、管理员同样受限）。
+
+## 2026-11-09 E2 后端锁定（分支 chore/e2-backend-lock，提交 3422979）
+- 镜像改用带哈希的 Linux 锁安装：api/beat/report-worker 用 base-linux-py312.lock，worker 加 ml-linux-py312.lock，evaluation 用 CI 锁 + ML 锁；删除 evaluation*.txt、ci-ml.in。update_locks.sh 第 1 步 CI 锁仍用 pip-compile（沿用已有哈希），base 和 ML 改用 uv 0.9.5 解析版本、只下载本平台文件后算哈希：3 步共 607 秒（旧 pip-compile --generate-hashes 跑 ML 锁超过 2 小时未完成）；重跑结果与已提交的 CI 锁、base 锁逐字节相同，ML 锁版本与旧锁一致。
+- 验证：同一提交 api 镜像无缓存构建两次 pip freeze 相同（101 包）；worker 组合（base+ML）和 evaluation 组合（CI+ML）在同一基础镜像各干净安装两次，pip freeze 分别相同（129、143 包，pip check 通过）；worker 镜像无缓存构建两次都在 apt 下载处因网络失败（与锁无关，改用上面的安装比对）。test_locks 5 通过。冒烟（3422979 部署后，10 题）9 成功 + 混合题 awaiting_review，与 A11b 时相同。
+- 遗留：apt 包未锁版本（只锁了基础镜像摘要）；E6 的 4 个 npm 例外 12-08 到期，需升级 vite/vitest（E3 后续）。

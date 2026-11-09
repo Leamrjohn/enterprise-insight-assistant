@@ -7,8 +7,7 @@ ENV PYTHONUNBUFFERED=1
 
 COPY requirements/ requirements/
 
-RUN pip install --upgrade pip \
-    && pip install -r requirements/base.txt
+RUN pip install --require-hashes -r requirements/base-linux-py312.lock
 
 RUN groupadd --gid 10001 app \
     && useradd --uid 10001 --gid app --create-home --shell /usr/sbin/nologin app \
