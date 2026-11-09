@@ -719,9 +719,22 @@
 - 测试：test_watchdog 8 通过（新鲜/过期/缺失/旧文件、子进程退出码、卡住子进程被杀、--check、两种心跳）；pyright、ruff 通过。
 - 未验证：持有任务时卡死再恢复的端到端过程（恢复由已有的租约过期恢复负责，见 test_recovery_delivery、test_stranded_tasks）；正式服务尚未用新命令重启（等合入后部署）。
 
+## 2026-11-09 E4 架构规则：import-linter（分支 chore/e4-import-rules）
+- 新增 backend/.importlinter 两条规则：core 不得引用 app.modules；业务模块分四层（workflow → analysis/knowledge/reporting/conversations/evaluation/reviews/memory/input_artifacts → runtime → documents/organizations/identity/observability），同层可互相引用。现存 41 条违规（core 4 条，如 gateway→runtime、middleware→observability；分层 37 条，多为各模块引用 workflow.models）登记在 ignore_imports，只禁止新增。
+- 发现：app/modules、app/utils 没有 __init__.py（命名空间包），grimp 看不到它们，规则会“全部通过”却什么都没查。正式补文件会让 ruff 把 app 改判为第一方包，约 100 个文件的 import 排序要重排（CI ruff 失败 101 处）；改用 known-third-party 又让 core/db/api 下 18 个文件失败；namespace 根包 grimp 不支持。最终 scripts/ci/lint_imports.sh 只在运行期间临时建这两个文件，跑完删除。待我决定：是否正式补 __init__.py 并统一重排 import（机械改动约 100 个文件）。
+- CI Static 矩阵加 import-linter；import-linter 2.3（带 grimp 3.19）进 dev 依赖和 CI 锁，其余包版本不变。
+- 验证：两条规则 KEPT；故意加 identity→workflow.models 和 core→modules.runtime 两条引用后 BROKEN、exit 1，删掉后恢复。
+
 ## 2026-11-09 O2a 轻量看板（分支 chore/o2a-dashboard）
 - 新增指标导出器 app/modules/observability/metrics_exporter.py（:9108，每次抓取查库：进行中任务、未认领 Outbox 事件及最老年龄、过期租约、卡住任务、账本按结算状态、长时间 reserved、Worker/Beat 心跳年龄；只有计数和年龄，标签不含任务/用户/公司 id）；连接用 agent_app，但强制只读事务（default_transaction_read_only=on）和 5 秒语句超时。prometheus-client 0.22.1 进运行时依赖和锁（其余包不变）。
 - compose observability profile 新增 metrics-exporter、prometheus（v3.5.0，保留 30 天）、grafana（12.0.2，匿名只读、无登录框），镜像按摘要固定，端口只绑 127.0.0.1（9090、3001）；看板和数据源由 ops/observability/ 下文件自动加载。worker、beat 的心跳写入共享卷 heartbeat，导出器只读挂载；镜像预建 /heartbeat 并归 app 用户。
 - 验证：单元 4 通过；本机连正式库跑真实查询：写操作被拒（read-only）。一次性容器（agent-o2a-*，接 agent_default 网络）里 Prometheus target up，Grafana 看板加载，经数据源查到 stranded=0、expired leases=0、reserved_stale=1、inflight=88（均为 awaiting_review），与直接查库一致；演练容器已删除。
 - 发现（待我决定）：平台库有 1 条模型调用账本 reserved 超过 10 分钟；导出器是否改用专用只读角色（现用 agent_app + 只读事务）。
 - 未验证：正式栈以 profile 启动（等部署）；心跳卷的实际写入（等部署后看面板）。
+
+## 2026-11-09 O1 全链路 trace（分支 chore/o1-tracing，叠在 O2a 上）
+- 新增 app/core/tracing.py：属性白名单 safe_attributes（16 个键：id、节点、工具名、模型名、结果、HTTP 方法/路由/状态码等；问题、回答、SQL、提示词、工具参数一律不进）、traceparent 写出与续接、traced_model_call 装饰器。导出只在设置 OTEL_EXPORTER_OTLP_ENDPOINT 时开启（compose 默认空）。
+- 埋点：API 中间件 span（名字用路由模板，不含具体 id）；建任务把 traceparent 写入 analysis_tasks.trace_context（新迁移 c5d6e7f8a9b0，可空，有回退）；Worker 用它续接 trace（task_id、execution_id、company_id、resumed、排队秒数）；8 个图节点各包一层 span（节点逻辑不变）；ToolRuntime.execute 一个 span；DeepSeek/OpenAI 每次物理调用一个 gen_ai.chat span。token 数等依赖 C2 的属性先不记（待 C2 补）。
+- 基础设施（observability profile）：otel-collector（contrib 0.130.0，transform 处理器按同一白名单 keep_keys 二次过滤）、tempo（2.8.1，保留 7 天）、Grafana Tempo 数据源；镜像按摘要固定。opentelemetry-sdk、exporter-otlp-proto-http 1.45.1 进依赖和锁（与 fastapi 已带的 api 1.45.1 对齐，新增 9 个包，原有版本不变）。
+- 验证：test_tracing 6 通过（白名单、API→Worker 同一 trace_id 且父子相连、问题原文和手机号不出现在任何 span、异常只记类名不记消息、API span 用路由模板、Collector 白名单与代码一致）；集成测试 test_task_trace_context 由 CI 跑；import 规则 KEPT。
+- 未验证：部署后在 Tempo 里看一个真实任务的完整链路（部署时做）；迁移在 CI 做往返检查。

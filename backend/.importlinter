@@ -1,0 +1,69 @@
+# E4: import direction rules, checked by `lint-imports` (import-linter) in CI.
+#
+# core must not import business modules, and business modules follow the
+# layers below (a module may import from layers beneath it; modules on one
+# line may import each other).  The imports listed under ignore_imports
+# already existed when the rules were introduced (2026-11-09): they are
+# allowed until fixed, but any new import against the rules fails CI.
+# Remove a line when its import is gone; never add one to get a change through.
+[importlinter]
+root_package = app
+
+[importlinter:contract:core]
+name = core does not import business modules
+type = forbidden
+source_modules = app.core
+forbidden_modules = app.modules
+ignore_imports =
+    app.core.gateway.deepseek -> app.modules.runtime.model_governance
+    app.core.gateway.local -> app.modules.runtime.model_governance
+    app.core.gateway.openai -> app.modules.runtime.model_governance
+    app.core.middleware -> app.modules.observability.rejection_audit
+
+[importlinter:contract:layers]
+name = business module layers
+type = layers
+containers = app.modules
+layers =
+    workflow
+    analysis : knowledge : reporting : conversations : evaluation : reviews : memory : input_artifacts
+    runtime
+    documents : organizations : identity : observability
+ignore_imports =
+    app.modules.conversations.api -> app.modules.workflow.audit.model_call
+    app.modules.conversations.api -> app.modules.workflow.delivery.outbox
+    app.modules.conversations.api -> app.modules.workflow.lifecycle.checkpoint
+    app.modules.conversations.api -> app.modules.workflow.lifecycle.execution_attempt
+    app.modules.conversations.api -> app.modules.workflow.schemas
+    app.modules.conversations.service -> app.modules.workflow.delivery.outbox
+    app.modules.conversations.service -> app.modules.workflow.models
+    app.modules.conversations.service -> app.modules.workflow.repository
+    app.modules.documents.ingestion -> app.modules.knowledge.rag.embeddings_local
+    app.modules.evaluation.observation -> app.modules.workflow.audit.events_models
+    app.modules.evaluation.observation -> app.modules.workflow.audit.model_call
+    app.modules.evaluation.observation -> app.modules.workflow.audit.tool_call
+    app.modules.evaluation.observation -> app.modules.workflow.lifecycle.execution_attempt
+    app.modules.evaluation.observation -> app.modules.workflow.models
+    app.modules.evaluation.workflow -> app.modules.workflow.audit.tool_call
+    app.modules.evaluation.workflow -> app.modules.workflow.models
+    app.modules.input_artifacts.attachment_context -> app.modules.workflow.models
+    app.modules.memory.service -> app.modules.workflow.models
+    app.modules.observability.repository -> app.modules.workflow.lifecycle.capacity
+    app.modules.observability.service -> app.modules.workflow.audit.model_call
+    app.modules.observability.service -> app.modules.workflow.models
+    app.modules.organizations.service -> app.modules.analysis.catalog.schema_discovery
+    app.modules.reviews.api -> app.modules.workflow.delivery.outbox
+    app.modules.reviews.models -> app.modules.workflow.models
+    app.modules.reviews.service -> app.modules.workflow.delivery.outbox
+    app.modules.reviews.service -> app.modules.workflow.lifecycle.task_state
+    app.modules.reviews.service -> app.modules.workflow.models
+    app.modules.runtime.model_governance -> app.modules.workflow.audit.model_call
+    app.modules.runtime.model_governance -> app.modules.workflow.lifecycle.execution_attempt
+    app.modules.runtime.model_governance -> app.modules.workflow.models
+    app.modules.runtime.schemas -> app.modules.analysis.data.data_request
+    app.modules.runtime.tool_guard -> app.modules.analysis.tool_protocol
+    app.modules.runtime.tool_runtime -> app.modules.analysis.tool_protocol
+    app.modules.runtime.tool_runtime -> app.modules.workflow.audit.events
+    app.modules.runtime.tool_runtime -> app.modules.workflow.audit.tool_call
+    app.modules.runtime.tool_runtime -> app.modules.workflow.lifecycle.execution_attempt
+    app.modules.runtime.tool_runtime -> app.modules.workflow.models
