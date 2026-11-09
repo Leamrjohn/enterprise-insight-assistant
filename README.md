@@ -189,7 +189,7 @@ backend/
   tests/{unit,integration,scripts,fixtures}
   scripts/{data,evaluation,ops,db}
   docker/               api / worker / evaluation 镜像定义
-  requirements/         base / ml / evaluation 依赖
+  requirements/         依赖输入（base.txt、ml.txt）和带哈希的 Linux 锁文件（*.lock，用 scripts/ops/update-locks.ps1 生成）
 frontend/src/           React 工作台
 data/business_knowledge_base/  可复现演示语料
 docs/                   计划、架构、设计稿、运维、审计、证据（见 docs/README.md）
