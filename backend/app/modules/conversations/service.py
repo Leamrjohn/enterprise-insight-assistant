@@ -3,6 +3,7 @@
 import re
 from dataclasses import dataclass
 
+from app.core.settings import get_settings
 from app.modules.conversations.models import Conversation, ConversationMessage
 from app.modules.conversations.repository import (
     create_conversation,
@@ -423,7 +424,6 @@ def _resolve_ready_owned_artifact_version_ids(
 MAX_CONTEXT_CHARS = 6000
 MAX_CONTEXT_MESSAGE_CHARS = 2000
 MIN_CONTEXT_FRAGMENT_CHARS = 1000
-MAX_CONTEXT_TOKENS = 2048
 COMPRESS_HISTORY_AT = 0.8
 COMPRESSED_ASSISTANT_CHARS = 400
 MAX_STANDING_CONSTRAINTS = 5
@@ -474,9 +474,11 @@ def build_conversation_context(
     max_chars: int = MAX_CONTEXT_CHARS,
     max_message_chars: int = MAX_CONTEXT_MESSAGE_CHARS,
     min_fragment_chars: int = MIN_CONTEXT_FRAGMENT_CHARS,
-    max_tokens: int = MAX_CONTEXT_TOKENS,
+    max_tokens: int | None = None,
     max_messages: int = MAX_CONTEXT_MESSAGES,
 ) -> dict:
+    if max_tokens is None:
+        max_tokens = get_settings().context_history_max_tokens
     if max_chars <= 0:
         raise ValueError("max_chars must be greater than 0")
 

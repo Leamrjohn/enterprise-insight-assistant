@@ -12,10 +12,11 @@ import logging
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Literal
+from typing import Any, Literal
 
 from app.core.exceptions import PermanentModelError, RetryableModelError
 from app.core.gateway.base import ModelGateway, ToolCall
+from app.core.settings import get_settings
 from pydantic import BaseModel, ValidationError
 
 logger = logging.getLogger(__name__)
@@ -72,14 +73,22 @@ class ToolReply:
     error_code: str | None = None
 
 
+def _setting(name: str) -> Callable[[], Any]:
+    return lambda: getattr(get_settings(), name)
+
+
 @dataclass(frozen=True)
 class LoopLimits:
-    max_rounds: int = 6
-    max_tool_calls: int = 8
-    max_repairs: int = 2
-    max_seconds: float = 90.0
-    model_retries: int = 1
-    backoff_seconds: float = 1.0
+    """Defaults come from the TOOL_LOOP_* settings (K1)."""
+
+    max_rounds: int = field(default_factory=_setting("tool_loop_max_rounds"))
+    max_tool_calls: int = field(default_factory=_setting("tool_loop_max_tool_calls"))
+    max_repairs: int = field(default_factory=_setting("tool_loop_max_repairs"))
+    max_seconds: float = field(default_factory=_setting("tool_loop_max_seconds"))
+    model_retries: int = field(default_factory=_setting("tool_loop_model_retries"))
+    backoff_seconds: float = field(
+        default_factory=_setting("tool_loop_backoff_seconds")
+    )
 
 
 @dataclass

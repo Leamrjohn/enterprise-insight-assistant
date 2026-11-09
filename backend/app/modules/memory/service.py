@@ -6,6 +6,8 @@ import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
+from app.core.config.memory import MemoryConfig
+from app.core.settings import get_settings
 from app.modules.documents.search_tokens import jieba_tokens
 from app.modules.memory.models import AnalysisMemory, MemoryAuditEvent
 from app.modules.memory.sources import MemorySource
@@ -16,9 +18,10 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from tiktoken import get_encoding
 
-MAX_PLANNER_MEMORY_TOKENS = 1024
-DEFAULT_MEMORY_TTL = timedelta(days=30)
-SOFT_DELETE_RETENTION = timedelta(days=90)
+# Defaults only; the running values come from MEMORY_* settings (K1).
+DEFAULT_MEMORY_TTL = timedelta(
+    days=MemoryConfig.model_fields["memory_ttl_days"].default
+)
 PERSISTABLE_MEMORY_STATUSES = {"completed", "partial"}
 MIN_RELEVANCE = 0.3
 RECENCY_HALF_LIFE_DAYS = 90
@@ -79,9 +82,11 @@ def select_planner_memories(
     user_id: int,
     question: str | None = None,
     limit: int = 8,
-    max_tokens: int = MAX_PLANNER_MEMORY_TOKENS,
+    max_tokens: int | None = None,
     record_use: bool = False,
 ) -> tuple[list[dict], dict]:
+    if max_tokens is None:
+        max_tokens = get_settings().memory_planner_max_tokens
     """Select whole authorized memories and return a redacted selection manifest.
 
     Code decides what may be used: company, user, status and both kinds of expiry
@@ -258,7 +263,9 @@ def persist_report_memory(
         "limitations": [limitation.model_dump() for limitation in report.limitations],
     }
     subject_key = subject_key_for(task.question or "")
-    expires_at = datetime.now(timezone.utc) + DEFAULT_MEMORY_TTL
+    expires_at = datetime.now(timezone.utc) + timedelta(
+        days=get_settings().memory_ttl_days
+    )
     previous = (
         db.query(AnalysisMemory)
         .filter(
@@ -464,7 +471,9 @@ def cleanup_memories(
             actor_kind="system",
             details={"previous_status": previous_status},
         )
-    purge_before = now - SOFT_DELETE_RETENTION
+    purge_before = now - timedelta(
+        days=get_settings().memory_soft_delete_retention_days
+    )
     purgeable = (
         db.query(AnalysisMemory)
         .filter(

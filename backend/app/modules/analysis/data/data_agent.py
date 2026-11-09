@@ -8,6 +8,7 @@ from app.core.exceptions import (
     RetryableModelError,
     StructuredOutputError,
 )
+from app.core.settings import get_settings
 from app.modules.analysis.agent_protocol import Agent, AgentInput, AgentOutput
 from app.modules.analysis.catalog.snapshot_catalog import SnapshotCatalog
 from app.modules.analysis.data.query_contract import QueryContract
@@ -22,7 +23,9 @@ from app.modules.organizations.models import BusinessDataSource
 from app.modules.reporting.semantic_review_service import SemanticReviewService
 from pydantic import ValidationError
 
-MAX_DATA_ATTEMPTS = 2
+
+def _max_data_attempts() -> int:
+    return get_settings().data_max_attempts
 
 
 def _concept_key(value: object) -> str:
@@ -126,7 +129,7 @@ class DataAgent(Agent):
             "sql_attempts": 0,
         }
 
-        for attempt_index in range(MAX_DATA_ATTEMPTS):
+        for attempt_index in range(_max_data_attempts()):
             try:
                 attempts["model_attempts"] += 1
                 candidate = self._sql_generator.generate(
@@ -144,7 +147,7 @@ class DataAgent(Agent):
                     error_code="sql_generation_permanent_error",
                 )
             except RetryableModelError:
-                if attempt_index == MAX_DATA_ATTEMPTS - 1:
+                if attempt_index == _max_data_attempts() - 1:
                     return AgentOutput(
                         success=False,
                         attempts=attempts,
@@ -155,7 +158,7 @@ class DataAgent(Agent):
                 previous_sql = None
                 continue
             except StructuredOutputError:
-                if attempt_index == MAX_DATA_ATTEMPTS - 1:
+                if attempt_index == _max_data_attempts() - 1:
                     return AgentOutput(
                         success=False,
                         attempts=attempts,
@@ -252,7 +255,7 @@ class DataAgent(Agent):
                         ],
                     )
                 if semantic_review.decision == "repair":
-                    if attempt_index < MAX_DATA_ATTEMPTS - 1:
+                    if attempt_index < _max_data_attempts() - 1:
                         repair_reason = "sql_semantic_error"
                         previous_sql = candidate.sql
                         continue
@@ -279,7 +282,7 @@ class DataAgent(Agent):
                 input.context.get("semantic_review_enabled")
                 and metric_assessment.status != "supported"
             ):
-                if attempt_index < MAX_DATA_ATTEMPTS - 1:
+                if attempt_index < _max_data_attempts() - 1:
                     repair_reason = "metric_contract_" + metric_assessment.status
                     previous_sql = candidate.sql
                     continue
@@ -345,7 +348,7 @@ class DataAgent(Agent):
                     attempts=attempts,
                     evidence=[evidence],
                 )
-            if result.repairable and attempt_index < MAX_DATA_ATTEMPTS - 1:
+            if result.repairable and attempt_index < _max_data_attempts() - 1:
                 repair_reason = result.error_code or "sql_validation_error"
                 previous_sql = candidate.sql
                 continue

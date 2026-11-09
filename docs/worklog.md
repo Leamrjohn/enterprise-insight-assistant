@@ -689,6 +689,13 @@
 - 首次运行 297 个文件查出 14 处断链，全在 docs/audits/for_external_review.md（从根目录移入后相对路径未改），已修正；docs/README.md 目录表里 roadmap/ 仍写“当前执行计划”，改为历史参考。修正后 0 处。
 - 待办：新作业合入后把 Docs links 加进 main 分支保护的必过检查。
 
+## 2026-11-09 K1 配置分域和常量归位（分支 chore/k1-config-domains）
+- Settings 拆成 app/core/config/ 下 11 个域（app、infra、security、admission、model、tool、context、memory、rag、flags、artifacts），Settings 多重继承各域；环境变量名和 settings.<字段> 写法不变，app/core/settings.py 保留为转发入口；settings.domain(RagConfig) 取单个域。
+- 20 个代码常量归入配置（限流、Planner/Data 重试次数、会话历史 token、上下文压缩 3 项、记忆 3 项、RRF_K、工具循环 8 项），调用点改为运行时读取；测试引用的 MAX_ROWS_WHEN_COMPRESSED、DEFAULT_MEMORY_TTL 保留为“默认值”别名，测试文件未改。
+- 验证：迁移前后 90 个原字段默认值逐个比对 0 差异；新增 test_config_domains 13 通过（含旧常量值、每个字段只属一个域、各域方法不重名、各域校验在 Settings 上生效）；本地 unit+scripts 与 main 对照失败集合完全相同（260 个均为本地无库连接或已有失败），CI 跑数据库测试。
+- 踩坑：①多个域都叫 validate_positive_int，多重继承后只剩一个生效，改为带域名前缀并加不重名测试；②Planner 重试次数改读 Settings 后，无数据库的路由门禁作业 43 题全部 ValidationError（本地复现），作业补上与 unit 相同的占位密码，修后本地 32/43、规则 31 与基线一致。
+- 未做：工具目录（超时、熔断）、EVIDENCE_REVIEW 预算按设计属策略文件，留给后续；冒烟待部署后与其他工单一起跑。
+
 ## 2026-11-09 G1 提示词注册表（分支 chore/g1-prompt-registry）
 - 8 个静态系统提示词（planner、知识回答、知识工具、证据核对及选项、三个语义复核）从代码迁到 app/prompts/*.md + manifest.json（版本、变量、sha256）；用脚本从源码语法树自动抽取，f-string 变量转 ${name} 模板，不手抄。新增 runtime/prompts.py（加载时校验文件、哈希、变量；渲染缺或多变量报错；CRLF 不影响哈希）。
 - 任务级 model_call_scope 传 prompt_version=prompts@<16 位哈希>，此后每条模型调用记录都有提示词集版本。
