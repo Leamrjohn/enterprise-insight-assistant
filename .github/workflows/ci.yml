@@ -50,7 +50,7 @@ jobs:
       - name: Import rules
         if: matrix.check == 'import-linter'
         working-directory: backend
-        run: lint-imports --no-cache
+        run: bash scripts/ci/lint_imports.sh
 
   backend:
     name: Backend (${{ matrix.suite }})
