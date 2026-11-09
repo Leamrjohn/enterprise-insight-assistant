@@ -189,11 +189,14 @@ jobs:
       - name: Install pinned pip-audit
         run: python -m pip install --require-hashes -r backend/requirements/security-tools.lock
       # The audit tools exit non-zero on any finding; check_audit.py decides what blocks.
-      - name: Audit backend lock
+      # The CI lock is what tests run on; the base and ML locks are what the images install.
+      - name: Audit backend locks
         run: |
-          python -m pip_audit -r backend/requirements/ci-linux-py312.lock --require-hashes --disable-pip \
-            --progress-spinner off -f json -o pip-audit.json || test -s pip-audit.json
-          python backend/scripts/security/check_audit.py pip pip-audit.json
+          for lock in ci base ml; do
+            python -m pip_audit -r "backend/requirements/$lock-linux-py312.lock" --require-hashes --disable-pip \
+              --progress-spinner off -f json -o "pip-audit-$lock.json" || test -s "pip-audit-$lock.json"
+            python backend/scripts/security/check_audit.py pip "pip-audit-$lock.json"
+          done
       - name: Audit frontend lock
         if: ${{ !cancelled() }}
         run: |
@@ -285,7 +288,7 @@ jobs:
           python -m pip install --root-user-action=ignore --require-hashes -r backend/requirements/ci-linux-py312.lock
           python -m pip install --root-user-action=ignore --no-index --no-build-isolation -r backend/requirements/base.txt -e './backend[dev]'
           python -m pip install --root-user-action=ignore --require-hashes \
-            --extra-index-url https://download.pytorch.org/whl/cpu -r backend/requirements/ci-ml-linux-py312.lock
+            --extra-index-url https://download.pytorch.org/whl/cpu -r backend/requirements/ml-linux-py312.lock
           python -m pip check
       - name: Apply migrations as migration role
         working-directory: backend

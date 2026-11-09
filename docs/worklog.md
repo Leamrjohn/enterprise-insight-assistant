@@ -701,3 +701,20 @@
 - 任务级 model_call_scope 传 prompt_version=prompts@<16 位哈希>，此后每条模型调用记录都有提示词集版本。
 - 验证：迁移前用旧代码渲染 9 种提示词并记下哈希，迁移后经真实调用路径渲染逐个相同（test_prompt_registry 6 通过）；路由门禁回放录音全部命中（32/43、规则 31，与基线同）；unit+scripts 失败集合与 main 相同。
 - 未做：SQL 生成和 Data 工具提示词动态拼接，留在代码里（待 C4）；“新任务 prompt_version 空值率 0”要部署后查库确认；CI 内容改了但版本没升的门禁（设计 3.3）未做。
+
+## 2026-11-09 R1 分工和授权范围（用户决定）
+- 分工：R1 除 C2（测量）、O3（告警）外由 Claude 代做；C2、O3 是训练工单，放到最后由用户亲手做；R1 段验收等这两个做完后一起过。O1 里依赖 C2 的部分（如每次模型调用的 token 分布）先留占位，注明“待 C2 补”。
+- 授权（用户 2026-11-09 上班前给出，只对 R1 剩余工单有效，R2 起恢复 AGENTS.md 原规则）：可直接新增依赖和工具（锁版本、过 E6 扫描）、新增 agent- 容器、改表迁移（先备份到 artifacts/backups/，E7a 往返通过才部署，部署后冒烟）、单次超过 10 个文件或 400 行、推送分支开 PR 并在 CI 全绿后用合并提交合入 main。
+- 仍不做（遇到就跳过、记入“待我决定”）：删库删卷；改测试或评测期望值；改主链结构、权限逻辑、SQL 校验；批量调用模型；改写 git 历史；AGENTS.md 绝对禁止项。同一思路失败 2 次就记录并换下一个工单。
+- 另：用户批准新增 uv 作为锁文件生成工具；默认分支改为 main、main 分支保护（11 项必过检查、须跟上 main、管理员同样受限）。
+
+## 2026-11-09 E2 后端锁定（分支 chore/e2-backend-lock，提交 3422979）
+- 镜像改用带哈希的 Linux 锁安装：api/beat/report-worker 用 base-linux-py312.lock，worker 加 ml-linux-py312.lock，evaluation 用 CI 锁 + ML 锁；删除 evaluation*.txt、ci-ml.in。update_locks.sh 第 1 步 CI 锁仍用 pip-compile（沿用已有哈希），base 和 ML 改用 uv 0.9.5 解析版本、只下载本平台文件后算哈希：3 步共 607 秒（旧 pip-compile --generate-hashes 跑 ML 锁超过 2 小时未完成）；重跑结果与已提交的 CI 锁、base 锁逐字节相同，ML 锁版本与旧锁一致。
+- 验证：同一提交 api 镜像无缓存构建两次 pip freeze 相同（101 包）；worker 组合（base+ML）和 evaluation 组合（CI+ML）在同一基础镜像各干净安装两次，pip freeze 分别相同（129、143 包，pip check 通过）；worker 镜像无缓存构建两次都在 apt 下载处因网络失败（与锁无关，改用上面的安装比对）。test_locks 5 通过。冒烟（3422979 部署后，10 题）9 成功 + 混合题 awaiting_review，与 A11b 时相同。
+- 遗留：apt 包未锁版本（只锁了基础镜像摘要）；E6 的 4 个 npm 例外 12-08 到期，需升级 vite/vitest（E3 后续）。
+
+## 2026-11-09 O4 探活：心跳和看门狗（分支 chore/o4-watchdog）
+- 新增 app/core/heartbeat.py（Worker 用 bootstep 挂在自身定时器上、即主事件循环里每 30 秒写心跳；Beat 用 HeartbeatScheduler 每次 tick 写）和 app/core/watchdog.py（作为容器主进程启动 celery 子进程、转发停止信号，心跳超过 120 秒或启动 180 秒内没有心跳就杀子进程并退出 1，交给 restart: 重启）；compose 的 worker、beat、report-worker 改用看门狗启动并加 healthcheck（只作展示）。
+- 演练（一次性容器 agent-o4-drill，挂载本分支代码，Redis 15 号库、test 队列，不碰正式服务）：心跳 30 秒一次；kill -STOP celery 主进程后约 40 秒（阈值调成 60 秒）日志出现 watchdog_restart，RestartCount 0→1，重启后心跳恢复、--check 通过。Beat 同样写心跳。演练留下的 4 个 Redis 键已删除。
+- 测试：test_watchdog 8 通过（新鲜/过期/缺失/旧文件、子进程退出码、卡住子进程被杀、--check、两种心跳）；pyright、ruff 通过。
+- 未验证：持有任务时卡死再恢复的端到端过程（恢复由已有的租约过期恢复负责，见 test_recovery_delivery、test_stranded_tasks）；正式服务尚未用新命令重启（等合入后部署）。

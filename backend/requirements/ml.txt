@@ -1,8 +1,12 @@
-# Installed only by the CPU model-worker image.  Keep the runtime image free
-# of local model dependencies.
+# Local model stack, installed only by the worker and evaluation images (and the
+# CI behavior gate) on top of the base or CI lock.  Locked into
+# ml-linux-py312.lock by scripts/deps/update_locks.sh; torch comes from the
+# PyTorch CPU index as 2.6.0+cpu.
+torch==2.6.0
 sentence-transformers==5.7.0
 # transformers 5.19.0 calls torch.accelerator.current_accelerator() during
 # import, which fails on the project's CPU-only torch 2.6.0 worker image.
 # Keep the tested sentence-transformers 5.7.0 CPU-compatible release here.
 transformers==5.14.1
-Pillow==12.3.0
+# The worker's document parser (OCR input images).
+Pillow==13.0.0

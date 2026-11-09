@@ -2,6 +2,7 @@ from celery import Celery
 from celery.schedules import crontab
 from celery.signals import setup_logging
 
+from app.core.heartbeat import WorkerHeartbeat
 from app.core.logging import configure_logging
 from app.core.settings import get_settings
 from app.core.tracing import setup_tracing
@@ -21,6 +22,10 @@ celery_app = Celery(
     broker=settings.redis_url,
     backend=settings.redis_url,
 )
+# O4: the worker touches its heartbeat file from its own event loop.
+if celery_app.steps is None:  # set by Celery.__init__; typed as optional
+    raise RuntimeError("Celery app has no bootstep registry")
+celery_app.steps["worker"].add(WorkerHeartbeat)
 
 
 celery_app.conf.update(
