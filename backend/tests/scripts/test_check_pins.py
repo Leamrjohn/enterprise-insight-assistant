@@ -1,6 +1,7 @@
 """E3: images, actions, toolchains and frontend versions must not float."""
 
 import json
+import subprocess
 import sys
 from pathlib import Path
 
@@ -77,3 +78,19 @@ def test_main_fails_on_a_floating_reference(tmp_path, capsys):
 
 def test_repository_has_no_floating_reference():
     assert find_problems(Path(__file__).resolve().parents[3]) == []
+
+
+def test_untracked_files_in_a_checkout_are_not_checked(tmp_path):
+    def git(*args):
+        subprocess.run(["git", *args], cwd=tmp_path, check=True, capture_output=True)
+
+    git("init", "-q")
+    (tmp_path / "docker-compose.yml").write_text(
+        f"    image: redis:7.4.9{DIGEST}\n", encoding="utf-8"
+    )
+    git("add", "docker-compose.yml")
+    old = tmp_path / "tmp/old-worktree/backend"
+    old.mkdir(parents=True)
+    (old / "api.Dockerfile").write_text("FROM python:3.12-slim\n", encoding="utf-8")
+
+    assert find_problems(tmp_path) == []
