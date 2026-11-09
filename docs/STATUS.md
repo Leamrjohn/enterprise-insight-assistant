@@ -112,3 +112,4 @@
 - 2026-11-08：E1 全历史扫描 0 个真实密钥（4 条误报）；待批准推送并开 PR。
 - 2026-11-08：已推送 work/smoke-baseline，开 PR #2（合入 main，未合并），CI 首次运行中，Auto-fix 已开启。
 - 2026-11-08：E1 完成，PR #2 以合并提交合入 main（387d64f）；之后每个工单从 main 开短分支。
+- 2026-11-09：E6 已在 chore/e6-security-scan 提交（secrets + deps 作业），本地验证通过；待批准推送并开 PR。

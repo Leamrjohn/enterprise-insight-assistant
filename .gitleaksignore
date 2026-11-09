@@ -1,0 +1,7 @@
+# E6: reviewed false positives, pinned to the exact commit, file, rule and line.
+# The fixture's document keys ("safety-stock-v1", "complaint-v2", ...) look like
+# `key: <random string>` to the generic-api-key rule; they are not credentials.
+0818d0d5082340035c8685fb85ee951b9902313e:backend/tests/fixtures/evaluation_retrieval/version_traps_v1.json:generic-api-key:14
+0818d0d5082340035c8685fb85ee951b9902313e:backend/tests/fixtures/evaluation_retrieval/version_traps_v1.json:generic-api-key:15
+0818d0d5082340035c8685fb85ee951b9902313e:backend/tests/fixtures/evaluation_retrieval/version_traps_v1.json:generic-api-key:20
+0818d0d5082340035c8685fb85ee951b9902313e:backend/tests/fixtures/evaluation_retrieval/version_traps_v1.json:generic-api-key:21

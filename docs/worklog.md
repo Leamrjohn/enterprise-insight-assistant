@@ -660,3 +660,8 @@
 - 推送 work/smoke-baseline，PR #2 首次 CI：pyright 26 个历史类型错误（10 个文件），只补类型和 None 检查修复（0fa865a），本地 pyright 0、测试 1608 通过；第二轮 CI 14/14 通过，integration 任务输出 migration round trip ok。
 - 用户选择合并提交（merge commit）合入 main（387d64f），原有提交历史保留；main 现为唯一主线，work/smoke-baseline 相对 main 无多余提交。
 - 此后每个工单从 main 开短分支，CI 全绿后合并（完整计划第 2.7 节）。本条记录在短分支 chore/e1-record 上，未推送。
+
+## 2026-11-09 E6 安全扫描接入 CI（分支 chore/e6-security-scan，未推送）
+- secrets 作业：gitleaks v8.18.4 按镜像摘要锁定，扫全历史；4 条已核实误报按“提交:文件:规则:行”精确放行（.gitleaksignore）。本地：仓库 407 个提交 0 条、exit 0；临时克隆里提交假 AWS key 后 1 条、exit 1。
+- deps 作业：pip-audit 2.7.3 由带哈希的 security-tools.lock 安装；判定交给 check_audit.py（后端全部拦、前端 high 起拦，例外须写理由和到期日，过期即失败）。现有 pillow/pypdf/vite/nanoid/source-map-js/undici 列入例外，到期 2026-12-08，升级归 E2/E3。
+- 验证：check_audit 测试 13 通过、tests/scripts 129 通过、pyright 0；干净容器重放 deps 步骤通过，去掉例外后 pip 60 条、npm 9 条被拦。CI 上实际运行未验证（未推送）；trivy 镜像扫描按决定暂缓。
