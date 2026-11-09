@@ -673,6 +673,17 @@
 - 检索慢的原因：compose 的 evaluation 服务没设 HF_HOME，每次重新下载约 1.6GB 模型（建索引 265～324 秒，有缓存后 12.7 秒）；另外 8 策略全跑时每个重排策略约 190～225 秒。待办：给 evaluation 服务挂模型缓存（不在本工单）。
 - CI 首跑：gitleaks 把 100 个录音里的请求哈希字段（"key": 64 位十六进制，等于文件名）报为 generic-api-key，逐条登记指纹到 .gitleaksignore（重录后要重新生成）；之后 22 项全绿。CI 上 SQL 21/24、检索各计数与本地完全一致；数据作业首跑约 11 分钟（含模型下载）。
 
+## 2026-11-09 E3 版本固定（分支 chore/e3-pin-versions，未推送）
+- 4 个 Dockerfile 的 python:3.12-slim、compose 和 CI 的全部镜像加 @sha256 摘要（摘要取自本机正在用的镜像，行为不变）；redis:7 → 7.4.9、node:22-alpine → 22.23.1-alpine；CI 的 python-version 3.12 → 3.12.15、node-version 22 → 22.23.1（与镜像内版本一致）。
+- frontend/package.json 11 个 latest 改为 package-lock.json 里已安装的确切版本，锁文件根节点同步；npm ci --dry-run 通过。
+- 新增 backend/scripts/deps/check_pins.py（镜像要摘要、action 要提交号、工具链和前端版本要 x.y.z）并接入 CI deps 作业；测试 5 通过，含“仓库当前无浮动引用”。
+- 未验证：setup-python 能否装到 3.12.15（推送后 CI 才知道）；compose 重新拉取后的启动（摘要与运行中镜像相同，未重启服务）。
+
+## 2026-11-09 E9 协作规范（分支 chore/e9-collaboration，未推送）
+- 新增 .github/CODEOWNERS（评测基线、迁移、身份权限、数据源策略、SQL 校验、查询登记、工具守卫、.github、AGENTS.md）、.github/pull_request_template.md（工单、改动、验证层、改前改后、没验证到的、需批准的事）、docs/design/adr/README.md（ADR 模板和索引）。
+- 第一批 ADR（模块化单体、记忆分表、RLS 控制角色）未写：决定内容需用户确认，不替用户补。
+- 用户批准后用 gh 设置：默认分支 feature/api-contracts → main；main 分支保护（必须 PR、11 项 CI 检查必过且须跟上 main、管理员同样受限、禁止强推和删除、不要求人工审批）。API 读回规则一致；真实拦截效果在下一个 PR 上确认。
+
 ## 2026-11-09 R1 分工和授权范围（用户决定）
 - 分工：R1 除 C2（测量）、O3（告警）外由 Claude 代做；C2、O3 是训练工单，放到最后由用户亲手做；R1 段验收等这两个做完后一起过。O1 里依赖 C2 的部分（如每次模型调用的 token 分布）先留占位，注明“待 C2 补”。
 - 授权（用户 2026-11-09 上班前给出，只对 R1 剩余工单有效，R2 起恢复 AGENTS.md 原规则）：可直接新增依赖和工具（锁版本、过 E6 扫描）、新增 agent- 容器、改表迁移（先备份到 artifacts/backups/，E7a 往返通过才部署，部署后冒烟）、单次超过 10 个文件或 400 行、推送分支开 PR 并在 CI 全绿后用合并提交合入 main。
