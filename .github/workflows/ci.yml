@@ -126,7 +126,15 @@ jobs:
           TEST_PATHS: ${{ matrix.paths }}
         run: |
           read -r -a test_paths <<< "$TEST_PATHS"
-          python -m pytest "${test_paths[@]}" -m 'not e2e and not slow' -q --junitxml=test-results/results.xml
+          python -m pytest "${test_paths[@]}" -m 'not e2e and not slow' -q --junitxml=test-results/results.xml             --cov=app --cov-report=json:test-results/coverage.json
+      # E5: coverage may not fall below tests/coverage_baseline.json.
+      - name: Coverage does not drop
+        working-directory: backend
+        run: python scripts/ci/check_coverage.py "${{ matrix.suite }}" test-results/coverage.json
+      - name: Skipped tests have a run time
+        if: matrix.suite == 'unit'
+        working-directory: backend
+        run: python scripts/ci/check_test_layers.py
       - name: Preserve test results
         if: ${{ !cancelled() && steps.tests.outcome != 'skipped' }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4

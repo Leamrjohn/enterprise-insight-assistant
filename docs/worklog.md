@@ -724,3 +724,9 @@
 - 发现：app/modules、app/utils 没有 __init__.py（命名空间包），grimp 看不到它们，规则会“全部通过”却什么都没查。正式补文件会让 ruff 把 app 改判为第一方包，约 100 个文件的 import 排序要重排（CI ruff 失败 101 处）；改用 known-third-party 又让 core/db/api 下 18 个文件失败；namespace 根包 grimp 不支持。最终 scripts/ci/lint_imports.sh 只在运行期间临时建这两个文件，跑完删除。待我决定：是否正式补 __init__.py 并统一重排 import（机械改动约 100 个文件）。
 - CI Static 矩阵加 import-linter；import-linter 2.3（带 grimp 3.19）进 dev 依赖和 CI 锁，其余包版本不变。
 - 验证：两条规则 KEPT；故意加 identity→workflow.models 和 core→modules.runtime 两条引用后 BROKEN、exit 1，删掉后恢复。
+
+## 2026-11-09 E5 分层门禁和覆盖率基线（分支 chore/e5-test-layers）
+- backend/tests/test_layers.json 登记 7 个带 skip/skipif/e2e/slow 的测试文件：层、触发方式（ci/manual/pending）、怎么跑；scripts/ci/check_test_layers.py 用语法树识别跳过（字符串里的不算），未登记或登记了却不再跳过都失败；单元测试和 CI unit 作业都会跑。
+- 覆盖率：CI unit、integration 作业加 --cov=app 生成 coverage.json，scripts/ci/check_coverage.py 与 tests/coverage_baseline.json 比较，低于基线 0.5 个百分点以上失败；基线只记实测值，不定目标。pytest-cov 6.2.1（带 coverage 7.17.2）进 dev 依赖和 CI 锁。
+- 待我决定：tests/unit/analysis/test_sql_executor.py 有 2 个无条件 skip 的测试，调用的默认业务库路径 A11b 后已拒绝（data_source 为空即 ConnectionNotAllowed），登记为 pending：删除还是改写成用登记的演示连接。
+- 验证：check_test_layers、check_coverage 测试 8 通过；本仓库 7 个跳过文件全部登记。
