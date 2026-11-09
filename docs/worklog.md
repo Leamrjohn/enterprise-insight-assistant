@@ -725,6 +725,9 @@
 - CI Static 矩阵加 import-linter；import-linter 2.3（带 grimp 3.19）进 dev 依赖和 CI 锁，其余包版本不变。
 - 验证：两条规则 KEPT；故意加 identity→workflow.models 和 core→modules.runtime 两条引用后 BROKEN、exit 1，删掉后恢复。
 
+## 2026-11-09 E3 修复：check_pins 只查已跟踪文件（分支 fix/e3-check-tracked-files）
+- 症状：主目录里 tmp/ 下的旧评测工作树有 23 处未固定的 Dockerfile，本地 test_repository_has_no_floating_reference 失败（CI 是干净检出所以没暴露）。根因：用 glob 扫目录。改为 git ls-files，非 git 目录才退回扫描；新增未跟踪文件不检查的测试，6 通过；主目录运行通过。
+
 ## 2026-11-09 E5 分层门禁和覆盖率基线（分支 chore/e5-test-layers）
 - backend/tests/test_layers.json 登记 7 个带 skip/skipif/e2e/slow 的测试文件：层、触发方式（ci/manual/pending）、怎么跑；scripts/ci/check_test_layers.py 用语法树识别跳过（字符串里的不算），未登记或登记了却不再跳过都失败；单元测试和 CI unit 作业都会跑。
 - 覆盖率：CI unit、integration 作业加 --cov=app 生成 coverage.json，scripts/ci/check_coverage.py 与 tests/coverage_baseline.json 比较，低于基线 0.5 个百分点以上失败；基线只记实测值，不定目标。pytest-cov 6.2.1（带 coverage 7.17.2）进 dev 依赖和 CI 锁。
