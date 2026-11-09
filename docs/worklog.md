@@ -678,3 +678,9 @@
 - frontend/package.json 11 个 latest 改为 package-lock.json 里已安装的确切版本，锁文件根节点同步；npm ci --dry-run 通过。
 - 新增 backend/scripts/deps/check_pins.py（镜像要摘要、action 要提交号、工具链和前端版本要 x.y.z）并接入 CI deps 作业；测试 5 通过，含“仓库当前无浮动引用”。
 - 未验证：setup-python 能否装到 3.12.15（推送后 CI 才知道）；compose 重新拉取后的启动（摘要与运行中镜像相同，未重启服务）。
+
+## 2026-11-09 G1 提示词注册表（分支 chore/g1-prompt-registry）
+- 8 个静态系统提示词（planner、知识回答、知识工具、证据核对及选项、三个语义复核）从代码迁到 app/prompts/*.md + manifest.json（版本、变量、sha256）；用脚本从源码语法树自动抽取，f-string 变量转 ${name} 模板，不手抄。新增 runtime/prompts.py（加载时校验文件、哈希、变量；渲染缺或多变量报错；CRLF 不影响哈希）。
+- 任务级 model_call_scope 传 prompt_version=prompts@<16 位哈希>，此后每条模型调用记录都有提示词集版本。
+- 验证：迁移前用旧代码渲染 9 种提示词并记下哈希，迁移后经真实调用路径渲染逐个相同（test_prompt_registry 6 通过）；路由门禁回放录音全部命中（32/43、规则 31，与基线同）；unit+scripts 失败集合与 main 相同。
+- 未做：SQL 生成和 Data 工具提示词动态拼接，留在代码里（待 C4）；“新任务 prompt_version 空值率 0”要部署后查库确认；CI 内容改了但版本没升的门禁（设计 3.3）未做。

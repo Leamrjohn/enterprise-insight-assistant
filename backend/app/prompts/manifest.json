@@ -1,0 +1,60 @@
+{
+  "planner.system": {
+    "version": "1.0.0",
+    "file": "planner/system.md",
+    "variables": [],
+    "sha256": "7a5d73565d75919e7672ed9a5629f5e5034631a68007433c4792a03e33379502"
+  },
+  "knowledge.answer_system": {
+    "version": "1.0.0",
+    "file": "knowledge/answer_system.md",
+    "variables": [],
+    "sha256": "834ce729fc5b02852a9b32a441e7c51b3ff2dd5c79b97c8ea87d37b8b81517a8"
+  },
+  "knowledge.tool_system": {
+    "version": "1.0.0",
+    "file": "knowledge/tool_system.md",
+    "variables": [],
+    "sha256": "ec4ba6ad6f22fd41d9893660986ecb0ae32e293576e3a2c96b4ccc065e9e8f4c"
+  },
+  "knowledge.support_system": {
+    "version": "1.0.0",
+    "file": "knowledge/support_system.md",
+    "variables": [
+      "data_fact_option"
+    ],
+    "sha256": "5418ff67b99546168bdf62c91c0724bc514e17b0f5cb5c1d55766df906604491"
+  },
+  "knowledge.support_data_fact_option": {
+    "version": "1.0.0",
+    "file": "knowledge/support_data_fact_option.md",
+    "variables": [],
+    "sha256": "cc28c937b11f876f6df897caa1d7f02e042d606a8481c42601ce5b3bf4adada1"
+  },
+  "review.plan_system": {
+    "version": "1.0.0",
+    "file": "review/plan_system.md",
+    "variables": [
+      "clarification_slots",
+      "other_tables_note"
+    ],
+    "sha256": "53d17648f3f4f85f79a4afa0d5a0f978b9017bac2d737ef107dc32ac4d2da299"
+  },
+  "review.sql_system": {
+    "version": "1.0.0",
+    "file": "review/sql_system.md",
+    "variables": [
+      "other_tables_note"
+    ],
+    "sha256": "4070ab272ecf91d7a84ae53c84708d0d91bd21b0705736455a9426cce6c49615"
+  },
+  "review.evidence_system": {
+    "version": "1.0.0",
+    "file": "review/evidence_system.md",
+    "variables": [
+      "qualification_json",
+      "qualification_rule"
+    ],
+    "sha256": "c2ccdf04a6da8b01f74d2782aebaff6f416de152d778ad631c7fe3596ad0ac03"
+  }
+}
