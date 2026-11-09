@@ -725,6 +725,9 @@
 - CI Static 矩阵加 import-linter；import-linter 2.3（带 grimp 3.19）进 dev 依赖和 CI 锁，其余包版本不变。
 - 验证：两条规则 KEPT；故意加 identity→workflow.models 和 core→modules.runtime 两条引用后 BROKEN、exit 1，删掉后恢复。
 
+## 2026-11-09 E3 修复：check_pins 只查已跟踪文件（分支 fix/e3-check-tracked-files）
+- 症状：主目录里 tmp/ 下的旧评测工作树有 23 处未固定的 Dockerfile，本地 test_repository_has_no_floating_reference 失败（CI 是干净检出所以没暴露）。根因：用 glob 扫目录。改为 git ls-files，非 git 目录才退回扫描；新增未跟踪文件不检查的测试，6 通过；主目录运行通过。
+
 ## 2026-11-09 C1 分词器统一（分支 chore/c1-tokenizer）
 - 新增 app/core/tokenizer.py（编码按进程缓存；DeepSeek 等 tiktoken 不认识的模型用 o200k_base；OpenAI 网关保持“未知模型名报错”的原行为），context_budget、conversations、memory、DeepSeek/OpenAI 网关、measure_context_baseline 共 6 处改走它，代码里不再直接调用 tiktoken。
 - 4 个镜像设置 TIKTOKEN_CACHE_DIR=/opt/tiktoken，构建时预置 o200k_base、cl100k_base。
