@@ -19,7 +19,8 @@ from __future__ import annotations
 import argparse
 import json
 import re
-from pathlib import Path
+import subprocess
+from pathlib import Path, PurePosixPath
 
 DIGEST = re.compile(r"@sha256:[0-9a-f]{64}$")
 COMMIT = re.compile(r"@[0-9a-f]{40}$")
@@ -88,21 +89,43 @@ def check_package_json(path: str, text: str) -> list[str]:
     return problems
 
 
+def _candidate_files(root: Path) -> list[Path]:
+    """Tracked files when root is a git checkout, so untracked copies such as
+    old evaluation worktrees under tmp/ are not checked; else a directory scan."""
+    patterns = ("Dockerfile", "*.Dockerfile", "docker-compose*.yml")
+    try:
+        output = subprocess.run(
+            ["git", "ls-files", "-z"],
+            cwd=root,
+            check=True,
+            capture_output=True,
+        ).stdout.decode("utf-8")
+        names = [name for name in output.split("\0") if name]
+    except (OSError, subprocess.CalledProcessError):
+        names = [p.relative_to(root).as_posix() for p in root.rglob("*") if p.is_file()]
+    paths = []
+    for name in names:
+        path = PurePosixPath(name)
+        if "node_modules" in path.parts:
+            continue
+        if any(path.match(pattern) for pattern in patterns) or (
+            path.parent == PurePosixPath(".github/workflows") and path.suffix == ".yml"
+        ):
+            paths.append(root / name)
+    return sorted(paths)
+
+
 def find_problems(root: Path) -> list[str]:
     problems: list[str] = []
-    dockerfiles = [*root.glob("**/Dockerfile"), *root.glob("**/*.Dockerfile")]
-    yamls = [
-        *root.glob("docker-compose*.yml"),
-        *root.glob(".github/workflows/*.yml"),
-    ]
-    for path in sorted(dockerfiles):
-        if "node_modules" not in path.parts:
-            text = path.read_text(encoding="utf-8")
-            problems += check_dockerfile(path.relative_to(root).as_posix(), text)
-    for path in sorted(yamls):
-        problems += check_yaml(
-            path.relative_to(root).as_posix(), path.read_text(encoding="utf-8")
-        )
+    for path in _candidate_files(root):
+        name = path.relative_to(root).as_posix()
+        text = path.read_text(encoding="utf-8")
+        if path.suffix == ".yml":
+            if "/" in name and not name.startswith(".github/"):
+                continue  # compose files count only at the repository root
+            problems += check_yaml(name, text)
+        else:
+            problems += check_dockerfile(name, text)
     package = root / "frontend/package.json"
     if package.exists():
         text = package.read_text(encoding="utf-8")
