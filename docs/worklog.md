@@ -684,5 +684,10 @@
 - 第一批 ADR（模块化单体、记忆分表、RLS 控制角色）未写：决定内容需用户确认，不替用户补。
 - 用户批准后用 gh 设置：默认分支 feature/api-contracts → main；main 分支保护（必须 PR、11 项 CI 检查必过且须跟上 main、管理员同样受限、禁止强推和删除、不要求人工审批）。API 读回规则一致；真实拦截效果在下一个 PR 上确认。
 
+## 2026-11-09 E11 文档整理和链接检查（分支 chore/e11-docs）
+- 新增 backend/scripts/docs/check_links.py：检查所有已跟踪 .md 的相对链接目标存在（跳过网址、页内锚点、代码块、冻结的 docs/history/）；CI 新增 Docs links 作业；测试 4 通过。
+- 首次运行 297 个文件查出 14 处断链，全在 docs/audits/for_external_review.md（从根目录移入后相对路径未改），已修正；docs/README.md 目录表里 roadmap/ 仍写“当前执行计划”，改为历史参考。修正后 0 处。
+- 待办：新作业合入后把 Docs links 加进 main 分支保护的必过检查。
+
 ## 2026-11-09 E3 修复：check_pins 只查已跟踪文件（分支 fix/e3-check-tracked-files）
 - 症状：主目录里 tmp/ 下的旧评测工作树有 23 处未固定的 Dockerfile，本地 test_repository_has_no_floating_reference 失败（CI 是干净检出所以没暴露）。根因：用 glob 扫目录。改为 git ls-files，非 git 目录才退回扫描；新增未跟踪文件不检查的测试，6 通过；主目录运行通过。
