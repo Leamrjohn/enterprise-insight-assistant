@@ -119,3 +119,5 @@
 - 2026-11-09：E3 镜像摘要、工具链和前端版本全部固定，check_pins.py 接入 CI，测试 5 通过；分支 chore/e3-pin-versions 未推送。
 
 - 2026-11-09：E9 CODEOWNERS、PR 模板、ADR 索引已在 chore/e9-collaboration 提交；默认分支改为 main，main 分支保护已设置。
+
+- 2026-11-09：E11 链接检查脚本和 CI 作业完成，修正 14 处断链；分支 chore/e11-docs。
