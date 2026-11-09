@@ -13,7 +13,6 @@ from openai import (
     RateLimitError,
     UnprocessableEntityError,
 )
-from tiktoken import encoding_for_model
 
 from app.core.exceptions import (
     MalformedModelResponseError,
@@ -22,6 +21,7 @@ from app.core.exceptions import (
 )
 from app.core.gateway.base import ModelCallRecord, ModelGateway
 from app.core.settings import get_settings
+from app.core.tokenizer import encoding_for_model
 from app.modules.runtime.model_governance import (
     estimate_chat_prompt_tokens,
     fallback_chain_scope,
@@ -229,7 +229,8 @@ class OpenAIGateway(ModelGateway):
             raise
 
     def count_tokens(self, text: str) -> int:
-        encoding = encoding_for_model(self.model_name)
+        # Unknown OpenAI model names still raise, as before C1.
+        encoding = encoding_for_model(self.model_name, fallback=False)
         return len(encoding.encode(text))
 
     def _log_failure(

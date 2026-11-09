@@ -4,6 +4,7 @@ import re
 from dataclasses import dataclass
 
 from app.core.settings import get_settings
+from app.core.tokenizer import count_tokens
 from app.modules.conversations.models import Conversation, ConversationMessage
 from app.modules.conversations.repository import (
     create_conversation,
@@ -36,7 +37,6 @@ from app.modules.workflow.repository import (
     get_task_input_artifact_version_ids,
 )
 from sqlalchemy.orm import Session
-from tiktoken import get_encoding
 
 
 @dataclass(frozen=True)
@@ -453,7 +453,7 @@ def find_standing_constraints(messages: list[ConversationMessage]) -> list[dict]
 
 def estimate_conversation_tokens(text: str) -> int:
     """Use the configured-family tokenizer for deterministic history selection."""
-    return len(get_encoding("o200k_base").encode(text))
+    return count_tokens(text)
 
 
 def _token_limited_prefix(content: str, max_tokens: int) -> str:

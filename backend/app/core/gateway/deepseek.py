@@ -15,7 +15,6 @@ from openai import (
     RateLimitError,
     UnprocessableEntityError,
 )
-from tiktoken import encoding_for_model, get_encoding
 
 from app.core.exceptions import (
     MalformedModelResponseError,
@@ -29,6 +28,7 @@ from app.core.gateway.base import (
     ToolChatResponse,
 )
 from app.core.settings import get_settings
+from app.core.tokenizer import count_tokens
 from app.modules.runtime.model_governance import (
     estimate_chat_prompt_tokens,
     fallback_chain_scope,
@@ -329,11 +329,7 @@ class DeepSeekGateway(ModelGateway):
             raise
 
     def count_tokens(self, text: str) -> int:
-        try:
-            encoding = encoding_for_model(self.model_name)
-        except KeyError:
-            encoding = get_encoding("o200k_base")
-        return len(encoding.encode(text))
+        return count_tokens(text, model_name=self.model_name)
 
     def _log_failure(
         self,
