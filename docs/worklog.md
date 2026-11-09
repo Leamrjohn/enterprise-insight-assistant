@@ -742,6 +742,7 @@
 - 发现（待我决定）：平台库有 1 条模型调用账本 reserved 超过 10 分钟；导出器是否改用专用只读角色（现用 agent_app + 只读事务）。
 - 未验证：正式栈以 profile 启动（等部署）；心跳卷的实际写入（等部署后看面板）。
 
+
 ## 2026-11-09 O1 全链路 trace（分支 chore/o1-tracing，叠在 O2a 上）
 - 新增 app/core/tracing.py：属性白名单 safe_attributes（16 个键：id、节点、工具名、模型名、结果、HTTP 方法/路由/状态码等；问题、回答、SQL、提示词、工具参数一律不进）、traceparent 写出与续接、traced_model_call 装饰器。导出只在设置 OTEL_EXPORTER_OTLP_ENDPOINT 时开启（compose 默认空）。
 - 埋点：API 中间件 span（名字用路由模板，不含具体 id）；建任务把 traceparent 写入 analysis_tasks.trace_context（新迁移 c5d6e7f8a9b0，可空，有回退）；Worker 用它续接 trace（task_id、execution_id、company_id、resumed、排队秒数）；8 个图节点各包一层 span（节点逻辑不变）；ToolRuntime.execute 一个 span；DeepSeek/OpenAI 每次物理调用一个 gen_ai.chat span。token 数等依赖 C2 的属性先不记（待 C2 补）。

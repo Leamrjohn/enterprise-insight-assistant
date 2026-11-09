@@ -137,4 +137,5 @@
 - 2026-11-09：K2 未知配置名在生产启动失败、开发告警，示例文件由清单生成（110 项）；分支 chore/k2-config-catalog。
 
 - 2026-11-09：O2a 导出器 + Prometheus + Grafana 看板，演练中面板数据与查库一致；分支 chore/o2a-dashboard。
+
 - 2026-11-09：O1 OpenTelemetry 埋点 + Collector/Tempo，属性白名单两道过滤；分支 chore/o1-tracing。
