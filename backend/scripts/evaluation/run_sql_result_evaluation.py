@@ -35,18 +35,31 @@ EAST_COMPARISON_FINGERPRINT = "ab3c4bf4"
 
 
 def demo_source():
+    """An unsaved acme source bound to an unsaved platform connection (A11b).
+
+    Loopback hosts are refused by the connection policy, so this runs on the
+    compose or CI network and reaches the demo database by its service name.
+    """
+    from app.modules.organizations.connections import new_connection
     from app.modules.organizations.models import BusinessDataSource
 
-    return BusinessDataSource(
-        dialect="postgresql",
+    connection = new_connection(
+        company_id=0,
+        name="evaluation-acme-demo",
+        host=os.environ.get("BUSINESS_SECURITY_TEST_HOST", "demo_business_acme"),
+        port=int(os.environ.get("BUSINESS_SECURITY_TEST_ACME_PORT", "5432")),
+        database="acme_business",
+        username="acme_readonly",
+        schema_name="public",
         credential_env_var="ACME_DEMO_DATABASE_PASSWORD",
-        connection_config={
-            "host": os.environ.get("BUSINESS_SECURITY_TEST_HOST", "localhost"),
-            "port": int(os.environ.get("BUSINESS_SECURITY_TEST_ACME_PORT", "5435")),
-            "database": "acme_business",
-            "user": "acme_readonly",
-            "schema": "public",
-        },
+        operator="evaluation",
+    )
+    return BusinessDataSource(
+        company_id=0,
+        dialect="postgresql",
+        connection_config={},
+        credential_env_var="ACME_DEMO_DATABASE_PASSWORD",
+        connection=connection,
     )
 
 

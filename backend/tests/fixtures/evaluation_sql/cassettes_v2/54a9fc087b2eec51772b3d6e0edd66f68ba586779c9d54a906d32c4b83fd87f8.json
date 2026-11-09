@@ -1,0 +1,1 @@
+{"key": "54a9fc087b2eec51772b3d6e0edd66f68ba586779c9d54a906d32c4b83fd87f8", "json_mode": true, "response": "{\"decision\":\"execute\",\"reason\":\"候选 SQL 使用已审定的 delivered_order_count/v1 指标口径：COUNT(sales_orders.id)，固定筛选 status='delivered'，业务时间列 order_date；并通过 customers.region_code='SOUTH' 正确表达华南区，时间范围覆盖 2025 全年，完整回答已交付订单笔数。\",\"missing_requirements\":[]}"}

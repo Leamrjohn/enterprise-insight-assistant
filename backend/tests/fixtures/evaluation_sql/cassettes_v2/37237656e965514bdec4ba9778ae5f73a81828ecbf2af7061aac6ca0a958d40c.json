@@ -1,0 +1,1 @@
+{"key": "37237656e965514bdec4ba9778ae5f73a81828ecbf2af7061aac6ca0a958d40c", "json_mode": true, "response": "{\"decision\":\"execute\",\"reason\":\"候选 SQL 使用已审定的 ticket_count/v1 指标口径（COUNT(service_tickets.id)），时间范围 2025-08-01 至 2025-09-01 精确覆盖 2025 年 8 月，与计划 evaluation_scope.period 一致；查询为聚合，返回客诉数量，完整回答用户问题。\",\"missing_requirements\":[]}"}

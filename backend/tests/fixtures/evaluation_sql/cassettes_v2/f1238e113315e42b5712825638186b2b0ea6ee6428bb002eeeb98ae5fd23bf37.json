@@ -1,0 +1,1 @@
+{"key": "f1238e113315e42b5712825638186b2b0ea6ee6428bb002eeeb98ae5fd23bf37", "json_mode": true, "response": "{\"decision\":\"execute\",\"reason\":\"候选 SQL 使用 sales_orders.total_amount 计算平均每笔订单金额，按 order_date 限定 2025-08-01 至 2025-08-31，并筛选 status='delivered'，完整覆盖已交付订单、订单金额、平均每笔金额和 2025 年 8 月范围；快照字段与枚举定义均支持该查询。\",\"missing_requirements\":[]}"}

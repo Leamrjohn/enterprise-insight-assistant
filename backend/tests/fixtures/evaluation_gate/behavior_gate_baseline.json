@@ -1,0 +1,50 @@
+{
+  "version": "behavior-gate/v1",
+  "notes": [
+    "2026-11-09 E10a. Counts may rise; min counts may not drop, max counts may not rise.",
+    "planner_route/plan_rules: held-out set plan-rules-heldout/v1 (frozen), Planner recorded 2026-11-07 (cassettes_heldout_v1); matches the R0 comparison (Planner 32/43, rules 31/43).",
+    "sql_results: re-recorded 2026-11-09 (cassettes_v2, 55 calls, ~$0.028) because the 11-02 recordings no longer match the SQL generation request; 21/24, one fewer than 11-02 (heldout-average-order: correct AVG() SQL refused by the metric contract).",
+    "retrieval: main-chain policy only, models pinned in scripts/evaluation/prefetch_models.py; single-policy and eight-policy runs gave identical counts.",
+    "A deliberate change that moves a count updates this file in the same commit and adds a note."
+  ],
+  "components": {
+    "planner_route": {
+      "equal": {"cases": 43},
+      "min": {"correct": 32},
+      "max": {"errors": 1}
+    },
+    "plan_rules": {
+      "min": {
+        "R2.right": 7,
+        "R3.right": 0,
+        "R4.right": 3,
+        "R5.right": 5,
+        "with_rules.correct": 31
+      },
+      "max": {
+        "R2.wrong": 3,
+        "R3.wrong": 2,
+        "R4.wrong": 0,
+        "R5.wrong": 0,
+        "conflicts": 0
+      }
+    },
+    "sql_results": {
+      "equal": {"cases": 24},
+      "min": {"passed": 21},
+      "max": {"released_wrong": 0}
+    },
+    "retrieval": {
+      "policy_id": "paragraph_jieba_rrf_rerank_v1",
+      "equal": {"cases": 64},
+      "min": {
+        "final.hit_at_1": 55,
+        "final.hit_at_3": 59,
+        "candidates.hit_at_10": 61,
+        "answer_in_prompt": 41,
+        "traps.right_version_first": 12
+      },
+      "max": {"traps.wrong_version_above_right": 0}
+    }
+  }
+}

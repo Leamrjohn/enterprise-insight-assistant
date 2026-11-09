@@ -1,0 +1,1 @@
+{"key": "f37a9b256bced9ed5523094b77778b0cb6b399fbc081d172e6ff3ed79934aec3", "json_mode": true, "response": "{\"decision\":\"execute\",\"reason\":\"候选 SQL 使用已审定的 gross_profit/v1 口径（SUM(line_amount - unit_cost*quantity)），按 sales_orders.order_date 限定 2025-09，筛选 status='delivered'，并通过 customers.region_code='EAST' 表达华东区，指标、范围与比较期均完整覆盖。\",\"missing_requirements\":[]}"}

@@ -198,6 +198,129 @@ jobs:
           (cd frontend && npm audit --package-lock-only --json > ../npm-audit.json) || test -s npm-audit.json
           python backend/scripts/security/check_audit.py npm npm-audit.json
 
+  behavior-routing:
+    name: Behavior gate (routing)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      PYTHONUTF8: '1'
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
+        with:
+          python-version: '3.12'
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --require-hashes -r backend/requirements/ci-linux-py312.lock
+          python -m pip install --no-index --no-build-isolation -r backend/requirements/base.txt -e './backend[dev]'
+      # Planner replay from committed recordings (a changed prompt misses and fails),
+      # then the plan rules on the same frozen held-out set.
+      - name: Planner replay and plan rules against the baseline
+        working-directory: backend
+        run: bash scripts/evaluation/behavior_gate.sh routing
+
+  behavior-data:
+    name: Behavior gate (SQL and Knowledge)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    # Inside the job network the demo database is reached by its service name;
+    # the connection policy refuses loopback addresses.
+    container:
+      image: python:3.12-slim@sha256:a6e34c598f2467ed0e9a8d349809fcd8b5c603269512df273a0bb1784edc11b1
+    env:
+      APP_ENV: test
+      DATABASE_HOST: postgres
+      DATABASE_PORT: '5432'
+      DATABASE_NAME: agent_platform_test
+      DATABASE_USER: agent_app
+      DATABASE_PASSWORD: changeme_in_production
+      MIGRATION_DATABASE_USER: agent_migrator
+      BUSINESS_DATABASE_PASSWORD: ci-unused-business-password
+      REDIS_URL: redis://redis:6379/0
+      ACME_DEMO_DATABASE_PASSWORD: acme_demo_readonly_password
+      HF_HOME: /github/home/huggingface
+      PYTHONUTF8: '1'
+    services:
+      postgres:
+        image: pgvector/pgvector:0.8.0-pg16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: changeme_in_production
+          POSTGRES_DB: agent_platform
+        options: >-
+          --health-cmd "pg_isready -U postgres -d agent_platform"
+          --health-interval 5s --health-timeout 3s --health-retries 12
+      demo_business_acme:
+        image: pgvector/pgvector:0.8.0-pg16
+        env:
+          POSTGRES_USER: business_owner
+          POSTGRES_PASSWORD: acme_owner_password
+          POSTGRES_DB: acme_business
+        options: >-
+          --health-cmd "pg_isready -U business_owner -d acme_business"
+          --health-interval 5s --health-timeout 3s --health-retries 12
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+      # psql comes from the same image as the service, run on the job network.
+      - name: Bootstrap isolated PostgreSQL roles and databases
+        uses: docker://pgvector/pgvector:0.8.0-pg16
+        env:
+          PGPASSWORD: changeme_in_production
+        with:
+          entrypoint: psql
+          args: -h postgres -U postgres -d agent_platform -v ON_ERROR_STOP=1 -f backend/scripts/db/bootstrap_postgres.sql
+      - name: Install backend and local model dependencies
+        run: |
+          python -m pip install --root-user-action=ignore --require-hashes -r backend/requirements/ci-linux-py312.lock
+          python -m pip install --root-user-action=ignore --no-index --no-build-isolation -r backend/requirements/base.txt -e './backend[dev]'
+          python -m pip install --root-user-action=ignore --require-hashes \
+            --extra-index-url https://download.pytorch.org/whl/cpu -r backend/requirements/ci-ml-linux-py312.lock
+          python -m pip check
+      - name: Apply migrations as migration role
+        working-directory: backend
+        run: python -m alembic upgrade head
+      - name: Seed the deterministic acme demo database
+        working-directory: backend
+        env:
+          BUSINESS_DB_HOST: demo_business_acme
+          BUSINESS_DB_PORT: '5432'
+          BUSINESS_DB_NAME: acme_business
+          BUSINESS_DB_USER: business_owner
+          BUSINESS_DB_PASSWORD: acme_owner_password
+          DEMO_READONLY_USER: acme_readonly
+          DEMO_READONLY_PASSWORD: acme_demo_readonly_password
+          DEMO_COMPANY_LABEL: Acme 演示公司
+        run: python scripts/data/seed_demo_business_database.py
+      - name: Restore pinned retrieval models
+        id: models
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: /github/home/huggingface
+          key: retrieval-models-${{ hashFiles('backend/scripts/evaluation/prefetch_models.py') }}
+      - name: Download pinned retrieval models
+        if: steps.models.outputs.cache-hit != 'true'
+        working-directory: backend
+        run: python scripts/evaluation/prefetch_models.py
+      - name: SQL replay against the baseline
+        working-directory: backend
+        run: bash scripts/evaluation/behavior_gate.sh sql
+      - name: Knowledge retrieval against the baseline
+        if: ${{ !cancelled() }}
+        working-directory: backend
+        run: bash scripts/evaluation/behavior_gate.sh retrieval
+      - name: Preserve gate reports
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: behavior-gate-${{ github.run_attempt }}
+          path: backend/gate-reports/
+          if-no-files-found: warn
+          retention-days: 14
+
   compose:
     name: Compose configuration
     runs-on: ubuntu-24.04
