@@ -4,6 +4,8 @@ WORKDIR /app
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
+# C1: tokenizer files baked in, so counting tokens needs no network.
+ENV TIKTOKEN_CACHE_DIR=/opt/tiktoken
 
 COPY requirements/ requirements/
 
@@ -13,6 +15,8 @@ RUN groupadd --gid 10001 app \
     && useradd --uid 10001 --gid app --create-home --shell /usr/sbin/nologin app \
     && mkdir -p /app/logs /app/storage \
     && chown -R app:app /app
+
+RUN python -c "import tiktoken; [tiktoken.get_encoding(n) for n in ('o200k_base', 'cl100k_base')]"     && chmod -R a+rX /opt/tiktoken
 
 COPY --chown=app:app . .
 
