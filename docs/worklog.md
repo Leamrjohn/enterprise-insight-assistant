@@ -725,6 +725,9 @@
 - CI Static 矩阵加 import-linter；import-linter 2.3（带 grimp 3.19）进 dev 依赖和 CI 锁，其余包版本不变。
 - 验证：两条规则 KEPT；故意加 identity→workflow.models 和 core→modules.runtime 两条引用后 BROKEN、exit 1，删掉后恢复。
 
+## 2026-11-09 E3 修复：check_pins 只查已跟踪文件（分支 fix/e3-check-tracked-files）
+- 症状：主目录里 tmp/ 下的旧评测工作树有 23 处未固定的 Dockerfile，本地 test_repository_has_no_floating_reference 失败（CI 是干净检出所以没暴露）。根因：用 glob 扫目录。改为 git ls-files，非 git 目录才退回扫描；新增未跟踪文件不检查的测试，6 通过；主目录运行通过。
+
 ## 2026-11-09 K2 严格校验和示例文件生成（分支 chore/k2-config-catalog）
 - 新增 app/core/config/catalog.py：由 K1 的 11 个域生成配置清单（110 项）和示例配置文件（按域分节，保留原有注释和占位值；密钥一律留空）；--check 供测试和 CI 用，--write 重新生成。
 - get_settings() 启动时检查未知配置名：env 文件里的全部键，以及进程环境里与已声明键同前缀的变量（PATH 等不管）；production 直接启动失败，development/test 只记警告；报错只列键名，不带值。数据源凭据名按白名单放行。
