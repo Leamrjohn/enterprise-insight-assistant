@@ -9,13 +9,18 @@ from time import sleep
 from app.core.exceptions import RetryableModelError, StructuredOutputError
 from app.core.gateway.base import ModelGateway
 from app.core.gateway.factory import get_model_gateway
+from app.core.settings import get_settings
 from app.modules.analysis.planner.planner_decision import (
     PlannerDecision,
     enforce_explicit_document_evidence_contract,
 )
 from pydantic import ValidationError
 
-MAX_PLANNER_ATTEMPTS = 2
+
+def _max_planner_attempts() -> int:
+    return get_settings().planner_max_attempts
+
+
 PLANNER_RETRY_BASE_DELAY_SECONDS = 1.0
 
 logger = logging.getLogger(__name__)
@@ -367,13 +372,13 @@ class PlanningService:
 
         last_failure: ValidationError | RetryableModelError | None = None
 
-        for attempt_index in range(MAX_PLANNER_ATTEMPTS):
+        for attempt_index in range(_max_planner_attempts()):
             attempt_number = attempt_index + 1
             logger.info(
                 "Calling Planner model",
                 extra={
                     "attempt": attempt_number,
-                    "max_attempts": MAX_PLANNER_ATTEMPTS,
+                    "max_attempts": _max_planner_attempts(),
                 },
             )
             try:
@@ -385,12 +390,12 @@ class PlanningService:
                 )
             except RetryableModelError as error:
                 last_failure = error
-                if attempt_number == MAX_PLANNER_ATTEMPTS:
+                if attempt_number == _max_planner_attempts():
                     logger.warning(
                         "Planner model retry budget exhausted",
                         extra={
                             "attempt": attempt_number,
-                            "max_attempts": MAX_PLANNER_ATTEMPTS,
+                            "max_attempts": _max_planner_attempts(),
                             "error_type": type(error).__name__,
                         },
                     )
@@ -419,7 +424,7 @@ class PlanningService:
                     "Planner returned an invalid structured decision; requesting repair",
                     extra={
                         "attempt": attempt_number,
-                        "max_attempts": MAX_PLANNER_ATTEMPTS,
+                        "max_attempts": _max_planner_attempts(),
                         "error_type": type(error).__name__,
                     },
                 )
@@ -439,7 +444,7 @@ class PlanningService:
 
         logger.error(
             "Planner structured-output retry budget exhausted",
-            extra={"max_attempts": MAX_PLANNER_ATTEMPTS},
+            extra={"max_attempts": _max_planner_attempts()},
         )
         raise StructuredOutputError(
             "模型连续返回不符合 Planner JSON 契约的结果"
