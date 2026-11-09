@@ -725,6 +725,9 @@
 - CI Static 矩阵加 import-linter；import-linter 2.3（带 grimp 3.19）进 dev 依赖和 CI 锁，其余包版本不变。
 - 验证：两条规则 KEPT；故意加 identity→workflow.models 和 core→modules.runtime 两条引用后 BROKEN、exit 1，删掉后恢复。
 
+## 2026-11-09 E3 修复：check_pins 只查已跟踪文件（分支 fix/e3-check-tracked-files）
+- 症状：主目录里 tmp/ 下的旧评测工作树有 23 处未固定的 Dockerfile，本地 test_repository_has_no_floating_reference 失败（CI 是干净检出所以没暴露）。根因：用 glob 扫目录。改为 git ls-files，非 git 目录才退回扫描；新增未跟踪文件不检查的测试，6 通过；主目录运行通过。
+
 ## 2026-11-09 O2a 轻量看板（分支 chore/o2a-dashboard）
 - 新增指标导出器 app/modules/observability/metrics_exporter.py（:9108，每次抓取查库：进行中任务、未认领 Outbox 事件及最老年龄、过期租约、卡住任务、账本按结算状态、长时间 reserved、Worker/Beat 心跳年龄；只有计数和年龄，标签不含任务/用户/公司 id）；连接用 agent_app，但强制只读事务（default_transaction_read_only=on）和 5 秒语句超时。prometheus-client 0.22.1 进运行时依赖和锁（其余包不变）。
 - compose observability profile 新增 metrics-exporter、prometheus（v3.5.0，保留 30 天）、grafana（12.0.2，匿名只读、无登录框），镜像按摘要固定，端口只绑 127.0.0.1（9090、3001）；看板和数据源由 ops/observability/ 下文件自动加载。worker、beat 的心跳写入共享卷 heartbeat，导出器只读挂载；镜像预建 /heartbeat 并归 app 用户。

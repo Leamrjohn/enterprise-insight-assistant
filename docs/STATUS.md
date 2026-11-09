@@ -132,4 +132,6 @@
 
 - 2026-11-09：E4 import-linter 两条规则接入 CI，存量 41 条登记，故意违规会失败；分支 chore/e4-import-rules。
 
+- 2026-11-09：修 check_pins 误扫未跟踪的 tmp/ 工作树；分支 fix/e3-check-tracked-files。
+
 - 2026-11-09：O2a 导出器 + Prometheus + Grafana 看板，演练中面板数据与查库一致；分支 chore/o2a-dashboard。
