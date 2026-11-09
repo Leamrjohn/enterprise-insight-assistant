@@ -742,6 +742,11 @@
 - 发现（待我决定）：平台库有 1 条模型调用账本 reserved 超过 10 分钟；导出器是否改用专用只读角色（现用 agent_app + 只读事务）。
 - 未验证：正式栈以 profile 启动（等部署）；心跳卷的实际写入（等部署后看面板）。
 
+## 2026-11-09 C1 分词器统一（分支 chore/c1-tokenizer）
+- 新增 app/core/tokenizer.py（编码按进程缓存；DeepSeek 等 tiktoken 不认识的模型用 o200k_base；OpenAI 网关保持“未知模型名报错”的原行为），context_budget、conversations、memory、DeepSeek/OpenAI 网关、measure_context_baseline 共 6 处改走它，代码里不再直接调用 tiktoken。
+- 4 个镜像设置 TIKTOKEN_CACHE_DIR=/opt/tiktoken，构建时预置 o200k_base、cl100k_base。
+- 验证：test_tokenizer 6 通过（与原 o200k 计数逐个相同）；上下文、会话、网关相关测试 48 通过；本分支 api 镜像在 --network none 容器里计数成功（中文问题 12 token，gpt-4 用 cl100k）。
+
 
 ## 2026-11-09 O1 全链路 trace（分支 chore/o1-tracing，叠在 O2a 上）
 - 新增 app/core/tracing.py：属性白名单 safe_attributes（16 个键：id、节点、工具名、模型名、结果、HTTP 方法/路由/状态码等；问题、回答、SQL、提示词、工具参数一律不进）、traceparent 写出与续接、traced_model_call 装饰器。导出只在设置 OTEL_EXPORTER_OTLP_ENDPOINT 时开启（compose 默认空）。

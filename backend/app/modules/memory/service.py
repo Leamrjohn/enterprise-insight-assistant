@@ -8,6 +8,7 @@ from datetime import datetime, timedelta, timezone
 
 from app.core.config.memory import MemoryConfig
 from app.core.settings import get_settings
+from app.core.tokenizer import count_tokens
 from app.modules.documents.search_tokens import jieba_tokens
 from app.modules.memory.models import AnalysisMemory, MemoryAuditEvent
 from app.modules.memory.sources import MemorySource
@@ -16,7 +17,6 @@ from app.modules.reporting.schemas import FinalAnalysisReport
 from app.modules.workflow.models import AnalysisTask
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
-from tiktoken import get_encoding
 
 # Defaults only; the running values come from MEMORY_* settings (K1).
 DEFAULT_MEMORY_TTL = timedelta(
@@ -46,7 +46,7 @@ def _planner_memory_payload(row: AnalysisMemory) -> dict:
 
 def _memory_tokens(payload: dict) -> int:
     text = json.dumps(payload, ensure_ascii=False, sort_keys=True)
-    return len(get_encoding("o200k_base").encode(text))
+    return count_tokens(text)
 
 
 def _facts_text(row: AnalysisMemory) -> str:
