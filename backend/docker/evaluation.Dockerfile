@@ -7,11 +7,11 @@ ENV PYTHONUNBUFFERED=1
 
 # The full-corpus retrieval evaluation uses the same local embedding and
 # reranking providers as the Worker, so it needs CPU model-dependency parity.
-# It still contains no provider-backed model dependency.
+# It still contains no provider-backed model dependency.  The test tools come
+# from the CI lock, so this image matches the CI behavior gate.
 COPY requirements/ requirements/
-RUN pip install --upgrade pip \
-    && pip install -r requirements/evaluation.txt \
-    && pip install --index-url https://download.pytorch.org/whl/cpu torch==2.6.0 \
-    && pip install -r requirements/ml.txt
+RUN pip install --require-hashes -r requirements/ci-linux-py312.lock \
+    && pip install --require-hashes --extra-index-url https://download.pytorch.org/whl/cpu \
+        -r requirements/ml-linux-py312.lock
 
 COPY . .

@@ -126,4 +126,6 @@
 
 - 2026-11-09：G1 8 个静态提示词迁入 app/prompts（逐字节一致），任务记录 prompt_version；分支 chore/g1-prompt-registry。
 
+- 2026-11-09：E2 镜像改用带哈希锁（uv 生成 ML 锁 607 秒），两次安装 pip freeze 一致，冒烟不变；R1 分工与授权范围已记录。
+
 - 2026-11-09：K2 未知配置名在生产启动失败、开发告警，示例文件由清单生成（110 项）；分支 chore/k2-config-catalog。
