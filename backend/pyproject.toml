@@ -38,6 +38,7 @@ dev = [
     "pyright==1.1.414",
     "pre-commit==4.7.0",
     "import-linter==2.3",
+    "pytest-cov==6.2.1",
 ]
 
 [tool.setuptools.packages.find]
