@@ -672,3 +672,10 @@
 - 验证：门禁测试 12 个 + tests/scripts 共 243 通过、pyright 0；本地干净容器全流程预演通过；故意改 R2 规则、删 Planner 提示词 1 个字、改 SQL 提示词 1 个字均失败；Knowledge 未做故意改坏验证，CI 机器上重排结果是否与本地完全一致未验证。
 - 检索慢的原因：compose 的 evaluation 服务没设 HF_HOME，每次重新下载约 1.6GB 模型（建索引 265～324 秒，有缓存后 12.7 秒）；另外 8 策略全跑时每个重排策略约 190～225 秒。待办：给 evaluation 服务挂模型缓存（不在本工单）。
 - CI 首跑：gitleaks 把 100 个录音里的请求哈希字段（"key": 64 位十六进制，等于文件名）报为 generic-api-key，逐条登记指纹到 .gitleaksignore（重录后要重新生成）；之后 22 项全绿。CI 上 SQL 21/24、检索各计数与本地完全一致；数据作业首跑约 11 分钟（含模型下载）。
+
+## 2026-11-09 K1 配置分域和常量归位（分支 chore/k1-config-domains）
+- Settings 拆成 app/core/config/ 下 11 个域（app、infra、security、admission、model、tool、context、memory、rag、flags、artifacts），Settings 多重继承各域；环境变量名和 settings.<字段> 写法不变，app/core/settings.py 保留为转发入口；settings.domain(RagConfig) 取单个域。
+- 20 个代码常量归入配置（限流、Planner/Data 重试次数、会话历史 token、上下文压缩 3 项、记忆 3 项、RRF_K、工具循环 8 项），调用点改为运行时读取；测试引用的 MAX_ROWS_WHEN_COMPRESSED、DEFAULT_MEMORY_TTL 保留为“默认值”别名，测试文件未改。
+- 验证：迁移前后 90 个原字段默认值逐个比对 0 差异；新增 test_config_domains 13 通过（含旧常量值、每个字段只属一个域、各域方法不重名、各域校验在 Settings 上生效）；本地 unit+scripts 与 main 对照失败集合完全相同（260 个均为本地无库连接或已有失败），CI 跑数据库测试。
+- 踩坑：多个域都叫 validate_positive_int，多重继承后只剩一个生效，4 个 test_settings 失败；改为带域名前缀并加了不重名测试。
+- 未做：工具目录（超时、熔断）、EVIDENCE_REVIEW 预算按设计属策略文件，留给后续；冒烟待部署后与其他工单一起跑。
