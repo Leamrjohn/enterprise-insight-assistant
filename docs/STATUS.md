@@ -128,4 +128,6 @@
 
 - 2026-11-09：E2 镜像改用带哈希锁（uv 生成 ML 锁 607 秒），两次安装 pip freeze 一致，冒烟不变；R1 分工与授权范围已记录。
 
+- 2026-11-09：O4 Worker/Beat 心跳和看门狗，卡死演练 40 秒内自动重启；分支 chore/o4-watchdog。
+
 - 2026-11-09：修 check_pins 误扫未跟踪的 tmp/ 工作树；分支 fix/e3-check-tracked-files。

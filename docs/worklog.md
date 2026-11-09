@@ -713,5 +713,11 @@
 - 验证：同一提交 api 镜像无缓存构建两次 pip freeze 相同（101 包）；worker 组合（base+ML）和 evaluation 组合（CI+ML）在同一基础镜像各干净安装两次，pip freeze 分别相同（129、143 包，pip check 通过）；worker 镜像无缓存构建两次都在 apt 下载处因网络失败（与锁无关，改用上面的安装比对）。test_locks 5 通过。冒烟（3422979 部署后，10 题）9 成功 + 混合题 awaiting_review，与 A11b 时相同。
 - 遗留：apt 包未锁版本（只锁了基础镜像摘要）；E6 的 4 个 npm 例外 12-08 到期，需升级 vite/vitest（E3 后续）。
 
+## 2026-11-09 O4 探活：心跳和看门狗（分支 chore/o4-watchdog）
+- 新增 app/core/heartbeat.py（Worker 用 bootstep 挂在自身定时器上、即主事件循环里每 30 秒写心跳；Beat 用 HeartbeatScheduler 每次 tick 写）和 app/core/watchdog.py（作为容器主进程启动 celery 子进程、转发停止信号，心跳超过 120 秒或启动 180 秒内没有心跳就杀子进程并退出 1，交给 restart: 重启）；compose 的 worker、beat、report-worker 改用看门狗启动并加 healthcheck（只作展示）。
+- 演练（一次性容器 agent-o4-drill，挂载本分支代码，Redis 15 号库、test 队列，不碰正式服务）：心跳 30 秒一次；kill -STOP celery 主进程后约 40 秒（阈值调成 60 秒）日志出现 watchdog_restart，RestartCount 0→1，重启后心跳恢复、--check 通过。Beat 同样写心跳。演练留下的 4 个 Redis 键已删除。
+- 测试：test_watchdog 8 通过（新鲜/过期/缺失/旧文件、子进程退出码、卡住子进程被杀、--check、两种心跳）；pyright、ruff 通过。
+- 未验证：持有任务时卡死再恢复的端到端过程（恢复由已有的租约过期恢复负责，见 test_recovery_delivery、test_stranded_tasks）；正式服务尚未用新命令重启（等合入后部署）。
+
 ## 2026-11-09 E3 修复：check_pins 只查已跟踪文件（分支 fix/e3-check-tracked-files）
 - 症状：主目录里 tmp/ 下的旧评测工作树有 23 处未固定的 Dockerfile，本地 test_repository_has_no_floating_reference 失败（CI 是干净检出所以没暴露）。根因：用 glob 扫目录。改为 git ls-files，非 git 目录才退回扫描；新增未跟踪文件不检查的测试，6 通过；主目录运行通过。
