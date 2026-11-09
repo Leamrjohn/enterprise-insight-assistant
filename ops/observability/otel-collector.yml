@@ -1,0 +1,32 @@
+# O1: OpenTelemetry Collector (compose profile "observability").
+# Receives spans over OTLP/HTTP from api, worker and beat, keeps only the
+# allowlisted attributes (second filter after app.core.tracing.safe_attributes;
+# tests/unit/system/test_tracing.py checks both lists are equal) and forwards
+# to Tempo.
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  transform/allowlist:
+    error_mode: ignore
+    trace_statements:
+      - context: span
+        statements:
+          - keep_keys(attributes, ["company_id", "error.class", "execution_id", "gen_ai.request.model", "gen_ai.response.finish_reason", "gen_ai.system", "http.request.method", "http.response.status_code", "http.route", "node", "queue_seconds", "resumed", "task_id", "tool.name", "tool.outcome", "tool.version"])
+  batch: {}
+
+exporters:
+  otlp/tempo:
+    endpoint: tempo:4317
+    tls:
+      insecure: true
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      processors: [transform/allowlist, batch]
+      exporters: [otlp/tempo]

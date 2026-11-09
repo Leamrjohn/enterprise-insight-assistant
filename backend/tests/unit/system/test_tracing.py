@@ -94,3 +94,16 @@ def test_api_request_span_uses_the_route_template(spans, monkeypatch):
     (span,) = [s for s in spans.get_finished_spans() if s.name.startswith("GET")]
     assert span.name == "GET /health/live"
     assert span.attributes["http.response.status_code"] == 200
+
+
+def test_collector_keeps_the_same_allowlist():
+    import re
+    from pathlib import Path
+
+    config = (
+        Path(__file__).resolve().parents[4] / "ops/observability/otel-collector.yml"
+    ).read_text(encoding="utf-8")
+    kept = re.search(r"keep_keys\(attributes, \[(.*?)\]\)", config, re.DOTALL)
+
+    assert kept is not None
+    assert set(re.findall(r'"([^"]+)"', kept.group(1))) == tracing.ALLOWED_ATTRIBUTES

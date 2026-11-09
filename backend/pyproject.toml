@@ -24,6 +24,8 @@ dependencies = [
     "sqlglot>=25.0,<30.0",
     "jieba==0.42.1",
     "prometheus-client==0.22.1",
+    "opentelemetry-sdk==1.45.1",
+    "opentelemetry-exporter-otlp-proto-http==1.45.1",
     "PyJWT>=2.10,<3.0",
     "argon2-cffi>=23.1,<26.0",
 ]
