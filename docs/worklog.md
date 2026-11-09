@@ -684,6 +684,11 @@
 - 第一批 ADR（模块化单体、记忆分表、RLS 控制角色）未写：决定内容需用户确认，不替用户补。
 - 用户批准后用 gh 设置：默认分支 feature/api-contracts → main；main 分支保护（必须 PR、11 项 CI 检查必过且须跟上 main、管理员同样受限、禁止强推和删除、不要求人工审批）。API 读回规则一致；真实拦截效果在下一个 PR 上确认。
 
+## 2026-11-09 E11 文档整理和链接检查（分支 chore/e11-docs）
+- 新增 backend/scripts/docs/check_links.py：检查所有已跟踪 .md 的相对链接目标存在（跳过网址、页内锚点、代码块、冻结的 docs/history/）；CI 新增 Docs links 作业；测试 4 通过。
+- 首次运行 297 个文件查出 14 处断链，全在 docs/audits/for_external_review.md（从根目录移入后相对路径未改），已修正；docs/README.md 目录表里 roadmap/ 仍写“当前执行计划”，改为历史参考。修正后 0 处。
+- 待办：新作业合入后把 Docs links 加进 main 分支保护的必过检查。
+
 ## 2026-11-09 O4 探活：心跳和看门狗（分支 chore/o4-watchdog）
 - 新增 app/core/heartbeat.py（Worker 用 bootstep 挂在自身定时器上、即主事件循环里每 30 秒写心跳；Beat 用 HeartbeatScheduler 每次 tick 写）和 app/core/watchdog.py（作为容器主进程启动 celery 子进程、转发停止信号，心跳超过 120 秒或启动 180 秒内没有心跳就杀子进程并退出 1，交给 restart: 重启）；compose 的 worker、beat、report-worker 改用看门狗启动并加 healthcheck（只作展示）。
 - 演练（一次性容器 agent-o4-drill，挂载本分支代码，Redis 15 号库、test 队列，不碰正式服务）：心跳 30 秒一次；kill -STOP celery 主进程后约 40 秒（阈值调成 60 秒）日志出现 watchdog_restart，RestartCount 0→1，重启后心跳恢复、--check 通过。Beat 同样写心跳。演练留下的 4 个 Redis 键已删除。

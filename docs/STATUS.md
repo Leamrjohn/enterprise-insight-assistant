@@ -120,4 +120,6 @@
 
 - 2026-11-09：E9 CODEOWNERS、PR 模板、ADR 索引已在 chore/e9-collaboration 提交；默认分支改为 main，main 分支保护已设置。
 
+- 2026-11-09：E11 链接检查脚本和 CI 作业完成，修正 14 处断链；分支 chore/e11-docs。
+
 - 2026-11-09：O4 Worker/Beat 心跳和看门狗，卡死演练 40 秒内自动重启；分支 chore/o4-watchdog。
