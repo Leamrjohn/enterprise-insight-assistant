@@ -29,6 +29,7 @@ from app.core.gateway.base import (
 )
 from app.core.settings import get_settings
 from app.core.tokenizer import count_tokens
+from app.core.tracing import traced_model_call
 from app.modules.runtime.model_governance import (
     estimate_chat_prompt_tokens,
     fallback_chain_scope,
@@ -107,6 +108,7 @@ class DeepSeekGateway(ModelGateway):
                 ),
             )
 
+    @traced_model_call("deepseek")
     def _chat_once(
         self,
         prompt: str,

@@ -4,10 +4,12 @@ import errno
 import logging
 import random as _random
 import re
-from contextlib import contextmanager
+from contextlib import ExitStack, contextmanager
+from datetime import datetime
 from threading import Event, Thread
 from typing import Any
 
+from app.core import tracing
 from app.core.celery_app import celery_app
 from app.core.exceptions import RetryableModelError
 from app.core.logging import (
@@ -583,11 +585,19 @@ def _publish_approved_draft(
     db.commit()
 
 
+def _queue_seconds(record: AnalysisTask) -> float | None:
+    created_at = getattr(record, "created_at", None)
+    if created_at is None:
+        return None
+    return round((datetime.now(created_at.tzinfo) - created_at).total_seconds(), 3)
+
+
 @celery_app.task(bind=True, max_retries=3)
 def process_analysis_task(self, task_id: int):
     """用独立数据库 Session 执行一次 LangGraph 分析工作流。"""
     db = SessionLocal()
     execution: ClaimedExecution | None = None
+    trace_scope = ExitStack()
     request_id_token = None
     task_id_token = None
     attempt_id_token = None
@@ -602,6 +612,22 @@ def process_analysis_task(self, task_id: int):
             logger.info("Task %s was already claimed, terminal, or missing", task_id)
             return
         record = execution.task
+        # O1: continue the trace the API request started; a resumed attempt
+        # keeps the trace id and is marked resumed.
+        trace_scope.enter_context(
+            tracing.span(
+                "analysis_task",
+                # Tracing must never fail a task: every field is optional here.
+                traceparent=getattr(record, "trace_context", None),
+                attributes={
+                    "task_id": getattr(record, "id", None),
+                    "execution_id": getattr(execution.attempt, "execution_id", None),
+                    "company_id": getattr(record, "company_id", None),
+                    "resumed": (getattr(execution.attempt, "retry_number", 0) or 0) > 0,
+                    "queue_seconds": _queue_seconds(record),
+                },
+            )
+        )
         task_id_token = task_id_context.set(record.id)
         attempt_id_token = execution_attempt_id_context.set(execution.attempt.id)
         if record.request_id:
@@ -908,6 +934,7 @@ def process_analysis_task(self, task_id: int):
         db.commit()
         raise
     finally:
+        trace_scope.close()
         if request_id_token is not None:
             request_id_context.reset(request_id_token)
         if attempt_id_token is not None:

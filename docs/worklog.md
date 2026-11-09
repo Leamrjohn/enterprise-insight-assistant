@@ -753,3 +753,11 @@
 - 待我决定：tests/unit/analysis/test_sql_executor.py 有 2 个无条件 skip 的测试，调用的默认业务库路径 A11b 后已拒绝（data_source 为空即 ConnectionNotAllowed），登记为 pending：删除还是改写成用登记的演示连接。
 - 验证：check_test_layers、check_coverage 测试 8 通过；本仓库 7 个跳过文件全部登记。
 - 基线（首次 CI 实测，提交 c665716）：unit 83.46%、integration 51.89%。同一提交另一次运行中 test_app_startup（子进程导入应用，30 秒上限）超时一次，那次 unit 作业整体也慢（83 秒对 66 秒）；未改测试，CI 改用 COVERAGE_CORE=sysmon 降低覆盖率开销。偶发情况需继续观察。
+
+
+## 2026-11-09 O1 全链路 trace（分支 chore/o1-tracing，叠在 O2a 上）
+- 新增 app/core/tracing.py：属性白名单 safe_attributes（16 个键：id、节点、工具名、模型名、结果、HTTP 方法/路由/状态码等；问题、回答、SQL、提示词、工具参数一律不进）、traceparent 写出与续接、traced_model_call 装饰器。导出只在设置 OTEL_EXPORTER_OTLP_ENDPOINT 时开启（compose 默认空）。
+- 埋点：API 中间件 span（名字用路由模板，不含具体 id）；建任务把 traceparent 写入 analysis_tasks.trace_context（新迁移 c5d6e7f8a9b0，可空，有回退）；Worker 用它续接 trace（task_id、execution_id、company_id、resumed、排队秒数）；8 个图节点各包一层 span（节点逻辑不变）；ToolRuntime.execute 一个 span；DeepSeek/OpenAI 每次物理调用一个 gen_ai.chat span。token 数等依赖 C2 的属性先不记（待 C2 补）。
+- 基础设施（observability profile）：otel-collector（contrib 0.130.0，transform 处理器按同一白名单 keep_keys 二次过滤）、tempo（2.8.1，保留 7 天）、Grafana Tempo 数据源；镜像按摘要固定。opentelemetry-sdk、exporter-otlp-proto-http 1.45.1 进依赖和锁（与 fastapi 已带的 api 1.45.1 对齐，新增 9 个包，原有版本不变）。
+- 验证：test_tracing 6 通过（白名单、API→Worker 同一 trace_id 且父子相连、问题原文和手机号不出现在任何 span、异常只记类名不记消息、API span 用路由模板、Collector 白名单与代码一致）；集成测试 test_task_trace_context 由 CI 跑；import 规则 KEPT。
+- 未验证：部署后在 Tempo 里看一个真实任务的完整链路（部署时做）；迁移在 CI 做往返检查。

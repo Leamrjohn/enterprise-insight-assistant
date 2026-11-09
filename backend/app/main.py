@@ -16,6 +16,7 @@ from app.core.exceptions import (
 from app.core.logging import configure_logging
 from app.core.middleware import request_context_middleware
 from app.core.settings import get_settings
+from app.core.tracing import setup_tracing
 from app.db.session import engine
 
 logger = logging.getLogger(__name__)
@@ -44,6 +45,7 @@ async def lifespan(app: FastAPI):
 
 settings = get_settings()
 configure_logging(settings)
+setup_tracing("agent-api")
 
 app = FastAPI(
     title=settings.app_name,

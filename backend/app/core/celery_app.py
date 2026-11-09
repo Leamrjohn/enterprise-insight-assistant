@@ -5,8 +5,10 @@ from celery.signals import setup_logging
 from app.core.heartbeat import WorkerHeartbeat
 from app.core.logging import configure_logging
 from app.core.settings import get_settings
+from app.core.tracing import setup_tracing
 
 settings = get_settings()
+setup_tracing("agent-celery")
 
 
 @setup_logging.connect

@@ -1,8 +1,10 @@
 """LangGraph 工作流图 —— 把 Agent 节点串成可执行的工作流"""
 
+import functools
 from collections.abc import Callable
 from typing import Literal
 
+from app.core import tracing
 from app.modules.organizations.models import BusinessDataSource
 from app.modules.runtime.tool_runtime import ToolRuntime
 from app.modules.workflow.orchestration.nodes import (
@@ -31,6 +33,17 @@ _RESUMABLE_NODES = frozenset(
     }
 )
 MAX_GRAPH_STEPS = 20
+
+
+def _traced(name: str, node: Callable) -> Callable:
+    """O1: a span around each node; the node itself is unchanged."""
+
+    @functools.wraps(node)
+    def run(*args, **kwargs):
+        with tracing.span(f"node.{name}", attributes={"node": name}):
+            return node(*args, **kwargs)
+
+    return run
 
 
 def _route_from_start(state: WorkflowState) -> str:
@@ -104,14 +117,21 @@ def build_workflow() -> StateGraph:
     graph = StateGraph(WorkflowState)
 
     # 注册所有节点
-    graph.add_node("planner_node", planner_node)
-    graph.add_node("planner_semantic_review_node", planner_semantic_review_node)
-    graph.add_node("planner_terminal_node", planner_terminal_node)
-    graph.add_node("planning_failure_node", planning_failure_node)
-    graph.add_node("data_node", data_node)
-    graph.add_node("knowledge_node", knowledge_node)
-    graph.add_node("reviewer_node", reviewer_node)
-    graph.add_node("smart_router_node", smart_router_node)
+    graph.add_node("planner_node", _traced("planner_node", planner_node))
+    graph.add_node(
+        "planner_semantic_review_node",
+        _traced("planner_semantic_review_node", planner_semantic_review_node),
+    )
+    graph.add_node(
+        "planner_terminal_node", _traced("planner_terminal_node", planner_terminal_node)
+    )
+    graph.add_node(
+        "planning_failure_node", _traced("planning_failure_node", planning_failure_node)
+    )
+    graph.add_node("data_node", _traced("data_node", data_node))
+    graph.add_node("knowledge_node", _traced("knowledge_node", knowledge_node))
+    graph.add_node("reviewer_node", _traced("reviewer_node", reviewer_node))
+    graph.add_node("smart_router_node", _traced("smart_router_node", smart_router_node))
 
     graph.add_conditional_edges(
         START,

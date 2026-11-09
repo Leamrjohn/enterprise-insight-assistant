@@ -20,3 +20,6 @@ pypdf==6.21.4
 jieba==0.42.1
 # O2a metrics exporter (app.modules.observability.metrics_exporter).
 prometheus-client==0.22.1
+# O1 tracing (app.core.tracing); opentelemetry-api comes with fastapi.
+opentelemetry-sdk==1.45.1
+opentelemetry-exporter-otlp-proto-http==1.45.1

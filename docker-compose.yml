@@ -6,6 +6,9 @@ x-backend-environment: &backend-environment
   DATABASE_USER: agent_app
   DATABASE_PASSWORD: changeme_in_production
   REDIS_URL: redis://redis:6379/0
+  # O1: set to http://otel-collector:4318 (observability profile) to export
+  # traces; empty keeps tracing local to each process.
+  OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
   INPUT_ARTIFACT_OBJECT_STORAGE_ENDPOINT_URL: ${INPUT_ARTIFACT_OBJECT_STORAGE_ENDPOINT_URL:-http://localstack:4566}
   INPUT_ARTIFACT_OBJECT_STORAGE_PUBLIC_ENDPOINT_URL: ${INPUT_ARTIFACT_OBJECT_STORAGE_PUBLIC_ENDPOINT_URL:-http://127.0.0.1:4566}
   INPUT_ARTIFACT_OBJECT_STORAGE_REGION: ${INPUT_ARTIFACT_OBJECT_STORAGE_REGION:-us-east-1}
@@ -547,6 +550,29 @@ services:
       - prometheus
     restart: unless-stopped
 
+  # O1 tracing: spans from api/worker/beat -> collector (attribute allowlist)
+  # -> Tempo (7 days) -> Grafana's Tempo data source.
+  otel-collector:
+    profiles: ["observability"]
+    image: otel/opentelemetry-collector-contrib:0.130.0@sha256:867d1074c2f750936fb9358ec9eefa009308053cf156b2c7ca1761ba5ef78452
+    logging: *default-logging
+    command: ["--config=/etc/otelcol/config.yml"]
+    volumes:
+      - ./ops/observability/otel-collector.yml:/etc/otelcol/config.yml:ro
+    depends_on:
+      - tempo
+    restart: unless-stopped
+
+  tempo:
+    profiles: ["observability"]
+    image: grafana/tempo:2.8.1@sha256:bc9245fe3da4e63dc4c6862d9c2dad9bcd8be13d0ba4f7705fa6acda4c904d0e
+    logging: *default-logging
+    command: ["-config.file=/etc/tempo.yml"]
+    volumes:
+      - ./ops/observability/tempo.yml:/etc/tempo.yml:ro
+      - tempo_data:/var/tempo
+    restart: unless-stopped
+
 volumes:
   postgres_data:
   business_data:
@@ -558,6 +584,7 @@ volumes:
   heartbeat:
   prometheus_data:
   grafana_data:
+  tempo_data:
 
 networks:
   default:

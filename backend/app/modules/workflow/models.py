@@ -89,6 +89,9 @@ class AnalysisTask(Base):
     request_id: Mapped[str | None] = mapped_column(
         String(128), nullable=True, index=True
     )
+    # O1: W3C traceparent of the request that created the task, so the worker
+    # continues the same trace.  No content; nullable for older tasks.
+    trace_context: Mapped[str | None] = mapped_column(String(64), nullable=True)
     active_execution_id: Mapped[str | None] = mapped_column(
         String(36), nullable=True, index=True
     )

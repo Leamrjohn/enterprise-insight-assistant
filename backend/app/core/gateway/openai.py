@@ -22,6 +22,7 @@ from app.core.exceptions import (
 from app.core.gateway.base import ModelCallRecord, ModelGateway
 from app.core.settings import get_settings
 from app.core.tokenizer import encoding_for_model
+from app.core.tracing import traced_model_call
 from app.modules.runtime.model_governance import (
     estimate_chat_prompt_tokens,
     fallback_chain_scope,
@@ -59,6 +60,7 @@ class OpenAIGateway(ModelGateway):
         with fallback_chain_scope(self.model_name):
             return self._chat_once(prompt, system_prompt, json_mode=json_mode)
 
+    @traced_model_call("openai")
     def _chat_once(
         self, prompt: str, system_prompt: str | None = None, *, json_mode: bool = False
     ) -> str:
