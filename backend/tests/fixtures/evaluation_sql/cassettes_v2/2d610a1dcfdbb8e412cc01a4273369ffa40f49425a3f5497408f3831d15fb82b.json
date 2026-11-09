@@ -1,0 +1,1 @@
+{"key": "2d610a1dcfdbb8e412cc01a4273369ffa40f49425a3f5497408f3831d15fb82b", "json_mode": true, "response": "{\"decision\":\"execute\",\"reason\":\"候选 SQL 使用已审定的 revenue/v1 指标口径（SUM(sales_orders.total_amount)，固定筛选 status='delivered'），按 customers.region_code='EAST' 限定华东区，时间范围覆盖 2025-08-01 至 2025-08-31，完整表达销售额、区域、已交付订单和月份四个必需概念，与计划范围一致。\",\"missing_requirements\":[]}"}

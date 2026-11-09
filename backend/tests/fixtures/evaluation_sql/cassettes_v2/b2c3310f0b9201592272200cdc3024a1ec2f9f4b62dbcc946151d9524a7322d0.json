@@ -1,0 +1,1 @@
+{"key": "b2c3310f0b9201592272200cdc3024a1ec2f9f4b62dbcc946151d9524a7322d0", "json_mode": true, "response": "{\"decision\":\"execute\",\"reason\":\"候选 SQL 使用 invoices.invoice_amount 与 payments.amount 计算所有发票的未回款余额合计，符合问题要求；快照包含所需表和关联，且无时间范围或状态筛选要求。\",\"missing_requirements\":[]}"}

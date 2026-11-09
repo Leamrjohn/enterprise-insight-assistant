@@ -1,0 +1,1 @@
+{"key": "ec6b26573335e43cf3251e07f5f50ea149c122f17ad2031dfe36dcd469edc3e0", "json_mode": true, "response": "{\"decision\":\"execute\",\"reason\":\"候选 SQL 使用已审定的 revenue/v1 口径（SUM(sales_orders.total_amount)，status='delivered'，按 order_date 限定 2025-08），按客户名称分组并取销售额前 5 名，完整覆盖了指标、时间范围、已交付订单筛选和客户维度，与计划一致。\",\"missing_requirements\":[]}"}

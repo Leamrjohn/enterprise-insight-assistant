@@ -1,0 +1,1 @@
+{"key": "fa87bd61505d5f79d8c1b1bf3851a3ff54f8e3b7de188d53ade1a04249e473e5", "json_mode": true, "response": "{\"decision\":\"execute\",\"reason\":\"候选 SQL 使用 customers.region_code='NORTH' 正确表达华北区客户，用 NOT EXISTS 子查询筛选在 2025-08-01 至 2025-08-31 期间没有 status='delivered' 订单的客户，并 COUNT(DISTINCT c.id) 统计客户数。时间范围、区域枚举、已交付状态均与快照和注册指标口径一致，完整回答了用户问题。\",\"missing_requirements\":[]}"}

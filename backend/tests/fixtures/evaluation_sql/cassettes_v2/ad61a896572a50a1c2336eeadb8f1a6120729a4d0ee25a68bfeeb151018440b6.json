@@ -1,0 +1,1 @@
+{"key": "ad61a896572a50a1c2336eeadb8f1a6120729a4d0ee25a68bfeeb151018440b6", "json_mode": true, "response": "{\"decision\":\"execute\",\"reason\":\"候选 SQL 使用已审定的 revenue/v1 指标口径（SUM(sales_orders.total_amount)，status='delivered'，时间列 order_date），并通过 customers.tier='strategic' 表达战略客户、2025 年时间范围完整，覆盖计划要求的实体、期间、指标与已交付条件。\",\"missing_requirements\":[]}"}

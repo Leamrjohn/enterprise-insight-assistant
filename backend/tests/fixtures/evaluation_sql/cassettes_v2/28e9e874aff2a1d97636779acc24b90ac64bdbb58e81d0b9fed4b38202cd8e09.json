@@ -1,0 +1,1 @@
+{"key": "28e9e874aff2a1d97636779acc24b90ac64bdbb58e81d0b9fed4b38202cd8e09", "json_mode": true, "response": "{\"decision\":\"execute\",\"reason\":\"候选 SQL 使用已审定的 revenue_target/v1 指标口径，对 monthly_budgets.revenue_target 求和，并按 monthly_budgets.month = 2025-08-01 限定 2025 年 8 月，覆盖了收入目标、成本中心（月度预算按成本中心记录）和月份范围，返回聚合结果，完整回答数据子问题。\",\"missing_requirements\":[]}"}

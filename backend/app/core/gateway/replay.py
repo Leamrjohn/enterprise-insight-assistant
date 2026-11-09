@@ -5,7 +5,9 @@ the exact request.  Replay mode only reads stored responses and fails closed on
 a miss, so an evaluation can never silently fall through to a paid call.
 
 Cassettes contain business data: keep them under the git-ignored
-``evaluation-runs/`` directory and never in the database.
+``evaluation-runs/`` directory and never in the database.  The only exception is
+the reviewed CI gate recordings under ``tests/fixtures`` (E10a), which cover the
+synthetic acme demo data and the frozen held-out questions only.
 """
 
 from __future__ import annotations

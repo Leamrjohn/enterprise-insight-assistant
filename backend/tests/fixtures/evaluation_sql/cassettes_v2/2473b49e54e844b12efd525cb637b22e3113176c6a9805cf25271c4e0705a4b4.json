@@ -1,0 +1,1 @@
+{"key": "2473b49e54e844b12efd525cb637b22e3113176c6a9805cf25271c4e0705a4b4", "json_mode": true, "response": "{\"decision\":\"execute\",\"reason\":\"候选 SQL 使用已审定的 revenue/v1 口径（SUM(sales_orders.total_amount)，status='delivered'），时间范围限定 2025 年 order_date，并通过 EXISTS 关联 service_tickets 实现每笔订单只计一次，完整覆盖已交付、2025年下单、关联客诉、销售额合计与去重等要求。\",\"missing_requirements\":[]}"}

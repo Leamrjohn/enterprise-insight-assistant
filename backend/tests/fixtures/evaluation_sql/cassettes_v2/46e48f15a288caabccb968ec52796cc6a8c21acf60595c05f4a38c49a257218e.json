@@ -1,0 +1,1 @@
+{"key": "46e48f15a288caabccb968ec52796cc6a8c21acf60595c05f4a38c49a257218e", "json_mode": true, "response": "{\"decision\":\"execute\",\"reason\":\"候选 SQL 使用已审定的 revenue_target/v1 指标口径，聚合 SUM(monthly_budgets.revenue_target)，时间范围限定为 2025-06，与问题及计划范围一致，可完整回答收入目标合计。\",\"missing_requirements\":[]}"}

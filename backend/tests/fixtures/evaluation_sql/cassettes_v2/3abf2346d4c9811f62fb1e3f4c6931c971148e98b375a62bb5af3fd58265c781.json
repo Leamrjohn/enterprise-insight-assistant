@@ -1,0 +1,1 @@
+{"key": "3abf2346d4c9811f62fb1e3f4c6931c971148e98b375a62bb5af3fd58265c781", "json_mode": true, "response": "{\"decision\":\"execute\",\"reason\":\"候选 SQL 使用已审定的 revenue/v1 指标口径（SUM(sales_orders.total_amount)，固定筛选 status='delivered'），按 order_date 限定 2025-04-01 至 2025-06-30 的 2025-Q2 范围，并按月分组输出月份与销售额，完整覆盖问题所需的指标、时间范围与按月汇总要求。\",\"missing_requirements\":[]}"}

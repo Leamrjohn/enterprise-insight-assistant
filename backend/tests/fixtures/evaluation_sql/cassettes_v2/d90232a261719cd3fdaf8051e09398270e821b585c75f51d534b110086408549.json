@@ -1,0 +1,1 @@
+{"key": "d90232a261719cd3fdaf8051e09398270e821b585c75f51d534b110086408549", "json_mode": true, "response": "{\"decision\":\"execute\",\"reason\":\"候选 SQL 使用 sales_orders.total_amount 计算平均每笔订单金额，按 order_date 限定 2025-08 且 status='delivered'，与已交付订单口径及时间范围一致；快照包含所需字段，指标口径可支持该聚合查询。\",\"missing_requirements\":[]}"}

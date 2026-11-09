@@ -113,3 +113,4 @@
 - 2026-11-08：已推送 work/smoke-baseline，开 PR #2（合入 main，未合并），CI 首次运行中，Auto-fix 已开启。
 - 2026-11-08：E1 完成，PR #2 以合并提交合入 main（387d64f）；之后每个工单从 main 开短分支。
 - 2026-11-09：E6 已在 chore/e6-security-scan 提交（secrets + deps 作业），本地验证通过；待批准推送并开 PR。
+- 2026-11-09：E10a 已在 chore/e10a-behavior-gate 提交（三类评测接入 CI），本地全流程预演通过；SQL 基线 21/24 待用户确认，推送待批准。

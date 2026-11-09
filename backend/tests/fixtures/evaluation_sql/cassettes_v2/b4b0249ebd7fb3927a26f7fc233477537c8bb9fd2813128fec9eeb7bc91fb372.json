@@ -1,0 +1,1 @@
+{"key": "b4b0249ebd7fb3927a26f7fc233477537c8bb9fd2813128fec9eeb7bc91fb372", "json_mode": true, "response": "{\"decision\":\"execute\",\"reason\":\"候选 SQL 使用已审定的 gross_profit/v1 口径：SUM(line_amount - unit_cost*quantity)，按 sales_orders.order_date 限定 2025-08-01 至 2025-09-01，并筛选 status='delivered'，完整覆盖毛利、已交付订单与 2025年8月范围。\",\"missing_requirements\":[]}"}
