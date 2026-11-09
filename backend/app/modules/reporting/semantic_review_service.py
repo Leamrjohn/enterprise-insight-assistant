@@ -28,6 +28,7 @@ from app.modules.reporting.semantic_review import (
     SQLSemanticReview,
 )
 from app.modules.runtime.context_budget import EVIDENCE_REVIEW, assemble
+from app.modules.runtime.prompts import get_prompt_registry
 from pydantic import ValidationError
 from sqlglot import exp
 from sqlglot.errors import SqlglotError
@@ -168,28 +169,10 @@ class SemanticReviewService:
         proposed_plan: dict[str, Any],
         catalog: SnapshotCatalog | None,
     ) -> PlannerDecision:
-        system_prompt = (
-            "你是企业经营助手的 Planner 语义复核器。只返回一个完整的 "
-            "PlannerDecision JSON，不回答用户问题。复核初始计划是否与用户问题、"
-            "当前公司已授权范围和契约快照一致。若指标或关键条件不能由快照支持，"
-            "选择 needs_clarification；若明确要求其他公司、未授权资料、系统内部数据、"
-            "写入或危险行为，选择 refuse。不得因为缺少时间而忽略跨公司或越权意图。"
-            "registered_metrics 是已审定的指标口径，filter_value_definitions 是筛选值的含义；"
-            "能用它们表达的指标和条件视为快照支持，不得再以缺少定义为由追问。"
-            "快照不含文档内容；route 为 knowledge_only 或 hybrid 时，文档证据由后续知识节点"
-            "在已授权文档内检索，不得因快照未展示文档、政策或风险提示而选择 needs_clarification。"
-            "scope_exit 不得实际完成翻译、写诗、推荐等无关任务。"
-            "action 只能是 analyze、direct_response、scope_exit、needs_clarification、refuse；"
-            "若初始计划正确，必须原样保留它的 action 和其他字段，不能使用 proceed、accept、keep 等词。"
-            "必须只输出以下九字段 JSON，九个字段都必须出现，不适用的填 null："
-            '{"action":"...","route":null,"reason":"...",'
-            '"clarification_question":null,"response_message":null,'
-            '"resolved_question":null,"clarification":null,"intent":null,'
-            '"evaluation_scope":null}。'
-            "选择 needs_clarification 时，clarification_question 用业务语言写具体追问，"
-            "不得出现表名或字段名，clarification 写"
-            f'{{"missing_slots":["{"|".join(get_args(ClarificationSlot))}"],"examples":[]}}。'
-            f"{_OTHER_TABLES_NOTE}"
+        system_prompt = get_prompt_registry().render(
+            "review.plan_system",
+            clarification_slots="|".join(get_args(ClarificationSlot)),
+            other_tables_note=_OTHER_TABLES_NOTE,
         )
         shown = select_tables(catalog, [question]) if catalog is not None else set()
         payload = {
@@ -268,21 +251,8 @@ class SemanticReviewService:
         candidate: SQLCandidate,
         catalog: SnapshotCatalog | None,
     ) -> SQLSemanticReview:
-        system_prompt = (
-            "你是受控 SQL 的执行前语义复核器。只返回 JSON。判断候选 SQL 是否真正"
-            "回答用户问题和 Planner 计划。你不能授权表、字段、关联或权限；这些由后续"
-            "SQLTool 决定。若快照缺少所需指标、枚举含义、比较期或关键条件，返回"
-            "insufficient_schema，绝不允许用无关表或近似指标替代。registered_metrics 是"
-            "已审定的指标口径，符合口径的 SQL 不得再以缺少定义为由拒绝。若快照足够但 SQL "
-            "遗漏可修复条件，返回 repair；只有关键业务条件、指标与范围都被表达时返回 execute。"
-            "当 Planner route=hybrid 时，候选 SQL 只需完整验证经营数据可支持的子问题；"
-            "原因归因所需的文档证据由知识节点处理，不得仅因 SQL 不能单独证明原因而拒绝"
-            "一个已覆盖指标、范围和比较期的数据查询。若候选 SQL 连数据子问题也不能证明，"
-            "仍必须拒绝。"
-            "必须只输出 JSON："
-            '{"decision":"execute|repair|insufficient_schema","reason":"...",'
-            '"missing_requirements":["..."]}。'
-            f"{_OTHER_TABLES_NOTE}"
+        system_prompt = get_prompt_registry().render(
+            "review.sql_system", other_tables_note=_OTHER_TABLES_NOTE
         )
         used = _tables_in_sql(candidate.sql)
         shown = (
@@ -351,22 +321,10 @@ class SemanticReviewService:
                     knowledge_result.get("evidences") or []
                 ),
             }
-        system_prompt = (
-            "你是企业经营报告的证据语义复核器。只返回 JSON，不生成新事实、数字、"
-            "引用或建议。判断现有数据和文档证据是否支持回答原问题：supported 表示"
-            "支持，partial 表示只支持部分事实，unsupported 表示不能回答核心问题。"
-            "当数据只是无关记录、缺少关键筛选/比较条件，或原因没有文档引用时，不能"
-            "判为 supported。"
-            "当 plan.route=hybrid 时，data_result 可单独支持数值或指标子问题；"
-            "knowledge_result 只需支持文档事实和结论边界。不得仅因文档未重复 SQL "
-            "指标，或 SQL 未包含文档背景，而把已分别覆盖的混合问题判为 partial。"
-            "对于 document_question，只有直接支持非因果、非数值文档事实的已列引用 chunk "
-            "才可写入 supported_document_chunk_ids；其他情况必须为空数组。"
-            f"{qualification_rule}"
-            "必须只输出 JSON："
-            '{"verdict":"supported|partial|unsupported","reason":"...",'
-            '"limitations":["..."],"supported_document_chunk_ids":[1],'
-            f"{qualification_json}"
+        system_prompt = get_prompt_registry().render(
+            "review.evidence_system",
+            qualification_rule=qualification_rule,
+            qualification_json=qualification_json,
         )
         payload, _ = assemble(
             EVIDENCE_REVIEW,

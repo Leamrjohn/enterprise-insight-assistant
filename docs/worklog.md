@@ -695,3 +695,9 @@
 - 验证：迁移前后 90 个原字段默认值逐个比对 0 差异；新增 test_config_domains 13 通过（含旧常量值、每个字段只属一个域、各域方法不重名、各域校验在 Settings 上生效）；本地 unit+scripts 与 main 对照失败集合完全相同（260 个均为本地无库连接或已有失败），CI 跑数据库测试。
 - 踩坑：①多个域都叫 validate_positive_int，多重继承后只剩一个生效，改为带域名前缀并加不重名测试；②Planner 重试次数改读 Settings 后，无数据库的路由门禁作业 43 题全部 ValidationError（本地复现），作业补上与 unit 相同的占位密码，修后本地 32/43、规则 31 与基线一致。
 - 未做：工具目录（超时、熔断）、EVIDENCE_REVIEW 预算按设计属策略文件，留给后续；冒烟待部署后与其他工单一起跑。
+
+## 2026-11-09 G1 提示词注册表（分支 chore/g1-prompt-registry）
+- 8 个静态系统提示词（planner、知识回答、知识工具、证据核对及选项、三个语义复核）从代码迁到 app/prompts/*.md + manifest.json（版本、变量、sha256）；用脚本从源码语法树自动抽取，f-string 变量转 ${name} 模板，不手抄。新增 runtime/prompts.py（加载时校验文件、哈希、变量；渲染缺或多变量报错；CRLF 不影响哈希）。
+- 任务级 model_call_scope 传 prompt_version=prompts@<16 位哈希>，此后每条模型调用记录都有提示词集版本。
+- 验证：迁移前用旧代码渲染 9 种提示词并记下哈希，迁移后经真实调用路径渲染逐个相同（test_prompt_registry 6 通过）；路由门禁回放录音全部命中（32/43、规则 31，与基线同）；unit+scripts 失败集合与 main 相同。
+- 未做：SQL 生成和 Data 工具提示词动态拼接，留在代码里（待 C4）；“新任务 prompt_version 空值率 0”要部署后查库确认；CI 内容改了但版本没升的门禁（设计 3.3）未做。
