@@ -120,4 +120,6 @@
 
 - 2026-11-09：E9 CODEOWNERS、PR 模板、ADR 索引已在 chore/e9-collaboration 提交；默认分支改为 main，main 分支保护已设置。
 
+- 2026-11-09：E11 链接检查脚本和 CI 作业完成，修正 14 处断链；分支 chore/e11-docs。
+
 - 2026-11-09：G1 8 个静态提示词迁入 app/prompts（逐字节一致），任务记录 prompt_version；分支 chore/g1-prompt-registry。
