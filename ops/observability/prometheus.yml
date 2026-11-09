@@ -1,0 +1,10 @@
+# O2a: Prometheus scrapes the platform metrics exporter (compose profile
+# "observability").  Alert rules come with O3.
+global:
+  scrape_interval: 30s
+  evaluation_interval: 30s
+
+scrape_configs:
+  - job_name: agent-platform
+    static_configs:
+      - targets: ["metrics-exporter:9108"]
