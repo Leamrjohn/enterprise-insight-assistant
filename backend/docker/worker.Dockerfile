@@ -15,10 +15,9 @@ RUN apt-get update \
 
 COPY requirements/ requirements/
 
-RUN pip install --upgrade pip \
-    && pip install -r requirements/base.txt \
-    && pip install --index-url https://download.pytorch.org/whl/cpu torch==2.6.0 \
-    && pip install -r requirements/ml.txt
+RUN pip install --require-hashes -r requirements/base-linux-py312.lock \
+    && pip install --require-hashes --extra-index-url https://download.pytorch.org/whl/cpu \
+        -r requirements/ml-linux-py312.lock
 
 RUN groupadd --gid 10001 app \
     && useradd --uid 10001 --gid app --create-home --shell /usr/sbin/nologin app \
