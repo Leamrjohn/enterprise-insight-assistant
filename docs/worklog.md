@@ -672,3 +672,8 @@
 - 验证：门禁测试 12 个 + tests/scripts 共 243 通过、pyright 0；本地干净容器全流程预演通过；故意改 R2 规则、删 Planner 提示词 1 个字、改 SQL 提示词 1 个字均失败；Knowledge 未做故意改坏验证，CI 机器上重排结果是否与本地完全一致未验证。
 - 检索慢的原因：compose 的 evaluation 服务没设 HF_HOME，每次重新下载约 1.6GB 模型（建索引 265～324 秒，有缓存后 12.7 秒）；另外 8 策略全跑时每个重排策略约 190～225 秒。待办：给 evaluation 服务挂模型缓存（不在本工单）。
 - CI 首跑：gitleaks 把 100 个录音里的请求哈希字段（"key": 64 位十六进制，等于文件名）报为 generic-api-key，逐条登记指纹到 .gitleaksignore（重录后要重新生成）；之后 22 项全绿。CI 上 SQL 21/24、检索各计数与本地完全一致；数据作业首跑约 11 分钟（含模型下载）。
+
+## 2026-11-09 E9 协作规范（分支 chore/e9-collaboration，未推送）
+- 新增 .github/CODEOWNERS（评测基线、迁移、身份权限、数据源策略、SQL 校验、查询登记、工具守卫、.github、AGENTS.md）、.github/pull_request_template.md（工单、改动、验证层、改前改后、没验证到的、需批准的事）、docs/design/adr/README.md（ADR 模板和索引）。
+- 第一批 ADR（模块化单体、记忆分表、RLS 控制角色）未写：决定内容需用户确认，不替用户补。
+- 发现：GitHub 上仓库默认分支是 feature/api-contracts，不是 main；main 之前没有分支保护。分支保护设置待用户确认规则后用 gh 执行。
