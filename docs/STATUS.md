@@ -123,4 +123,7 @@
 - 2026-11-09：E11 链接检查脚本和 CI 作业完成，修正 14 处断链；分支 chore/e11-docs。
 
 - 2026-11-09：K1 配置分 11 个域、20 个常量归入配置，默认值 0 差异；分支 chore/k1-config-domains。
+
+- 2026-11-09：G1 8 个静态提示词迁入 app/prompts（逐字节一致），任务记录 prompt_version；分支 chore/g1-prompt-registry。
+
 - 2026-11-09：K2 未知配置名在生产启动失败、开发告警，示例文件由清单生成（110 项）；分支 chore/k2-config-catalog。
