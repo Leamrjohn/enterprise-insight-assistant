@@ -683,5 +683,5 @@
 - Settings 拆成 app/core/config/ 下 11 个域（app、infra、security、admission、model、tool、context、memory、rag、flags、artifacts），Settings 多重继承各域；环境变量名和 settings.<字段> 写法不变，app/core/settings.py 保留为转发入口；settings.domain(RagConfig) 取单个域。
 - 20 个代码常量归入配置（限流、Planner/Data 重试次数、会话历史 token、上下文压缩 3 项、记忆 3 项、RRF_K、工具循环 8 项），调用点改为运行时读取；测试引用的 MAX_ROWS_WHEN_COMPRESSED、DEFAULT_MEMORY_TTL 保留为“默认值”别名，测试文件未改。
 - 验证：迁移前后 90 个原字段默认值逐个比对 0 差异；新增 test_config_domains 13 通过（含旧常量值、每个字段只属一个域、各域方法不重名、各域校验在 Settings 上生效）；本地 unit+scripts 与 main 对照失败集合完全相同（260 个均为本地无库连接或已有失败），CI 跑数据库测试。
-- 踩坑：多个域都叫 validate_positive_int，多重继承后只剩一个生效，4 个 test_settings 失败；改为带域名前缀并加了不重名测试。
+- 踩坑：①多个域都叫 validate_positive_int，多重继承后只剩一个生效，改为带域名前缀并加不重名测试；②Planner 重试次数改读 Settings 后，无数据库的路由门禁作业 43 题全部 ValidationError（本地复现），作业补上与 unit 相同的占位密码，修后本地 32/43、规则 31 与基线一致。
 - 未做：工具目录（超时、熔断）、EVIDENCE_REVIEW 预算按设计属策略文件，留给后续；冒烟待部署后与其他工单一起跑。
