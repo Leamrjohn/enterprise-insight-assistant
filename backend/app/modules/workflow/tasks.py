@@ -617,12 +617,13 @@ def process_analysis_task(self, task_id: int):
         trace_scope.enter_context(
             tracing.span(
                 "analysis_task",
-                traceparent=record.trace_context,
+                # Tracing must never fail a task: every field is optional here.
+                traceparent=getattr(record, "trace_context", None),
                 attributes={
-                    "task_id": record.id,
-                    "execution_id": execution.attempt.execution_id,
-                    "company_id": record.company_id,
-                    "resumed": execution.attempt.retry_number > 0,
+                    "task_id": getattr(record, "id", None),
+                    "execution_id": getattr(execution.attempt, "execution_id", None),
+                    "company_id": getattr(record, "company_id", None),
+                    "resumed": (getattr(execution.attempt, "retry_number", 0) or 0) > 0,
                     "queue_seconds": _queue_seconds(record),
                 },
             )
