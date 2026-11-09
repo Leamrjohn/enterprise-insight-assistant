@@ -728,6 +728,13 @@
 ## 2026-11-09 E3 修复：check_pins 只查已跟踪文件（分支 fix/e3-check-tracked-files）
 - 症状：主目录里 tmp/ 下的旧评测工作树有 23 处未固定的 Dockerfile，本地 test_repository_has_no_floating_reference 失败（CI 是干净检出所以没暴露）。根因：用 glob 扫目录。改为 git ls-files，非 git 目录才退回扫描；新增未跟踪文件不检查的测试，6 通过；主目录运行通过。
 
+## 2026-11-09 K2 严格校验和示例文件生成（分支 chore/k2-config-catalog）
+- 新增 app/core/config/catalog.py：由 K1 的 11 个域生成配置清单（110 项）和示例配置文件（按域分节，保留原有注释和占位值；密钥一律留空）；--check 供测试和 CI 用，--write 重新生成。
+- get_settings() 启动时检查未知配置名：env 文件里的全部键，以及进程环境里与已声明键同前缀的变量（PATH 等不管）；production 直接启动失败，development/test 只记警告；报错只列键名，不带值。数据源凭据名按白名单放行。
+- 示例文件重新生成：原有键一个不少、值不变（2 个 JSON 列表仅空格不同），新增 33 个此前缺失的配置项。
+- 验证：test_config_catalog 7 通过（示例一致、每项只出现一次、密钥留空、拼错能发现、生产启动失败且不泄露值、开发只告警、正确键通过）；unit+scripts 失败集合与 main 相同。CI 由单元测试里的一致性检查覆盖。
+- 未验证：正式环境的真实配置文件里是否有未声明的键（按规定不读该文件；开发环境只会出警告，部署后看 api/worker 日志里的 “Unknown configuration keys”）。
+
 ## 2026-11-09 E5 分层门禁和覆盖率基线（分支 chore/e5-test-layers）
 - backend/tests/test_layers.json 登记 7 个带 skip/skipif/e2e/slow 的测试文件：层、触发方式（ci/manual/pending）、怎么跑；scripts/ci/check_test_layers.py 用语法树识别跳过（字符串里的不算），未登记或登记了却不再跳过都失败；单元测试和 CI unit 作业都会跑。
 - 覆盖率：CI unit、integration 作业加 --cov=app 生成 coverage.json，scripts/ci/check_coverage.py 与 tests/coverage_baseline.json 比较，低于基线 0.5 个百分点以上失败；基线只记实测值，不定目标。pytest-cov 6.2.1（带 coverage 7.17.2）进 dev 依赖和 CI 锁。

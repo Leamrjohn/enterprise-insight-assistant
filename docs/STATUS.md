@@ -134,4 +134,6 @@
 
 - 2026-11-09：修 check_pins 误扫未跟踪的 tmp/ 工作树；分支 fix/e3-check-tracked-files。
 
+- 2026-11-09：K2 未知配置名在生产启动失败、开发告警，示例文件由清单生成（110 项）；分支 chore/k2-config-catalog。
+
 - 2026-11-09：E5 跳过测试登记表和覆盖率门禁；分支 chore/e5-test-layers。
