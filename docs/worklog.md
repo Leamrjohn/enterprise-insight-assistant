@@ -666,8 +666,9 @@
 - deps 作业：pip-audit 2.7.3 由带哈希的 security-tools.lock 安装；判定交给 check_audit.py（后端全部拦、前端 high 起拦，例外须写理由和到期日，过期即失败）。现有 pillow/pypdf/vite/nanoid/source-map-js/undici 列入例外，到期 2026-12-08，升级归 E2/E3。
 - 验证：check_audit 测试 13 通过、tests/scripts 129 通过、pyright 0；干净容器重放 deps 步骤通过，去掉例外后 pip 60 条、npm 9 条被拦。CI 上实际运行未验证（未推送）；trivy 镜像扫描按决定暂缓。
 
-## 2026-11-09 E10a 最小行为门禁（方案 B：路由、SQL、Knowledge 全接入；分支 chore/e10a-behavior-gate，未推送）
+## 2026-11-09 E10a 最小行为门禁（方案 B：路由、SQL、Knowledge 全接入；PR #4 以合并提交合入 main，e46bc03）
 - 新增 check_behavior_gate.py + behavior_gate.sh + 基线文件；CI 新增 behavior-routing（Planner 回放 + 规则）和 behavior-data（容器作业：演示库现场生成、SQL 回放、主链检索策略、模型按修订号锁定并缓存、ML 依赖带哈希锁）。录音提交进 tests/fixtures（Planner 45 个、SQL 55 个）。
 - SQL 录音重录（用户批准，55 次调用约 $0.028）：旧录音因 SQL 生成请求变化全部失配；21/24（11-02 为 22/24，heldout-average-order 正确的 AVG SQL 被指标契约拦下），回放 2 次一致。顺带修复 run_sql_result_evaluation.py 自 A11b 起无法连接的问题（改用未保存的平台连接）。
 - 验证：门禁测试 12 个 + tests/scripts 共 243 通过、pyright 0；本地干净容器全流程预演通过；故意改 R2 规则、删 Planner 提示词 1 个字、改 SQL 提示词 1 个字均失败；Knowledge 未做故意改坏验证，CI 机器上重排结果是否与本地完全一致未验证。
 - 检索慢的原因：compose 的 evaluation 服务没设 HF_HOME，每次重新下载约 1.6GB 模型（建索引 265～324 秒，有缓存后 12.7 秒）；另外 8 策略全跑时每个重排策略约 190～225 秒。待办：给 evaluation 服务挂模型缓存（不在本工单）。
+- CI 首跑：gitleaks 把 100 个录音里的请求哈希字段（"key": 64 位十六进制，等于文件名）报为 generic-api-key，逐条登记指纹到 .gitleaksignore（重录后要重新生成）；之后 22 项全绿。CI 上 SQL 21/24、检索各计数与本地完全一致；数据作业首跑约 11 分钟（含模型下载）。
