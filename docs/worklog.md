@@ -719,6 +719,12 @@
 - 测试：test_watchdog 8 通过（新鲜/过期/缺失/旧文件、子进程退出码、卡住子进程被杀、--check、两种心跳）；pyright、ruff 通过。
 - 未验证：持有任务时卡死再恢复的端到端过程（恢复由已有的租约过期恢复负责，见 test_recovery_delivery、test_stranded_tasks）；正式服务尚未用新命令重启（等合入后部署）。
 
+## 2026-11-09 E4 架构规则：import-linter（分支 chore/e4-import-rules）
+- 新增 backend/.importlinter 两条规则：core 不得引用 app.modules；业务模块分四层（workflow → analysis/knowledge/reporting/conversations/evaluation/reviews/memory/input_artifacts → runtime → documents/organizations/identity/observability），同层可互相引用。现存 41 条违规（core 4 条，如 gateway→runtime、middleware→observability；分层 37 条，多为各模块引用 workflow.models）登记在 ignore_imports，只禁止新增。
+- 发现：app/modules、app/utils 没有 __init__.py（命名空间包），grimp 看不到它们，规则会“全部通过”却什么都没查。正式补文件会让 ruff 把 app 改判为第一方包，约 100 个文件的 import 排序要重排（CI ruff 失败 101 处）；改用 known-third-party 又让 core/db/api 下 18 个文件失败；namespace 根包 grimp 不支持。最终 scripts/ci/lint_imports.sh 只在运行期间临时建这两个文件，跑完删除。待我决定：是否正式补 __init__.py 并统一重排 import（机械改动约 100 个文件）。
+- CI Static 矩阵加 import-linter；import-linter 2.3（带 grimp 3.19）进 dev 依赖和 CI 锁，其余包版本不变。
+- 验证：两条规则 KEPT；故意加 identity→workflow.models 和 core→modules.runtime 两条引用后 BROKEN、exit 1，删掉后恢复。
+
 ## 2026-11-09 K2 严格校验和示例文件生成（分支 chore/k2-config-catalog）
 - 新增 app/core/config/catalog.py：由 K1 的 11 个域生成配置清单（110 项）和示例配置文件（按域分节，保留原有注释和占位值；密钥一律留空）；--check 供测试和 CI 用，--write 重新生成。
 - get_settings() 启动时检查未知配置名：env 文件里的全部键，以及进程环境里与已声明键同前缀的变量（PATH 等不管）；production 直接启动失败，development/test 只记警告；报错只列键名，不带值。数据源凭据名按白名单放行。

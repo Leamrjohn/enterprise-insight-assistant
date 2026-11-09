@@ -130,4 +130,6 @@
 
 - 2026-11-09：O4 Worker/Beat 心跳和看门狗，卡死演练 40 秒内自动重启；分支 chore/o4-watchdog。
 
+- 2026-11-09：E4 import-linter 两条规则接入 CI，存量 41 条登记，故意违规会失败；分支 chore/e4-import-rules。
+
 - 2026-11-09：K2 未知配置名在生产启动失败、开发告警，示例文件由清单生成（110 项）；分支 chore/k2-config-catalog。
