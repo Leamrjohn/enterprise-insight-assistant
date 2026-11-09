@@ -122,4 +122,6 @@
 
 - 2026-11-09：E11 链接检查脚本和 CI 作业完成，修正 14 处断链；分支 chore/e11-docs。
 
+- 2026-11-09：K1 配置分 11 个域、20 个常量归入配置，默认值 0 差异；分支 chore/k1-config-domains。
+
 - 2026-11-09：修 check_pins 误扫未跟踪的 tmp/ 工作树；分支 fix/e3-check-tracked-files。

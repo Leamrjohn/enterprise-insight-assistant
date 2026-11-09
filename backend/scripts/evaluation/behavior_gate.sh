@@ -3,7 +3,7 @@
 # No step calls a model: replay fails closed on a missing recording, and the
 # retrieval models are local and loaded offline.
 #
-#   scripts/evaluation/behavior_gate.sh routing    # no database
+#   scripts/evaluation/behavior_gate.sh routing    # no database (Settings still needs placeholder passwords)
 #   scripts/evaluation/behavior_gate.sh sql        # needs the acme demo database
 #   scripts/evaluation/behavior_gate.sh retrieval  # needs agent_platform_test and HF_HOME
 #
