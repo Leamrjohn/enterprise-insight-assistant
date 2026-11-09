@@ -13,8 +13,8 @@ RUN pip install --require-hashes -r requirements/base-linux-py312.lock
 
 RUN groupadd --gid 10001 app \
     && useradd --uid 10001 --gid app --create-home --shell /usr/sbin/nologin app \
-    && mkdir -p /app/logs /app/storage \
-    && chown -R app:app /app
+    && mkdir -p /app/logs /app/storage /heartbeat \
+    && chown -R app:app /app /heartbeat
 
 RUN python -c "import tiktoken; [tiktoken.get_encoding(n) for n in ('o200k_base', 'cl100k_base')]"     && chmod -R a+rX /opt/tiktoken
 

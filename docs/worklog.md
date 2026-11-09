@@ -735,6 +735,13 @@
 - 验证：test_config_catalog 7 通过（示例一致、每项只出现一次、密钥留空、拼错能发现、生产启动失败且不泄露值、开发只告警、正确键通过）；unit+scripts 失败集合与 main 相同。CI 由单元测试里的一致性检查覆盖。
 - 未验证：正式环境的真实配置文件里是否有未声明的键（按规定不读该文件；开发环境只会出警告，部署后看 api/worker 日志里的 “Unknown configuration keys”）。
 
+## 2026-11-09 O2a 轻量看板（分支 chore/o2a-dashboard）
+- 新增指标导出器 app/modules/observability/metrics_exporter.py（:9108，每次抓取查库：进行中任务、未认领 Outbox 事件及最老年龄、过期租约、卡住任务、账本按结算状态、长时间 reserved、Worker/Beat 心跳年龄；只有计数和年龄，标签不含任务/用户/公司 id）；连接用 agent_app，但强制只读事务（default_transaction_read_only=on）和 5 秒语句超时。prometheus-client 0.22.1 进运行时依赖和锁（其余包不变）。
+- compose observability profile 新增 metrics-exporter、prometheus（v3.5.0，保留 30 天）、grafana（12.0.2，匿名只读、无登录框），镜像按摘要固定，端口只绑 127.0.0.1（9090、3001）；看板和数据源由 ops/observability/ 下文件自动加载。worker、beat 的心跳写入共享卷 heartbeat，导出器只读挂载；镜像预建 /heartbeat 并归 app 用户。
+- 验证：单元 4 通过；本机连正式库跑真实查询：写操作被拒（read-only）。一次性容器（agent-o2a-*，接 agent_default 网络）里 Prometheus target up，Grafana 看板加载，经数据源查到 stranded=0、expired leases=0、reserved_stale=1、inflight=88（均为 awaiting_review），与直接查库一致；演练容器已删除。
+- 发现（待我决定）：平台库有 1 条模型调用账本 reserved 超过 10 分钟；导出器是否改用专用只读角色（现用 agent_app + 只读事务）。
+- 未验证：正式栈以 profile 启动（等部署）；心跳卷的实际写入（等部署后看面板）。
+
 ## 2026-11-09 C1 分词器统一（分支 chore/c1-tokenizer）
 - 新增 app/core/tokenizer.py（编码按进程缓存；DeepSeek 等 tiktoken 不认识的模型用 o200k_base；OpenAI 网关保持“未知模型名报错”的原行为），context_budget、conversations、memory、DeepSeek/OpenAI 网关、measure_context_baseline 共 6 处改走它，代码里不再直接调用 tiktoken。
 - 4 个镜像设置 TIKTOKEN_CACHE_DIR=/opt/tiktoken，构建时预置 o200k_base、cl100k_base。
