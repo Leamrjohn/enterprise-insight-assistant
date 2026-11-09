@@ -679,6 +679,11 @@
 - 新增 backend/scripts/deps/check_pins.py（镜像要摘要、action 要提交号、工具链和前端版本要 x.y.z）并接入 CI deps 作业；测试 5 通过，含“仓库当前无浮动引用”。
 - 未验证：setup-python 能否装到 3.12.15（推送后 CI 才知道）；compose 重新拉取后的启动（摘要与运行中镜像相同，未重启服务）。
 
+## 2026-11-09 E9 协作规范（分支 chore/e9-collaboration，未推送）
+- 新增 .github/CODEOWNERS（评测基线、迁移、身份权限、数据源策略、SQL 校验、查询登记、工具守卫、.github、AGENTS.md）、.github/pull_request_template.md（工单、改动、验证层、改前改后、没验证到的、需批准的事）、docs/design/adr/README.md（ADR 模板和索引）。
+- 第一批 ADR（模块化单体、记忆分表、RLS 控制角色）未写：决定内容需用户确认，不替用户补。
+- 用户批准后用 gh 设置：默认分支 feature/api-contracts → main；main 分支保护（必须 PR、11 项 CI 检查必过且须跟上 main、管理员同样受限、禁止强推和删除、不要求人工审批）。API 读回规则一致；真实拦截效果在下一个 PR 上确认。
+
 ## 2026-11-09 O4 探活：心跳和看门狗（分支 chore/o4-watchdog）
 - 新增 app/core/heartbeat.py（Worker 用 bootstep 挂在自身定时器上、即主事件循环里每 30 秒写心跳；Beat 用 HeartbeatScheduler 每次 tick 写）和 app/core/watchdog.py（作为容器主进程启动 celery 子进程、转发停止信号，心跳超过 120 秒或启动 180 秒内没有心跳就杀子进程并退出 1，交给 restart: 重启）；compose 的 worker、beat、report-worker 改用看门狗启动并加 healthcheck（只作展示）。
 - 演练（一次性容器 agent-o4-drill，挂载本分支代码，Redis 15 号库、test 队列，不碰正式服务）：心跳 30 秒一次；kill -STOP celery 主进程后约 40 秒（阈值调成 60 秒）日志出现 watchdog_restart，RestartCount 0→1，重启后心跳恢复、--check 通过。Beat 同样写心跳。演练留下的 4 个 Redis 键已删除。
