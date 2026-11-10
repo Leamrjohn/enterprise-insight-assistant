@@ -805,3 +805,7 @@
 - 审核发现：compose 用 APP_ENV=development，原先只有 production 拒绝，“写错配置名启动失败”在实际部署不成立。改为 app_env != "test" 即拒绝；test 环境仍只告警（pytest 和 compose 的 worker-test、evaluation 都是 test）。报错仍只列键名。
 - 测试：原“development 只告警”改为“development 启动失败且不带值”，新增“test 只告警”；test_config_catalog 8 通过，全量 1725 通过 40 跳过 0 失败。
 - 改前自检：api/worker/beat/report-worker/metrics-exporter 5 个容器和本机配置的未知键都为空，收紧后不会导致现有服务起不来。
+
+## 2026-11-10 O1/O2a 默认开启（分支 chore/o1-tracing-default-on，用户决定）
+- compose 的 OTEL_EXPORTER_OTLP_ENDPOINT 默认改为 http://otel-collector:4318（显式设为空仍可关闭）；worker-test、evaluation 显式置空，测试和评测不进共享 trace 库。scripts/ops/stack.ps1（up/down/status）加入 tempo、otel-collector（排在发送方之前）和 metrics-exporter、prometheus、grafana。
+- 验证：docker compose config 通过，6 个应用服务指向收集器、2 个测试服务为空；收集器不可达时，api 容器内建 200 个 span 调用方只耗 0.007 秒，导出失败只记 WARNING/ERROR，进程退出时最多多等约 10 秒。

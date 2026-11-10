@@ -6,9 +6,10 @@ x-backend-environment: &backend-environment
   DATABASE_USER: agent_app
   DATABASE_PASSWORD: changeme_in_production
   REDIS_URL: redis://redis:6379/0
-  # O1: set to http://otel-collector:4318 (observability profile) to export
-  # traces; empty keeps tracing local to each process.
-  OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+  # O1: traces go to the collector (observability profile, started by
+  # scripts/ops/up.ps1).  If it is down, the exporter only logs a warning;
+  # tasks never wait on it.  Set to empty to keep tracing in-process.
+  OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT-http://otel-collector:4318}
   INPUT_ARTIFACT_OBJECT_STORAGE_ENDPOINT_URL: ${INPUT_ARTIFACT_OBJECT_STORAGE_ENDPOINT_URL:-http://localstack:4566}
   INPUT_ARTIFACT_OBJECT_STORAGE_PUBLIC_ENDPOINT_URL: ${INPUT_ARTIFACT_OBJECT_STORAGE_PUBLIC_ENDPOINT_URL:-http://127.0.0.1:4566}
   INPUT_ARTIFACT_OBJECT_STORAGE_REGION: ${INPUT_ARTIFACT_OBJECT_STORAGE_REGION:-us-east-1}
@@ -326,6 +327,8 @@ services:
     environment:
       <<: *backend-environment
       APP_ENV: test
+      # Test and evaluation runs stay out of the shared trace store.
+      OTEL_EXPORTER_OTLP_ENDPOINT: ""
       DATABASE_NAME: agent_platform_test
       LOG_LEVEL: WARNING
     volumes:
@@ -348,6 +351,8 @@ services:
     environment:
       <<: *backend-environment
       APP_ENV: test
+      # Test and evaluation runs stay out of the shared trace store.
+      OTEL_EXPORTER_OTLP_ENDPOINT: ""
       DATABASE_NAME: agent_platform_test
       LOG_LEVEL: WARNING
     depends_on:
