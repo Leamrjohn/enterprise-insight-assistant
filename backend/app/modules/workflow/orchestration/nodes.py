@@ -4,12 +4,12 @@ import logging
 import re
 from typing import Any
 
+from app.core.config.snapshot import runtime_settings
 from app.core.exceptions import (
     PermanentModelError,
     RetryableModelError,
     StructuredOutputError,
 )
-from app.core.settings import get_settings
 from app.db.session import SessionLocal, set_tenant_scope
 from app.modules.analysis.agent_protocol import AgentInput
 from app.modules.analysis.catalog.snapshot_catalog import SnapshotCatalog
@@ -427,7 +427,7 @@ def planning_failure_node(state: WorkflowState) -> dict:
 
 def model_tools_enabled(company_id: int | None) -> bool:
     """Off by default; the allowlist lets one company try it before anyone else."""
-    settings = get_settings()
+    settings = runtime_settings()
     if settings.model_tool_mode == "all":
         return True
     return (
@@ -442,7 +442,7 @@ def _guarded_rag_tool() -> Tool:
         RAGTool(degrade_on_rerank_failure=True),
         CircuitBreaker("rag_search:local", store),
     )
-    if get_settings().knowledge_evidence_transport != "mcp_stdio":
+    if runtime_settings().knowledge_evidence_transport != "mcp_stdio":
         return local
     from app.modules.knowledge.mcp_adapter import McpEvidenceReadTool
 
@@ -463,14 +463,14 @@ def knowledge_node(state: WorkflowState) -> dict:
     """
     _set_stage(state, "retrieving_knowledge", "knowledge_node")
     runtime = state.get("tool_runtime")
-    support_check = get_settings().knowledge_support_check_enabled
+    support_check = runtime_settings().knowledge_support_check_enabled
     if runtime and model_tools_enabled(state.get("company_id")):
         agent = ToolCallingKnowledgeAgent(
             rag_tool=runtime.wrap(_guarded_rag_tool()), support_check=support_check
         )
     else:
         rag_tool = RAGTool()
-        if get_settings().knowledge_evidence_transport == "mcp_stdio":
+        if runtime_settings().knowledge_evidence_transport == "mcp_stdio":
             from app.modules.knowledge.mcp_adapter import McpEvidenceReadTool
 
             rag_tool = McpEvidenceReadTool.stdio()

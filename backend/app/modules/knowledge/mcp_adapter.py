@@ -7,7 +7,7 @@ from hashlib import sha256
 from importlib.metadata import PackageNotFoundError, version
 from typing import Any, TypeGuard
 
-from app.core.settings import get_settings
+from app.core.config.snapshot import runtime_settings
 from app.modules.analysis.tool_protocol import Tool, ToolInput, ToolOutput
 from app.modules.knowledge.tool import RAGTool
 from mcp import Client, StdioServerParameters
@@ -120,7 +120,7 @@ def _has_locked_mcp_sdk() -> bool:
 
 def _stdio_runtime_environment() -> dict[str, str]:
     """Pass only the configuration required by the read-only RAG subprocess."""
-    settings = get_settings()
+    settings = runtime_settings()
     return {
         "APP_ENV": settings.app_env,
         "LOG_LEVEL": settings.log_level,

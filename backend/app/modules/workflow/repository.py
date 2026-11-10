@@ -1,5 +1,6 @@
 from copy import deepcopy
 
+from app.core.config.snapshot import build_config_snapshot, config_snapshot_hash
 from app.core.exceptions import TaskAdmissionLimitError
 from app.core.settings import get_settings
 from app.core.tracing import current_traceparent
@@ -80,6 +81,7 @@ def create_task(
     settings = get_settings()
     if company_id is not None:
         _admit_task(db, company_id=company_id, settings=settings)
+    config_snapshot = build_config_snapshot(settings)
     record = AnalysisTask(
         user_id=user_id,
         question=question,
@@ -93,6 +95,8 @@ def create_task(
         parent_task_id=parent_task_id,
         request_id=request_id,
         trace_context=current_traceparent(),
+        config_snapshot=config_snapshot,
+        config_snapshot_hash=config_snapshot_hash(config_snapshot),
         workflow_policy_snapshot=workflow_policy_snapshot(
             settings.workflow_release_version
         ),

@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from app.core.config.context import ContextConfig
-from app.core.settings import get_settings
+from app.core.config.snapshot import runtime_settings
 from app.core.tokenizer import count_tokens as count_text_tokens
 
 logger = logging.getLogger(__name__)
@@ -58,7 +58,7 @@ def count_tokens(value: Any) -> int:
 
 def cap_data_rows(data_result: dict) -> dict:
     """Keep the first rows and say how many were dropped; the columns stay."""
-    max_rows = get_settings().context_max_rows_when_compressed
+    max_rows = runtime_settings().context_max_rows_when_compressed
     evidence = []
     for item in data_result.get("evidence") or []:
         rows = item.get("rows") if isinstance(item, dict) else None
@@ -74,7 +74,7 @@ def cap_data_rows(data_result: dict) -> dict:
 
 def cap_chunk_text(knowledge_result: dict) -> dict:
     """Shorten long chunks and mark them, so a model can't read absence as fact."""
-    max_chars = get_settings().context_max_chunk_chars_when_compressed
+    max_chars = runtime_settings().context_max_chunk_chars_when_compressed
     evidences = []
     for item in knowledge_result.get("evidences") or []:
         content = item.get("content") if isinstance(item, dict) else None
@@ -104,7 +104,7 @@ def assemble(
 
     tokens = count_tokens(payload)
     compressed = []
-    threshold = manifest.budget_tokens * get_settings().context_compress_at
+    threshold = manifest.budget_tokens * runtime_settings().context_compress_at
     for name, rule in manifest.sections.items():
         if tokens < threshold:
             break

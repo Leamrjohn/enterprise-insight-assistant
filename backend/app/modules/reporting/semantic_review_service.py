@@ -8,10 +8,10 @@ from time import sleep
 from typing import Any, get_args
 
 import sqlglot
+from app.core.config.snapshot import runtime_settings
 from app.core.exceptions import RetryableModelError, StructuredOutputError
 from app.core.gateway.base import ModelGateway
 from app.core.gateway.factory import get_model_gateway
-from app.core.settings import get_settings
 from app.modules.analysis.catalog.schema_selection import (
     narrow_catalog,
     select_tables,
@@ -301,7 +301,7 @@ class SemanticReviewService:
         report: dict[str, Any],
         memories_used: list[dict[str, Any]] | None = None,
     ) -> EvidenceSemanticReview:
-        sentence_refs = get_settings().review_qualification_mode == "sentence_ref"
+        sentence_refs = runtime_settings().review_qualification_mode == "sentence_ref"
         qualification_rule = (
             "document_qualification_refs 只可填写已列引用 chunk 中方括号内的完整句子编号"
             "（S 加数字），标出原文写明的结论边界；不要抄写、改写或补充句子。"

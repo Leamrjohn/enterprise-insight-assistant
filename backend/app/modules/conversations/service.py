@@ -3,7 +3,7 @@
 import re
 from dataclasses import dataclass
 
-from app.core.settings import get_settings
+from app.core.config.snapshot import runtime_settings
 from app.core.tokenizer import count_tokens
 from app.modules.conversations.models import Conversation, ConversationMessage
 from app.modules.conversations.repository import (
@@ -478,7 +478,7 @@ def build_conversation_context(
     max_messages: int = MAX_CONTEXT_MESSAGES,
 ) -> dict:
     if max_tokens is None:
-        max_tokens = get_settings().context_history_max_tokens
+        max_tokens = runtime_settings().context_history_max_tokens
     if max_chars <= 0:
         raise ValueError("max_chars must be greater than 0")
 
