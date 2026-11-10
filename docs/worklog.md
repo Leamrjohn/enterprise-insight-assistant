@@ -796,6 +796,11 @@
 - 验证：test_config_snapshot 9 通过（运行中改配置不影响、存回 JSON 后恢复取值相同、基础设施不变、校验非法值和未知版本、节点代码不再直读）；集成测试 4 通过（落库、同配置同哈希、后改配置不影响、运维命令差异）；全量 1724 通过 40 跳过 0 失败；测试库迁移往返检查 ok；pyright 0、ruff 通过。
 - 未做：快照值未接入 trace 属性；公司策略（K3，R9）还没有，快照只含平台配置。
 
+## 2026-11-10 K4 和 O1 修复部署（main 88ec222）和冒烟
+- 部署前备份 artifacts/backups/agent_platform_20261110_005423_k4.dump（sha256 记在 manifest）；迁移 c5d6e7f8a9b0 → d6e7f8a9b0c1；重建并重启 api/worker/beat/report-worker（OTEL 端点仅本次以 shell 变量设置），readiness 4 项 ok。
+- 冒烟 k4-deploy（任务 915–924，$0.025059，125 秒）：9 成功 + 混合题 awaiting_review，与前几次相同。10/10 任务有 config_snapshot，同一哈希 bad16cd8a065…、27 项；show_task_config.py 918 显示哈希与内容一致、与当前配置无差异。
+- Tempo 最近 15 分钟：根服务全部是 agent-api，worker span（agent-celery）挂在 API 的 trace 下，O1 服务名问题已消除。仓库已开启“允许自动合并”（用户批准）。
+
 ## 2026-11-10 K2 收紧：除 test 外未知配置名一律启动失败（分支 chore/k2-strict-outside-test，用户批准改测试期望）
 - 审核发现：compose 用 APP_ENV=development，原先只有 production 拒绝，“写错配置名启动失败”在实际部署不成立。改为 app_env != "test" 即拒绝；test 环境仍只告警（pytest 和 compose 的 worker-test、evaluation 都是 test）。报错仍只列键名。
 - 测试：原“development 只告警”改为“development 启动失败且不带值”，新增“test 只告警”；test_config_catalog 8 通过，全量 1725 通过 40 跳过 0 失败。
