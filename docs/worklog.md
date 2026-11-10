@@ -780,3 +780,8 @@
 6. 前端 4 个审计例外 12-08 到期，需升级 vite/vitest（依赖升级）。
 7. worker 镜像 apt 包未锁版本，本机代理下载不稳；是否改用固定快照源（snapshot.debian.org）。
 8. OTEL_EXPORTER_OTLP_ENDPOINT 是否默认开启（需 observability profile 常驻）。
+
+## 2026-11-10 修复：API 进程 trace 服务名（分支 fix/o1-service-name）
+- 症状：API 进程的全局 trace 服务名是 agent-celery（O1 遗留待办）。根因：app.main 导入 celery_app，celery_app 在导入时就调用 setup_tracing("agent-celery") 并抢先设置全局 provider，main 里的 setup_tracing("agent-api") 只换了模块内的 _provider。
+- 修复：celery_app 改为在 celeryd_init、beat_init 信号里设置（worker 在 fork 前触发，子进程继承）。新增子进程测试：导入 app.main 后全局服务名为 agent-api（修前失败、修后通过）；tests/unit/system 61 通过，import 规则 KEPT，pyright 0。
+- 未验证：部署后在 Tempo 里看 API span 的服务名（未部署）。

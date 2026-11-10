@@ -1,6 +1,6 @@
 from celery import Celery
 from celery.schedules import crontab
-from celery.signals import setup_logging
+from celery.signals import beat_init, celeryd_init, setup_logging
 
 from app.core.heartbeat import WorkerHeartbeat
 from app.core.logging import configure_logging
@@ -8,7 +8,13 @@ from app.core.settings import get_settings
 from app.core.tracing import setup_tracing
 
 settings = get_settings()
-setup_tracing("agent-celery")
+
+
+@celeryd_init.connect
+@beat_init.connect
+def _setup_celery_tracing(**_kwargs) -> None:
+    """Only Celery processes are agent-celery; the API imports this module too."""
+    setup_tracing("agent-celery")
 
 
 @setup_logging.connect
