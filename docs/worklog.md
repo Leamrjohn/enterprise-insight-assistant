@@ -785,3 +785,8 @@
 - 症状：API 进程的全局 trace 服务名是 agent-celery（O1 遗留待办）。根因：app.main 导入 celery_app，celery_app 在导入时就调用 setup_tracing("agent-celery") 并抢先设置全局 provider，main 里的 setup_tracing("agent-api") 只换了模块内的 _provider。
 - 修复：celery_app 改为在 celeryd_init、beat_init 信号里设置（worker 在 fork 前触发，子进程继承）。新增子进程测试：导入 app.main 后全局服务名为 agent-api（修前失败、修后通过）；tests/unit/system 61 通过，import 规则 KEPT，pyright 0。
 - 未验证：部署后在 Tempo 里看 API span 的服务名（未部署）。
+
+## 2026-11-10 R1 代做部分审核（main de95377）
+- 结论：14 个代做工单里 13 个已合入并部署，main CI 13 项必过全绿；本地重跑 ruff、import-linter、配置清单、版本固定、跳过登记、链接检查和 R1 相关测试 230 个均通过。
+- 缺陷：①K4 快照哈希没有做，也没有记录（之前汇报说“全部做完”有误），段验收“任一任务能查到生效配置”因此不满足；②K2 只在 production 启动失败，compose 是 APP_ENV=development，所以“写错配置名启动失败”在实际部署里不成立（要改测试期望，待用户决定）；③API trace 服务名错误，已修（fix/o1-service-name）。
+- 未验证：E10a 故意改坏 Knowledge 的失败；O4 持有任务时卡死再恢复的端到端过程；E5 的 test_app_startup 偶发超时。
