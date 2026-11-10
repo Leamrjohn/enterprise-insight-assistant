@@ -145,3 +145,4 @@
 - 2026-11-09：O1 OpenTelemetry 埋点 + Collector/Tempo，属性白名单两道过滤；分支 chore/o1-tracing。
 - 2026-11-09：worker 镜像 ENV 移到 apt 层后，恢复 apt 缓存；分支 fix/worker-layer-order。
 - 2026-11-09：R1 除 C2、O3 外全部合入并部署；冒烟 9+1 待复核与之前相同；Tempo 可见完整链路；待我决定 8 项见 worklog。
+- 2026-11-10：R1 代做部分审核：K4 未做、K2 开发环境只告警（待决定）、API trace 服务名已修（fix/o1-service-name，未推送）。
