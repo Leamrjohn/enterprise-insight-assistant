@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 
 from app.core.config.memory import MemoryConfig
-from app.core.settings import get_settings
+from app.core.config.snapshot import runtime_settings
 from app.core.tokenizer import count_tokens
 from app.modules.documents.search_tokens import jieba_tokens
 from app.modules.memory.models import AnalysisMemory, MemoryAuditEvent
@@ -86,7 +86,7 @@ def select_planner_memories(
     record_use: bool = False,
 ) -> tuple[list[dict], dict]:
     if max_tokens is None:
-        max_tokens = get_settings().memory_planner_max_tokens
+        max_tokens = runtime_settings().memory_planner_max_tokens
     """Select whole authorized memories and return a redacted selection manifest.
 
     Code decides what may be used: company, user, status and both kinds of expiry
@@ -264,7 +264,7 @@ def persist_report_memory(
     }
     subject_key = subject_key_for(task.question or "")
     expires_at = datetime.now(timezone.utc) + timedelta(
-        days=get_settings().memory_ttl_days
+        days=runtime_settings().memory_ttl_days
     )
     previous = (
         db.query(AnalysisMemory)
@@ -472,7 +472,7 @@ def cleanup_memories(
             details={"previous_status": previous_status},
         )
     purge_before = now - timedelta(
-        days=get_settings().memory_soft_delete_retention_days
+        days=runtime_settings().memory_soft_delete_retention_days
     )
     purgeable = (
         db.query(AnalysisMemory)

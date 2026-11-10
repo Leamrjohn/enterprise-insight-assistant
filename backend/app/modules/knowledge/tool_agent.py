@@ -10,9 +10,9 @@ from __future__ import annotations
 
 import json
 
+from app.core.config.snapshot import runtime_settings
 from app.core.gateway.base import ModelGateway
 from app.core.gateway.factory import get_model_gateway
-from app.core.settings import get_settings
 from app.modules.analysis.agent_protocol import AgentInput, AgentOutput
 from app.modules.analysis.tool_protocol import ToolInput, ToolOutput
 from app.modules.knowledge.agent import (
@@ -209,7 +209,7 @@ class ToolCallingKnowledgeAgent(KnowledgeAgent):
 
     def __init__(self, *args, limits: LoopLimits | None = None, **kwargs) -> None:
         super().__init__(*args, **kwargs)
-        settings = get_settings()
+        settings = runtime_settings()
         self._limits = limits or LoopLimits(
             max_rounds=settings.knowledge_tool_loop_max_rounds,
             max_tool_calls=settings.knowledge_tool_loop_max_tool_calls,

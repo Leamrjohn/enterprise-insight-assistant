@@ -1,7 +1,7 @@
 from datetime import date
 
+from app.core.config.snapshot import runtime_settings
 from app.core.exceptions import EmbeddingError, VectorSearchError
-from app.core.settings import get_settings
 from app.modules.documents.chunks import DocumentChunk
 from app.modules.documents.search_tokens import TOKENIZERS
 from app.modules.documents.vector_repository import (
@@ -140,7 +140,7 @@ def _evidence(row: dict, labels: tuple[str, ...]) -> EvidenceRef:
 def _fuse_routes(routes: list[tuple[str, list[dict]]]) -> list[EvidenceRef]:
     """Reciprocal rank fusion: rank position decides, so routes with different
     score scales can be combined.  Text found twice counts as one chunk."""
-    rrf_k = get_settings().rag_rrf_k  # a larger value flattens rank differences
+    rrf_k = runtime_settings().rag_rrf_k  # a larger value flattens rank differences
     fused: dict[tuple[int, str], dict] = {}
     for label, rows in routes:
         for rank, row in enumerate(rows, start=1):

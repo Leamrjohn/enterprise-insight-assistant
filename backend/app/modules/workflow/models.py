@@ -92,6 +92,12 @@ class AnalysisTask(Base):
     # O1: W3C traceparent of the request that created the task, so the worker
     # continues the same trace.  No content; nullable for older tasks.
     trace_context: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # K4: business configuration frozen at creation (app/core/config/snapshot.py)
+    # and the sha256 of its canonical JSON.  Nullable for older tasks.
+    config_snapshot: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    config_snapshot_hash: Mapped[str | None] = mapped_column(
+        String(64), nullable=True, index=True
+    )
     active_execution_id: Mapped[str | None] = mapped_column(
         String(36), nullable=True, index=True
     )

@@ -1,8 +1,8 @@
 import logging
 import time
 
+from app.core.config.snapshot import runtime_settings
 from app.core.exceptions import RetrievalError
-from app.core.settings import get_settings
 from app.db.session import SessionLocal, set_tenant_scope
 from app.modules.analysis.tool_protocol import Tool, ToolInput, ToolOutput
 from app.modules.knowledge.rag.embeddings_local import (
@@ -47,7 +47,7 @@ class RAGTool(Tool):
         self._reranker = reranker
         self._retrieval_policy = (
             retrieval_policy
-            or SELECTABLE_RETRIEVAL_POLICIES[get_settings().rag_retrieval_policy]
+            or SELECTABLE_RETRIEVAL_POLICIES[runtime_settings().rag_retrieval_policy]
         )
         self._degrade_on_rerank_failure = degrade_on_rerank_failure
 
@@ -96,7 +96,7 @@ class RAGTool(Tool):
         db = None
         degraded = False
         try:
-            settings = get_settings()
+            settings = runtime_settings()
             db = SessionLocal()
             set_tenant_scope(db, company_id)
             db.execute(

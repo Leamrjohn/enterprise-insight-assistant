@@ -11,6 +11,7 @@ from typing import Any
 
 from app.core import tracing
 from app.core.celery_app import celery_app
+from app.core.config.snapshot import task_config_scope
 from app.core.exceptions import RetryableModelError
 from app.core.logging import (
     execution_attempt_id_context,
@@ -627,6 +628,11 @@ def process_analysis_task(self, task_id: int):
                     "queue_seconds": _queue_seconds(record),
                 },
             )
+        )
+        # K4: every attempt, including a recovered one, runs on the snapshot
+        # the task was created with.
+        trace_scope.enter_context(
+            task_config_scope(getattr(record, "config_snapshot", None))
         )
         task_id_token = task_id_context.set(record.id)
         attempt_id_token = execution_attempt_id_context.set(execution.attempt.id)

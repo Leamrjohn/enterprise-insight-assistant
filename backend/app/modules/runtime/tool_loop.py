@@ -14,9 +14,9 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any, Literal
 
+from app.core.config.snapshot import runtime_settings
 from app.core.exceptions import PermanentModelError, RetryableModelError
 from app.core.gateway.base import ModelGateway, ToolCall
-from app.core.settings import get_settings
 from pydantic import BaseModel, ValidationError
 
 logger = logging.getLogger(__name__)
@@ -74,7 +74,7 @@ class ToolReply:
 
 
 def _setting(name: str) -> Callable[[], Any]:
-    return lambda: getattr(get_settings(), name)
+    return lambda: getattr(runtime_settings(), name)
 
 
 @dataclass(frozen=True)

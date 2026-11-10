@@ -780,3 +780,8 @@
 6. 前端 4 个审计例外 12-08 到期，需升级 vite/vitest（依赖升级）。
 7. worker 镜像 apt 包未锁版本，本机代理下载不稳；是否改用固定快照源（snapshot.debian.org）。
 8. OTEL_EXPORTER_OTLP_ENDPOINT 是否默认开启（需 observability profile 常驻）。
+
+## 2026-11-10 K4 配置快照和哈希（分支 chore/k4-config-snapshot，审核时发现漏做后补做）
+- 新增 app/core/config/snapshot.py：建任务时把 context、memory、rag、flags、tool 五个域共 27 项（无密钥）写入 analysis_tasks.config_snapshot，sha256(规范化 JSON) 写入 config_snapshot_hash（迁移 d6e7f8a9b0c1，可空、不回填）；Worker 每次执行（含恢复）进入 task_config_scope，节点里 12 处业务参数读取改为 runtime_settings()，基础设施配置仍读 get_settings()；旧任务无快照时按原来的方式读当前配置。运维命令 scripts/db/show_task_config.py <task_id> 只读显示哈希、哈希是否与内容一致、与当前配置不同的项。
+- 验证：test_config_snapshot 9 通过（运行中改配置不影响、存回 JSON 后恢复取值相同、基础设施不变、校验非法值和未知版本、节点代码不再直读）；集成测试 4 通过（落库、同配置同哈希、后改配置不影响、运维命令差异）；全量 1724 通过 40 跳过 0 失败；测试库迁移往返检查 ok；pyright 0、ruff 通过。
+- 未做：快照值未接入 trace 属性；公司策略（K3，R9）还没有，快照只含平台配置。
