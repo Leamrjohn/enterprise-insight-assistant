@@ -155,7 +155,7 @@ def check_known_keys(
     env_file: Path = BACKEND_DIR / ".env",
     environ: Mapping[str, str] | None = None,
 ) -> list[str]:
-    """K2: refuse (production) or warn about names no setting declares.
+    """K2: refuse names no setting declares; the test environment only warns.
 
     Only names are reported, never values.
     """
@@ -171,7 +171,7 @@ def check_known_keys(
         message = "Unknown configuration keys (misspelt or removed): " + ", ".join(
             unknown
         )
-        if settings.app_env == "production":
+        if settings.app_env != "test":
             raise ValueError(message)
         logger.warning(message)
     return unknown

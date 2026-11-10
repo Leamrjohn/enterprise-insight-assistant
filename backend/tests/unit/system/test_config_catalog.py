@@ -54,11 +54,23 @@ def test_misspelt_setting_fails_startup_in_production(tmp_path):
     assert "secret-looking-value" not in str(raised.value)
 
 
-def test_misspelt_setting_only_warns_in_development(tmp_path, monkeypatch):
+def test_misspelt_setting_fails_startup_in_development(tmp_path):
+    settings = Settings(**REQUIRED, app_env="development")
+    env_file = _env_file(tmp_path, "DATABASE_HOST=db\n")
+
+    with pytest.raises(ValueError, match="RAG_RERANK_TOPK") as raised:
+        check_known_keys(
+            settings, env_file=env_file, environ={"RAG_RERANK_TOPK": "secret-ish"}
+        )
+
+    assert "secret-ish" not in str(raised.value)
+
+
+def test_misspelt_setting_only_warns_in_test(tmp_path, monkeypatch):
     # Other tests reconfigure logging, so capture the module logger directly.
     warnings = []
     monkeypatch.setattr(config_settings.logger, "warning", warnings.append)
-    settings = Settings(**REQUIRED, app_env="development")
+    settings = Settings(**REQUIRED, app_env="test")
     env_file = _env_file(tmp_path, "DATABASE_HOST=db\n")
 
     unknown = check_known_keys(
