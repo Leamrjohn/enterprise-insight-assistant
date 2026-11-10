@@ -107,3 +107,30 @@ def test_collector_keeps_the_same_allowlist():
 
     assert kept is not None
     assert set(re.findall(r'"([^"]+)"', kept.group(1))) == tracing.ALLOWED_ATTRIBUTES
+
+
+def test_api_process_reports_its_own_service_name():
+    """app.main imports celery_app; the API's global provider must still be agent-api."""
+    import subprocess
+    import sys
+    from pathlib import Path
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            (
+                "import app.main; "
+                "from opentelemetry import trace; "
+                "print(trace.get_tracer_provider().resource.attributes['service.name'])"
+            ),
+        ],
+        cwd=Path(__file__).resolve().parents[3],
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stderr[-2000:]
+    assert result.stdout.strip().splitlines()[-1] == "agent-api"
