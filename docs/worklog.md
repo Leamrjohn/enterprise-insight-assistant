@@ -805,3 +805,10 @@
 - 审核发现：compose 用 APP_ENV=development，原先只有 production 拒绝，“写错配置名启动失败”在实际部署不成立。改为 app_env != "test" 即拒绝；test 环境仍只告警（pytest 和 compose 的 worker-test、evaluation 都是 test）。报错仍只列键名。
 - 测试：原“development 只告警”改为“development 启动失败且不带值”，新增“test 只告警”；test_config_catalog 8 通过，全量 1725 通过 40 跳过 0 失败。
 - 改前自检：api/worker/beat/report-worker/metrics-exporter 5 个容器和本机配置的未知键都为空，收紧后不会导致现有服务起不来。
+
+## 2026-11-10 R1 第二次审核（main 86fd0e7）
+- 工单：除 C2、O3 外 19 个全部合入；13 个 CI 作业全部是必过检查（管理员同样受限）；冒烟任务 915–924 快照、trace 10/10，60 次模型调用 prompt_version 空值 0。O4 补做端到端演练：任务 926 运行中冻结 Celery，约 2 分钟后租约过期、看门狗重启 Worker（第 1 次尝试 expired），3 秒后第 2 次尝试完成，冻结到完成约 2.5 分钟。
+- 新缺口：O1/O2a 只在本次部署有效：up.ps1 不带 observability profile、compose 的 OTEL 端点默认为空，下次正常重启后 trace 和看板都会关闭（待用户决定是否默认开启）。
+- 仍未验证：E10a 故意改坏 Knowledge 时失败（只验证了路由和 SQL）；E4 有 41 条现存违规登记在 ignore_imports，只防新增。
+- 噪声：任务 303（11-02）的 1 条 reserved 账本一直让 agent_reserved_billing_stale=1，O3 加告警后会误报（改账本数据需用户决定）。
+- 段验收：CI 全绿 ✓；写错配置名启动失败 ✓；改坏路由/提示词 CI 失败 ✓（路由、SQL）；跨公司反例 ✓；每节点基线（C2）✗；注入故障告警（O3）✗；5 分钟定位失败任务 ◐（K4+O1 已有，但 trace 需默认开启）；冒烟连续 3 轮一致 ◐（等 C2、O3 后在同一提交上跑 3 轮）。
