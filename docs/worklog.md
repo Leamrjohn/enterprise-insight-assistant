@@ -812,3 +812,7 @@
 - 仍未验证：E10a 故意改坏 Knowledge 时失败（只验证了路由和 SQL）；E4 有 41 条现存违规登记在 ignore_imports，只防新增。
 - 噪声：任务 303（11-02）的 1 条 reserved 账本一直让 agent_reserved_billing_stale=1，O3 加告警后会误报（改账本数据需用户决定）。
 - 段验收：CI 全绿 ✓；写错配置名启动失败 ✓；改坏路由/提示词 CI 失败 ✓（路由、SQL）；跨公司反例 ✓；每节点基线（C2）✗；注入故障告警（O3）✗；5 分钟定位失败任务 ◐（K4+O1 已有，但 trace 需默认开启）；冒烟连续 3 轮一致 ◐（等 C2、O3 后在同一提交上跑 3 轮）。
+
+## 2026-11-10 O1/O2a 默认开启（分支 chore/o1-tracing-default-on，用户决定）
+- compose 的 OTEL_EXPORTER_OTLP_ENDPOINT 默认改为 http://otel-collector:4318（显式设为空仍可关闭）；worker-test、evaluation 显式置空，测试和评测不进共享 trace 库。scripts/ops/stack.ps1（up/down/status）加入 tempo、otel-collector（排在发送方之前）和 metrics-exporter、prometheus、grafana。
+- 验证：docker compose config 通过，6 个应用服务指向收集器、2 个测试服务为空；收集器不可达时，api 容器内建 200 个 span 调用方只耗 0.007 秒，导出失败只记 WARNING/ERROR，进程退出时最多多等约 10 秒。

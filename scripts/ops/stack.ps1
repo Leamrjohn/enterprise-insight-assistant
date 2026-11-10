@@ -3,9 +3,12 @@ param([Parameter(Mandatory)][ValidateSet('up', 'down', 'status')][string]$Mode)
 
 $ErrorActionPreference = 'Stop'
 $projectRoot = (Resolve-Path (Join-Path $PSScriptRoot '../..')).Path
+# O1/O2a: the observability profile runs with the stack by default; the collector
+# and Tempo start before the services that send traces to them.
 $services = @('postgres', 'business_db', 'demo_business_acme', 'demo_business_beta',
-    'redis', 'clamd', 'localstack', 'capacity-signal', 'api', 'worker',
-    'report-worker', 'beat', 'frontend')
+    'redis', 'clamd', 'localstack', 'capacity-signal', 'tempo', 'otel-collector',
+    'api', 'worker', 'report-worker', 'beat', 'frontend',
+    'metrics-exporter', 'prometheus', 'grafana')
 $rows = @(& docker ps -a --filter 'label=com.docker.compose.project=agent' --format '{{.Names}}|{{.Label "com.docker.compose.service"}}|{{.State}}|{{.Label "com.docker.compose.project.working_dir"}}')
 if ($LASTEXITCODE -ne 0) { throw 'Cannot list project containers.' }
 $containers = @{}
