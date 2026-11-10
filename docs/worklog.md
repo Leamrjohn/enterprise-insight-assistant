@@ -795,3 +795,8 @@
 - 新增 app/core/config/snapshot.py：建任务时把 context、memory、rag、flags、tool 五个域共 27 项（无密钥）写入 analysis_tasks.config_snapshot，sha256(规范化 JSON) 写入 config_snapshot_hash（迁移 d6e7f8a9b0c1，可空、不回填）；Worker 每次执行（含恢复）进入 task_config_scope，节点里 12 处业务参数读取改为 runtime_settings()，基础设施配置仍读 get_settings()；旧任务无快照时按原来的方式读当前配置。运维命令 scripts/db/show_task_config.py <task_id> 只读显示哈希、哈希是否与内容一致、与当前配置不同的项。
 - 验证：test_config_snapshot 9 通过（运行中改配置不影响、存回 JSON 后恢复取值相同、基础设施不变、校验非法值和未知版本、节点代码不再直读）；集成测试 4 通过（落库、同配置同哈希、后改配置不影响、运维命令差异）；全量 1724 通过 40 跳过 0 失败；测试库迁移往返检查 ok；pyright 0、ruff 通过。
 - 未做：快照值未接入 trace 属性；公司策略（K3，R9）还没有，快照只含平台配置。
+
+## 2026-11-10 K2 收紧：除 test 外未知配置名一律启动失败（分支 chore/k2-strict-outside-test，用户批准改测试期望）
+- 审核发现：compose 用 APP_ENV=development，原先只有 production 拒绝，“写错配置名启动失败”在实际部署不成立。改为 app_env != "test" 即拒绝；test 环境仍只告警（pytest 和 compose 的 worker-test、evaluation 都是 test）。报错仍只列键名。
+- 测试：原“development 只告警”改为“development 启动失败且不带值”，新增“test 只告警”；test_config_catalog 8 通过，全量 1725 通过 40 跳过 0 失败。
+- 改前自检：api/worker/beat/report-worker/metrics-exporter 5 个容器和本机配置的未知键都为空，收紧后不会导致现有服务起不来。
