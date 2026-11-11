@@ -10,6 +10,10 @@ from uuid import uuid4
 
 from app.core.settings import MAX_LLM_TIMEOUT_SECONDS
 from app.db.clock import database_now
+from app.modules.runtime.context_measurement import (
+    context_usage,
+    take_declared_sections,
+)
 from app.modules.workflow.audit.model_call import ModelCallRecord
 from app.modules.workflow.lifecycle.execution_attempt import TaskExecutionAttempt
 from app.modules.workflow.models import AnalysisTask
@@ -321,7 +325,9 @@ def reserve_model_call(
         reserved_prompt_tokens=estimated_prompt_tokens,
         reserved_completion_tokens=reserved_completion_tokens,
         reserved_cost=reserved_cost,
-        resource_usage={},
+        # C2: per-section token counts of what this call sends (names and
+        # numbers only); see app/modules/runtime/context_measurement.py.
+        resource_usage={"context_tokens": context_usage(take_declared_sections())},
         result_category="reserved",
     )
     task.model_budget_usage = usage
@@ -491,7 +497,8 @@ def record_model_call(
     )
     record.duration_ms = round(duration_ms)
     if resource_usage is not None:
-        record.resource_usage = resource_usage
+        # Merge: keep what was stored at reservation (C2 context_tokens).
+        record.resource_usage = {**(record.resource_usage or {}), **resource_usage}
     record.result_category = result_category
     record.error_code = error_code
     record.billing_status = billing_status

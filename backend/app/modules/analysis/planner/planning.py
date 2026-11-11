@@ -14,6 +14,7 @@ from app.modules.analysis.planner.planner_decision import (
     PlannerDecision,
     enforce_explicit_document_evidence_contract,
 )
+from app.modules.runtime.context_measurement import declare_sections
 from app.modules.runtime.prompts import get_prompt_registry
 from pydantic import ValidationError
 
@@ -265,6 +266,7 @@ class PlanningService:
         )
 
         last_failure: ValidationError | RetryableModelError | None = None
+        last_raw_output = ""
 
         for attempt_index in range(_max_planner_attempts()):
             attempt_number = attempt_index + 1
@@ -277,6 +279,34 @@ class PlanningService:
             )
             try:
                 self.model_attempts += 1
+                declare_sections(
+                    system=build_planning_system_prompt(),
+                    question=question,
+                    history=(
+                        json.dumps(conversation_context, ensure_ascii=False)
+                        if conversation_context is not None
+                        else "null"
+                    ),
+                    memory=(
+                        json.dumps(planner_memory, ensure_ascii=False)
+                        if planner_memory
+                        else "[]"
+                    ),
+                    feedback=(
+                        json.dumps(feedback, ensure_ascii=False) if feedback else "null"
+                    ),
+                    retry=(
+                        json.dumps(retry_context, ensure_ascii=False)
+                        if retry_context
+                        else "null"
+                    ),
+                    attachments=(
+                        json.dumps(attachment_context, ensure_ascii=False)
+                        if attachment_context
+                        else "[]"
+                    ),
+                    previous_output=last_raw_output,
+                )
                 raw_output = self._gateway.chat(
                     prompt=prompt,
                     system_prompt=build_planning_system_prompt(),
@@ -322,6 +352,7 @@ class PlanningService:
                         "error_type": type(error).__name__,
                     },
                 )
+                last_raw_output = raw_output
                 prompt = build_planning_repair_prompt(
                     question=question,
                     conversation_context=conversation_context,

@@ -816,3 +816,8 @@
 ## 2026-11-10 O1/O2a 默认开启（分支 chore/o1-tracing-default-on，用户决定）
 - compose 的 OTEL_EXPORTER_OTLP_ENDPOINT 默认改为 http://otel-collector:4318（显式设为空仍可关闭）；worker-test、evaluation 显式置空，测试和评测不进共享 trace 库。scripts/ops/stack.ps1（up/down/status）加入 tempo、otel-collector（排在发送方之前）和 metrics-exporter、prometheus、grafana。
 - 验证：docker compose config 通过，6 个应用服务指向收集器、2 个测试服务为空；收集器不可达时，api 容器内建 200 个 span 调用方只耗 0.007 秒，导出失败只记 WARNING/ERROR，进程退出时最多多等约 10 秒。
+
+## 2026-11-10 C2 测量第一、二、三步（训练工单，用户编写；分支 chore/c2-context-measurement）
+- 用户写：measure_sections、measurement_details、context_usage、planner 在重试循环内声明 8 个部分（system/question/history/memory/feedback/retry/attachments/previous_output，修复重试时 previous_output 为上次回答）；加严测试 2 个（total 含全部部分、结果只能是 node+整数计数）。
+- Claude 搭骨架：declare_sections/take_declared_sections（取出即清空）；reserve_model_call 把计数写入 model_call_records.resource_usage["context_tokens"]（未声明记 {"declared": False}）；结算改为合并写入。改存账本而非 workflow 事件：runtime 写事件会新增反向依赖（E4）。
+- 验证：全量 1735 通过 40 跳过 0 失败（含账本端到端）；ruff、import 规则、pyright 通过；故意改坏 total、塞入原文均被新测试拦下。其余 11 个调用点未声明。
