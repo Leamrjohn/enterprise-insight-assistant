@@ -833,3 +833,9 @@
 - 验证：promtool 6 条 SUCCESS，test_alert_rules 2 passed；故障注入（停 beat、暂停 worker、演练任务 938 等 8 行演练数据）后触发用时：UnknownCostSpike ≤36 秒、QueueBacklog 1.6 分、WorkerDown 3.6 分、ExporterDown 2.2 分、BeatStalled 4.2 分、TasksStranded 11 分（规则要求持续 10 分钟）；恢复后 ≤83 秒全部消失；演练数据已删除（用户确认），unknown 回到 26。
 - 待办：停导出器时 WorkerDown、BeatStalled 因 absent() 连带误报，考虑导出器不可用时抑制。
 - 待办：agent_model_call_records 是行数，删行会被 increase() 当成计数器重置，UnknownCostSpike 误报约 1 小时；考虑导出真正只增不减的计数。
+
+## 2026-11-13 R1 段验收：冒烟连续 3 轮（run r1-final-2026-11-13，main 6b0fff8）
+- 结果：3 轮一致，每轮 9 成功 + 混合题 awaiting_review（已知，按规则不算成功）；task 939~968，每轮约 2 分钟、0.025 费用单位。报告 docs/smoke_results/r1-final-2026-11-13.md。
+- 开跑前发现经营库容器 agent-demo_business_acme-1 自 11-11 16:10 退出（退出码 255，重启策略 no），手动启动后正常。
+- 节点基线（3 轮 provider_model 调用，输入 token P50/P95/最大）：planner 1598/1800/1800（31 次，含 task 946 第二次调用，已声明且 previous_output=96）、data 1230/1419/1420、knowledge 553/2505/2505、reviewer 1020/1747/1916、semantic_review 1216.5/2225/2225；分部分计数仍只有 planner。
+- 待办：经营库容器改为自动重启；/health/ready 不检查经营库，停机两天无提示。
