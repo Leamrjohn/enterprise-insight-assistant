@@ -821,3 +821,9 @@
 - 用户写：measure_sections、measurement_details、context_usage、planner 在重试循环内声明 8 个部分（system/question/history/memory/feedback/retry/attachments/previous_output，修复重试时 previous_output 为上次回答）；加严测试 2 个（total 含全部部分、结果只能是 node+整数计数）。
 - Claude 搭骨架：declare_sections/take_declared_sections（取出即清空）；reserve_model_call 把计数写入 model_call_records.resource_usage["context_tokens"]（未声明记 {"declared": False}）；结算改为合并写入。改存账本而非 workflow 事件：runtime 写事件会新增反向依赖（E4）。
 - 验证：全量 1735 通过 40 跳过 0 失败（含账本端到端）；ruff、import 规则、pyright 通过；故意改坏 total、塞入原文均被新测试拦下。其余 11 个调用点未声明。
+
+## 2026-11-13 C2 基线（训练工单，用户写查询；分支 docs/c2-baseline）
+- 数据：冒烟 c2-baseline task 927~936，planner 10 次调用全部 declared=true（本轮无重试）；percentile_cont 计算。P50/P95/最大：total 1428.5/1554/1627，system 1307/1307/1307（占 91%），history 97/97/97，question 16.5/42/57，memory 1/118/213，attachments/feedback/retry 均 1（空值写成 "null"/"[]"），previous_output 0。
+- 模板开销 prompt_tokens − total：165~173，10 次几乎不变，来源未验证（推测为消息格式标记或本地分词器与服务商的差异）。
+- 覆盖：data 8、knowledge 12、reviewer 8、semantic_review 10 次模型调用 declared=false；knowledge 12 次本地重排序不经治理层，无 context_tokens。
+- 遗留：其余 11 个调用点未声明，只有 planner 有分部分基线；重试路径的声明未被本轮数据覆盖。
