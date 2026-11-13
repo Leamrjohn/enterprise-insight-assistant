@@ -17,6 +17,11 @@ from typing import Any
 from app.core.config.context import ContextConfig
 from app.core.config.snapshot import runtime_settings
 from app.core.tokenizer import count_tokens as count_text_tokens
+from app.modules.runtime.context.manifest import (
+    ContextManifest,
+    SectionEntry,
+    content_hash,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -34,8 +39,11 @@ class Section:
 
 
 @dataclass(frozen=True)
-class ContextManifest:
+class ContextPolicy:
     node: str
+    # "<node>/<n>": recorded with every call; raise n whenever the sections,
+    # fields or budget change, so ledger rows can be compared per version.
+    version: str
     budget_tokens: int
     # In the order to shrink them: the first entry gives way first.
     sections: dict[str, Section]
@@ -49,6 +57,7 @@ class ContextDecision:
     left_out: list[str] = field(default_factory=list)
     compressed: list[str] = field(default_factory=list)
     over_budget: bool = False
+    manifest: ContextManifest | None = None
 
 
 def count_tokens(value: Any) -> int:
@@ -89,23 +98,26 @@ def cap_chunk_text(knowledge_result: dict) -> dict:
 
 
 def assemble(
-    manifest: ContextManifest, sections: dict[str, Any]
+    policy: ContextPolicy, sections: dict[str, Any]
 ) -> tuple[dict[str, Any], ContextDecision]:
     """The payload a node may send, and a record of what was done to it."""
     payload: dict[str, Any] = {}
-    left_out = [name for name in sections if name not in manifest.sections]
-    for name, rule in manifest.sections.items():
+    left_out = [name for name in sections if name not in policy.sections]
+    filtered = []
+    for name, rule in policy.sections.items():
         if name not in sections:
             continue
         value = sections[name]
         if rule.fields is not None and isinstance(value, dict):
             value = {key: value[key] for key in rule.fields if key in value}
+            if value != sections[name]:
+                filtered.append(name)
         payload[name] = value
 
     tokens = count_tokens(payload)
     compressed = []
-    threshold = manifest.budget_tokens * runtime_settings().context_compress_at
-    for name, rule in manifest.sections.items():
+    threshold = policy.budget_tokens * runtime_settings().context_compress_at
+    for name, rule in policy.sections.items():
         if tokens < threshold:
             break
         if rule.compress is None or name not in payload:
@@ -116,13 +128,17 @@ def assemble(
             compressed.append(name)
             tokens = count_tokens(payload)
 
+    over_budget = tokens > policy.budget_tokens
     decision = ContextDecision(
-        node=manifest.node,
+        node=policy.node,
         tokens=tokens,
-        budget_tokens=manifest.budget_tokens,
+        budget_tokens=policy.budget_tokens,
         left_out=left_out,
         compressed=compressed,
-        over_budget=tokens > manifest.budget_tokens,
+        over_budget=over_budget,
+        manifest=_manifest(
+            policy, sections, payload, filtered, compressed, tokens, over_budget
+        ),
     )
     if left_out or compressed or decision.over_budget:
         logger.info(
@@ -139,6 +155,50 @@ def assemble(
     return payload, decision
 
 
+def _manifest(
+    policy: ContextPolicy,
+    sections: dict[str, Any],
+    payload: dict[str, Any],
+    filtered: list[str],
+    compressed: list[str],
+    tokens: int,
+    over_budget: bool,
+) -> ContextManifest:
+    """Per section, in the order received: tokens given, tokens sent, and why."""
+    entries = []
+    for name, value in sections.items():
+        original = count_tokens(value)
+        if name not in payload:
+            entries.append(
+                SectionEntry(name, original, 0, "left_out", reason="not_in_policy")
+            )
+            continue
+        sent = payload[name]
+        if name in compressed:
+            action, reason = "compressed", "near_budget"
+        elif name in filtered:
+            action, reason = "filtered", "field_whitelist"
+        else:
+            action, reason = "kept", None
+        entries.append(
+            SectionEntry(
+                name,
+                original,
+                count_tokens(sent),
+                action,
+                reason=reason,
+                content_hash=content_hash(sent),
+            )
+        )
+    return ContextManifest(
+        policy=policy.version,
+        budget_tokens=policy.budget_tokens,
+        estimated_tokens=tokens,
+        over_budget=over_budget,
+        sections=tuple(entries),
+    )
+
+
 _PLAN_FIELDS = ("action", "route", "resolved_question", "intent", "evaluation_scope")
 _REPORT_FIELDS = (
     "status",
@@ -151,8 +211,9 @@ _REPORT_FIELDS = (
 
 # The report's data_evidence and document_citations repeat data_result and
 # knowledge_result, which are in the same payload.
-EVIDENCE_REVIEW = ContextManifest(
+EVIDENCE_REVIEW = ContextPolicy(
     node="evidence_review",
+    version="evidence_review/1",
     budget_tokens=4000,
     sections={
         "data_result": Section(

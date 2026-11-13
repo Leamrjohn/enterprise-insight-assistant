@@ -55,6 +55,11 @@ class ModelCallRecord(Base):
     cost: Mapped[Decimal | None] = mapped_column(Numeric(12, 6))
     duration_ms: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     resource_usage: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    # C3: the policy that built this call's context and what it did to each
+    # section (token counts, actions, hashes; never the text).  None when no
+    # policy built it.
+    context_policy: Mapped[str | None] = mapped_column(String(64), index=True)
+    context_manifest: Mapped[dict | None] = mapped_column(JSONB)
     result_category: Mapped[str] = mapped_column(String(32), nullable=False)
     error_code: Mapped[str | None] = mapped_column(String(128))
     created_at: Mapped[datetime] = mapped_column(
