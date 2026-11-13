@@ -59,6 +59,14 @@ def test_assistant_turns_count_their_tool_calls():
     assert sections["assistant"] == f"{calls}\n我再查一次\n{calls}"
 
 
+def test_empty_text_assistant_turn_is_like_none():
+    # The real loop sends content "" (gateway/base.py assistant_message).
+    turn = {"role": "assistant", "content": "", "tool_calls": TOOL_CALLS}
+    sections = gateway_sections("ignored", messages=[*MESSAGES[:2], turn], tools=TOOLS)
+
+    assert sections["assistant"] == json.dumps(TOOL_CALLS, ensure_ascii=False)
+
+
 def test_tool_loop_prompt_is_not_counted_twice():
     # chat_with_tools passes the whole request again as `prompt`.
     sections = gateway_sections("x" * 500, messages=MESSAGES, tools=TOOLS)
