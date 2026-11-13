@@ -56,7 +56,7 @@ def test_assistant_turns_count_their_tool_calls():
     sections = gateway_sections("ignored", messages=MESSAGES, tools=TOOLS)
 
     # content None -> only the tool calls; content present -> content, then calls
-    assert sections["assistant"] == "\n".join([calls, "我再查一次", calls])
+    assert sections["assistant"] == f"{calls}\n我再查一次\n{calls}"
 
 
 def test_tool_loop_prompt_is_not_counted_twice():
