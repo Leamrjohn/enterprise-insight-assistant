@@ -1,0 +1,80 @@
+# O3 (training): Prometheus alert rules on the O2a exporter metrics.
+# One rule is written as an example; add the others the test lists
+# (backend/tests/scripts/test_alert_rules.py) using these metrics:
+#   agent_heartbeat_age_seconds{process="worker"|"beat"}
+#   agent_outbox_pending_age_seconds, agent_tasks_stranded,
+#   agent_leases_expired, agent_reserved_billing_stale,
+#   agent_model_call_records{billing_status}, agent_exporter_up
+# Each rule needs labels.severity and annotations.runbook (a heading in
+# docs/operations/alert_runbook.md that says what to check first).
+# Then wire it up: prometheus.yml rule_files + an alertmanager container
+# (new container: ask first), and inject each fault to see it fire < 5 min.
+groups:
+  - name: agent-platform
+    rules:
+      - alert: WorkerDown
+        # No worker heartbeat for 2 minutes, or none at all.
+        expr: >-
+          (agent_heartbeat_age_seconds{process="worker"} > 120)
+          or absent(agent_heartbeat_age_seconds{process="worker"})
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: Worker heartbeat is stale or missing
+          runbook: worker-down
+
+      # ---- 例子 2（已写好）：和 WorkerDown 只差两处：process="beat"、runbook 名 ----
+      - alert: BeatStalled
+        expr: >-
+          (agent_heartbeat_age_seconds{process="beat"} > 120)
+          or absent(agent_heartbeat_age_seconds{process="beat"})
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: Beat heartbeat is stale or missing
+          runbook: beat-stalled
+
+      # ---- 下面 4 条由你填：把每个 ??? 换成内容 ----
+      # 填空 1：最老的待处理事件超过 300 秒
+      - alert: QueueBacklog
+        expr: agent_outbox_pending_age_seconds > 300
+        for: 1m
+        labels:
+          severity: high
+        annotations:
+          summary: Oldest outbox event has waited over 5 minutes
+          runbook: queue-backlog
+
+      # 填空 2：卡住任务大于 0，持续 10 分钟（“持续”靠 for 实现）
+      - alert: TasksStranded
+        expr: agent_tasks_stranded>0
+        for: 10m
+        labels:
+          severity: high
+        annotations:
+          summary: Retrying tasks have no execution for 10 minutes
+          runbook: tasks-stranded
+
+      # 填空 3：Prometheus 抓不到导出器，或者导出器查库失败，两种都要报
+      - alert: ExporterDown
+        expr: >-
+          (up{job="agent-platform"} == 0)
+          or (agent_exporter_up == 0)
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: Metrics exporter is unreachable or cannot read the database
+          runbook: exporter-down
+
+      # 填空 4：1 小时内新增的 unknown 账单超过 5 条
+      - alert: UnknownCostSpike
+        expr: increase(agent_model_call_records{billing_status="unknown"}[1h]) > 5
+        for: 0m
+        labels:
+          severity: medium
+        annotations:
+          summary: More than 5 model calls with unknown cost in the last hour
+          runbook: unknown-cost-spike
