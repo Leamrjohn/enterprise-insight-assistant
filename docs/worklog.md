@@ -827,3 +827,9 @@
 - 模板开销 prompt_tokens − total：165~173，10 次几乎不变，来源未验证（推测为消息格式标记或本地分词器与服务商的差异）。
 - 覆盖：data 8、knowledge 12、reviewer 8、semantic_review 10 次模型调用 declared=false；knowledge 12 次本地重排序不经治理层，无 context_tokens。
 - 遗留：其余 11 个调用点未声明，只有 planner 有分部分基线；重试路径的声明未被本轮数据覆盖。
+
+## 2026-11-13 O3 告警（训练工单，用户写规则；PR #30，main 6b0fff8）
+- 做了什么：6 条规则接入 Prometheus，Grafana 新增“正在触发的告警”表（方案 A，不加容器），处理手册 docs/operations/alert_runbook.md。
+- 验证：promtool 6 条 SUCCESS，test_alert_rules 2 passed；故障注入（停 beat、暂停 worker、演练任务 938 等 8 行演练数据）后触发用时：UnknownCostSpike ≤36 秒、QueueBacklog 1.6 分、WorkerDown 3.6 分、ExporterDown 2.2 分、BeatStalled 4.2 分、TasksStranded 11 分（规则要求持续 10 分钟）；恢复后 ≤83 秒全部消失；演练数据已删除（用户确认），unknown 回到 26。
+- 待办：停导出器时 WorkerDown、BeatStalled 因 absent() 连带误报，考虑导出器不可用时抑制。
+- 待办：agent_model_call_records 是行数，删行会被 increase() 当成计数器重置，UnknownCostSpike 误报约 1 小时；考虑导出真正只增不减的计数。
