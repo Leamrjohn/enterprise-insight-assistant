@@ -23,6 +23,7 @@ from app.core.gateway.base import ModelCallRecord, ModelGateway
 from app.core.settings import get_settings
 from app.core.tokenizer import encoding_for_model
 from app.core.tracing import traced_model_call
+from app.modules.runtime.context_measurement import gateway_sections
 from app.modules.runtime.model_governance import (
     estimate_chat_prompt_tokens,
     fallback_chain_scope,
@@ -83,6 +84,7 @@ class OpenAIGateway(ModelGateway):
             ),
             reserved_completion_tokens=max_output_tokens,
             pricing_parameters=provenance["model_parameters"],
+            fallback_sections=gateway_sections(prompt, system_prompt),
         )
         try:
             messages = []

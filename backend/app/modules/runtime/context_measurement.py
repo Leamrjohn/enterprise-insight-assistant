@@ -10,6 +10,11 @@ before ``gateway.chat``; ``reserve_model_call`` (model_governance) takes the
 declaration and stores ``context_usage(...)`` in that call's
 ``model_call_records.resource_usage["context_tokens"]``.  The record already
 has node_name, prompt_tokens and model_call_id, so the baseline is one query.
+
+Fallback (step 3): a call site that declared nothing is still split, coarsely,
+by the gateway: ``gateway_sections(...)`` cuts the request into what the
+gateway can see (system / prompt, or the tool-loop messages by role plus the
+tool schemas) and the record says ``"declared": "auto"``.
 """
 
 from __future__ import annotations
@@ -41,16 +46,38 @@ def take_declared_sections() -> dict[str, str] | None:
     return sections
 
 
-def context_usage(sections: Mapping[str, str] | None) -> dict[str, Any]:
+def context_usage(
+    sections: Mapping[str, str] | None,
+    fallback: Mapping[str, str] | None = None,
+) -> dict[str, Any]:
     """What reserve_model_call stores under resource_usage["context_tokens"].
 
     Declared:  {"declared": True, "tokens": measure_sections(sections)}
-    None:      {"declared": False}   (call site not wired yet; still visible)
-    No text from the sections, ever.
+    Fallback:  {"declared": "auto", "tokens": measure_sections(fallback)}
+               (call site declared nothing; the gateway split it)
+    Neither:   {"declared": False}   (still visible)
+    A declaration always wins over the fallback.  No text, ever.
     """
-    if sections is None:
-        return {"declared": False}
-    return {"declared": True, "tokens": measure_sections(sections)}
+    if sections is not None:
+        return {"declared": True, "tokens": measure_sections(sections)}
+    if fallback is not None:
+        return {"declared": "auto", "tokens": measure_sections(fallback)}
+    return {"declared": False}
+
+
+def gateway_sections(
+    prompt: str,
+    system_prompt: str | None = None,
+    messages: list[dict] | None = None,
+    tools: list[dict] | None = None,
+) -> dict[str, str]:
+    """The sections a gateway can see in one request (C2 fallback).
+
+    TODO(C2 step 3, you write this): contract and examples are in
+    docs/training/c2_gateway_contract.md; tests in
+    backend/tests/unit/runtime/test_context_gateway.py.
+    """
+    raise NotImplementedError
 
 
 def measure_sections(sections: Mapping[str, str]) -> dict[str, int]:

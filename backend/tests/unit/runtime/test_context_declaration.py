@@ -128,3 +128,25 @@ def test_ledger_keeps_section_counts_after_settlement(db_session, test_user):
     assert first.resource_usage["finish_reason"] == "stop"  # merged, not replaced
     assert retry.resource_usage["context_tokens"] == {"declared": False}
     assert "华东" not in str(first.resource_usage)
+
+
+def test_undeclared_call_keeps_the_gateway_split(db_session, test_user):
+    task = _task(test_user)
+    db_session.add(task)
+    db_session.commit()
+
+    with model_call_scope(
+        db_session, task=task, attempt=SimpleNamespace(id=None), node_name="reviewer"
+    ):
+        take_declared_sections()  # nothing left over from another test
+        reserve_model_call(
+            provider="local",
+            model_name="test-model",
+            fallback_sections={"system": "系统提示", "prompt": QUESTION},
+        )
+
+    record = db_session.query(ModelCallRecord).filter_by(task_id=task.id).one()
+    usage = record.resource_usage["context_tokens"]
+    assert usage["declared"] == "auto"
+    assert usage["tokens"]["prompt"] == count_tokens(QUESTION)
+    assert "华东" not in str(record.resource_usage)

@@ -1,6 +1,6 @@
 """Task-scoped model budget enforcement and privacy-safe call auditing."""
 
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
@@ -248,8 +248,13 @@ def reserve_model_call(
     reserved_completion_tokens: int = 0,
     pricing_parameters: dict | None = None,
     charge_kind: str = "provider_model",
+    fallback_sections: Mapping[str, str] | None = None,
 ) -> ModelCallScope | None:
-    """Atomically consume a call slot before contacting an external provider."""
+    """Atomically consume a call slot before contacting an external provider.
+
+    ``fallback_sections`` is the gateway's own split of the request (C2), used
+    only when the call site declared nothing.
+    """
     scope = _scope.get()
     if scope is None:
         return None
@@ -327,7 +332,9 @@ def reserve_model_call(
         reserved_cost=reserved_cost,
         # C2: per-section token counts of what this call sends (names and
         # numbers only); see app/modules/runtime/context_measurement.py.
-        resource_usage={"context_tokens": context_usage(take_declared_sections())},
+        resource_usage={
+            "context_tokens": context_usage(take_declared_sections(), fallback_sections)
+        },
         result_category="reserved",
     )
     task.model_budget_usage = usage
