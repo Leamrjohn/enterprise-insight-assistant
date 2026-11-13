@@ -142,7 +142,7 @@ def test_undeclared_call_keeps_the_gateway_split(db_session, test_user):
         reserve_model_call(
             provider="local",
             model_name="test-model",
-            fallback_sections={"system": "系统提示", "prompt": QUESTION},
+            request_parts={"prompt": QUESTION, "system_prompt": "系统提示"},
         )
 
     record = db_session.query(ModelCallRecord).filter_by(task_id=task.id).one()
