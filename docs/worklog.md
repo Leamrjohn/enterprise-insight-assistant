@@ -839,3 +839,10 @@
 - 开跑前发现经营库容器 agent-demo_business_acme-1 自 11-11 16:10 退出（退出码 255，重启策略 no），手动启动后正常。
 - 节点基线（3 轮 provider_model 调用，输入 token P50/P95/最大）：planner 1598/1800/1800（31 次，含 task 946 第二次调用，已声明且 previous_output=96）、data 1230/1419/1420、knowledge 553/2505/2505、reviewer 1020/1747/1916、semantic_review 1216.5/2225/2225；分部分计数仍只有 planner。
 - 待办：经营库容器改为自动重启；/health/ready 不检查经营库，停机两天无提示。
+
+## 2026-11-13 C2 第 3 步：网关兜底分部分计数（训练工单，用户写 gateway_sections；PR #33，main 250d2fa）
+- 做了什么：调用点没声明时，网关按 system/prompt（多轮工具调用按 role 加 tools）拆分，账本记 declared="auto"；网关只传原始请求，拆分在 runtime 层，未新增 import 豁免。
+- 验证：全量 1747 passed / 40 skipped，lint_imports 2 kept；冒烟 c2-auto-baseline（task 969~978）9 成功 + 混合题待复核，provider_model 调用 50 次全部 true/auto，0 次 false。
+- 基线（输入 token P50/P95/最大）：data system 632/1011/1025、prompt 569.5/1060/1113；knowledge system 178/203/211、prompt 371/2101/2395；reviewer system 289 固定、prompt 719/1372.5/1453；semantic_review system 411 固定、prompt 760.5/1345/1702。
+- 发现：auto 节点“计费 − 测量”约 0（−89～111，本地分词器与服务商的差异），planner 却稳定约 170，说明 planner 声明的 8 个部分漏了约 170 token 的模板文字，不是消息格式开销。
+- 遗留：本轮没有走到多轮工具调用（无 assistant/tool_results 部分），该路径只有单元测试覆盖。
