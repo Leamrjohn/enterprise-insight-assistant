@@ -19,6 +19,7 @@ tool schemas) and the record says ``"declared": "auto"``.
 
 from __future__ import annotations
 
+import json
 from collections.abc import Mapping
 from contextvars import ContextVar
 from typing import Any
@@ -71,13 +72,35 @@ def gateway_sections(
     messages: list[dict] | None = None,
     tools: list[dict] | None = None,
 ) -> dict[str, str]:
-    """The sections a gateway can see in one request (C2 fallback).
-
-    TODO(C2 step 3, you write this): contract and examples are in
-    docs/training/c2_gateway_contract.md; tests in
-    backend/tests/unit/runtime/test_context_gateway.py.
-    """
-    raise NotImplementedError
+    """The sections a gateway can see in one request (C2 fallback)."""
+    if messages is None:
+        return {"system": system_prompt or "", "prompt": prompt}
+    else:
+        result = {
+            "system": "",
+            "user": "",
+            "assistant": "",
+            "tool_results": "",
+            "tools": "",
+        }
+        roles = {
+            "system": "system",
+            "user": "user",
+            "assistant": "assistant",
+            "tool": "tool_results",
+        }
+        for msg in messages:
+            k = roles.get(msg["role"], msg["role"])
+            if k in result and msg.get("content"):
+                result[k] += ("\n" if result[k] else "") + msg["content"]
+            if k in result and msg.get("tool_calls"):
+                result[k] += ("\n" if result[k] else "") + json.dumps(
+                    msg["tool_calls"], ensure_ascii=False
+                )
+        result["tools"] = (
+            json.dumps(tools, ensure_ascii=False) if tools is not None else ""
+        )
+        return result
 
 
 def measure_sections(sections: Mapping[str, str]) -> dict[str, int]:
