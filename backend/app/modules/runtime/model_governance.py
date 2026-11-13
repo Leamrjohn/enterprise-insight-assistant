@@ -1,17 +1,19 @@
 """Task-scoped model budget enforcement and privacy-safe call auditing."""
 
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from hashlib import sha256
+from typing import Any
 from uuid import uuid4
 
 from app.core.settings import MAX_LLM_TIMEOUT_SECONDS
 from app.db.clock import database_now
 from app.modules.runtime.context_measurement import (
     context_usage,
+    gateway_sections,
     take_declared_sections,
 )
 from app.modules.workflow.audit.model_call import ModelCallRecord
@@ -248,8 +250,15 @@ def reserve_model_call(
     reserved_completion_tokens: int = 0,
     pricing_parameters: dict | None = None,
     charge_kind: str = "provider_model",
+    request_parts: Mapping[str, Any] | None = None,
 ) -> ModelCallScope | None:
-    """Atomically consume a call slot before contacting an external provider."""
+    """Atomically consume a call slot before contacting an external provider.
+
+    ``request_parts`` is what the gateway sends (prompt, system_prompt,
+    messages, tools).  When the call site declared nothing, C2 splits it with
+    ``gateway_sections`` here, so gateways need not import the measurement
+    module (core must not import business modules).
+    """
     scope = _scope.get()
     if scope is None:
         return None
@@ -309,6 +318,12 @@ def reserve_model_call(
             "reserved_cost": str(current_reserved_cost + (reserved_cost or Decimal(0))),
         }
     )
+    declared = take_declared_sections()
+    fallback = (
+        gateway_sections(**request_parts)
+        if declared is None and request_parts is not None
+        else None
+    )
     record = ModelCallRecord(
         model_call_id=str(uuid4()),
         task_id=task.id,
@@ -327,7 +342,7 @@ def reserve_model_call(
         reserved_cost=reserved_cost,
         # C2: per-section token counts of what this call sends (names and
         # numbers only); see app/modules/runtime/context_measurement.py.
-        resource_usage={"context_tokens": context_usage(take_declared_sections())},
+        resource_usage={"context_tokens": context_usage(declared, fallback)},
         result_category="reserved",
     )
     task.model_budget_usage = usage

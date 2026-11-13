@@ -83,6 +83,7 @@ class OpenAIGateway(ModelGateway):
             ),
             reserved_completion_tokens=max_output_tokens,
             pricing_parameters=provenance["model_parameters"],
+            request_parts={"prompt": prompt, "system_prompt": system_prompt},
         )
         try:
             messages = []

@@ -36,6 +36,7 @@ class LocalModelGateway(ModelGateway):
             provider="local",
             model_name="local-simulator",
             estimated_prompt_tokens=self.count_tokens(prompt),
+            request_parts={"prompt": prompt, "system_prompt": system_prompt},
         )
         provenance = prompt_provenance(prompt, system_prompt, json_mode=json_mode)
 
