@@ -852,3 +852,4 @@
 - 验证（本机）：ruff 通过；新增和相关测试 33 passed；全量测试中非数据库测试只有评测夹具哈希 5 条失败（Windows 换行符导致，与本改动无关）。连测试库的测试（含新迁移和账本端到端）本机没有数据库密码，没有运行，交给 CI。
 - 遗留：迁移尚未在运行中的库上执行，冒烟尚未运行；其他节点仍只有 C2 计数，C4/C5 接入时补上清单；本机 lint-imports 报一条 ignore 未匹配，main 上相同。
 - 补全练习（2026-11-19）：_manifest 循环体由用户重写，测试通过。待办（C4 评估）：一段同时被白名单过滤和压缩时只记 compressed，丢失“被过滤”信息；清单不记被白名单去掉的字段名，上游新增字段被挡掉时无人提醒。
+- 上线（2026-11-19，main 2a1548e）：备份 artifacts/backups/agent_platform_20261119_101531_c3.dump（sha256 记 manifest）后迁移 d6e7f8a9b0c1→e7f8a9b0c1d2；首次构建 Debian 源 404，重试成功；重启 api/worker/report-worker/beat，readiness 4 项 ok。冒烟 c3-deploy-r1（任务 989–998，$0.025083，66,071 token）9 成功 + 混合题待复核；reviewer 8 行均为 evidence_review/1 且无超预算，其余节点为 NULL（预期）。
