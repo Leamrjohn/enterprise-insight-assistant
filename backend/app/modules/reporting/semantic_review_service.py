@@ -28,6 +28,7 @@ from app.modules.reporting.semantic_review import (
     SQLSemanticReview,
 )
 from app.modules.runtime.context_budget import EVIDENCE_REVIEW, assemble
+from app.modules.runtime.model_governance import model_context_scope
 from app.modules.runtime.prompts import get_prompt_registry
 from pydantic import ValidationError
 from sqlglot import exp
@@ -326,7 +327,7 @@ class SemanticReviewService:
             qualification_rule=qualification_rule,
             qualification_json=qualification_json,
         )
-        payload, _ = assemble(
+        payload, decision = assemble(
             EVIDENCE_REVIEW,
             {
                 "question": question,
@@ -345,14 +346,16 @@ class SemanticReviewService:
                 'contradicted_memories：[{"memory_id":1,"reason":"..."}]；'
                 "这只是请人工审核，不影响本次判断，也不要因为记忆而改变 verdict。"
             )
-        raw_output = self._chat(system_prompt=system_prompt, payload=payload)
-        review = self._parse_with_repair(
-            EvidenceSemanticReview,
-            raw_output,
-            "证据语义复核结果不符合 JSON 契约",
-            system_prompt,
-            payload,
-        )
+        # C3: the first call and any repair record what the policy did.
+        with model_context_scope(decision.manifest):
+            raw_output = self._chat(system_prompt=system_prompt, payload=payload)
+            review = self._parse_with_repair(
+                EvidenceSemanticReview,
+                raw_output,
+                "证据语义复核结果不符合 JSON 契约",
+                system_prompt,
+                payload,
+            )
         return review.model_copy(
             update={
                 "contradicted_memories": _credible_memory_flags(
