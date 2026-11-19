@@ -14,8 +14,9 @@ from hashlib import sha256
 from typing import Any, Literal
 
 # kept: sent as given; filtered: only whitelisted fields sent;
-# compressed: shortened by its compressor; left_out: not sent at all.
-Action = Literal["kept", "filtered", "compressed", "left_out"]
+# compressed: shortened by its compressor; left_out: not in the policy;
+# dropped: in the policy but given up to fit the budget (C4).
+Action = Literal["kept", "filtered", "compressed", "left_out", "dropped"]
 
 
 def content_hash(value: Any) -> str:
