@@ -11,6 +11,7 @@ from uuid import uuid4
 
 from app.core.settings import MAX_LLM_TIMEOUT_SECONDS
 from app.db.clock import database_now
+from app.modules.runtime.context.manifest import ContextManifest
 from app.modules.runtime.context_measurement import (
     context_usage,
     gateway_sections,
@@ -93,6 +94,19 @@ _scope: ContextVar[ModelCallScope | None] = ContextVar("model_call_scope", defau
 _fallback_models_tried: ContextVar[tuple[str, ...] | None] = ContextVar(
     "fallback_models_tried", default=None
 )
+_context_manifest: ContextVar[ContextManifest | None] = ContextVar(
+    "context_manifest", default=None
+)
+
+
+@contextmanager
+def model_context_scope(manifest: ContextManifest | None) -> Iterator[None]:
+    """Every call reserved inside (a repair included) records this manifest."""
+    token = _context_manifest.set(manifest)
+    try:
+        yield
+    finally:
+        _context_manifest.reset(token)
 
 
 @contextmanager
@@ -324,6 +338,7 @@ def reserve_model_call(
         if declared is None and request_parts is not None
         else None
     )
+    manifest = _context_manifest.get()
     record = ModelCallRecord(
         model_call_id=str(uuid4()),
         task_id=task.id,
@@ -343,6 +358,10 @@ def reserve_model_call(
         # C2: per-section token counts of what this call sends (names and
         # numbers only); see app/modules/runtime/context_measurement.py.
         resource_usage={"context_tokens": context_usage(declared, fallback)},
+        # C3: same commit as the reservation, so a manifest that can't be
+        # written stops the call before it is sent.
+        context_policy=manifest.policy if manifest else None,
+        context_manifest=manifest.to_record() if manifest else None,
         result_category="reserved",
     )
     task.model_budget_usage = usage

@@ -10,7 +10,7 @@ from app.modules.conversations.service import (
 from app.modules.runtime.context_budget import (
     EVIDENCE_REVIEW,
     MAX_ROWS_WHEN_COMPRESSED,
-    ContextManifest,
+    ContextPolicy,
     Section,
     assemble,
     cap_chunk_text,
@@ -29,11 +29,14 @@ def _message(index, role, content):
 
 
 def test_undeclared_sections_and_fields_do_not_get_in():
-    manifest = ContextManifest(
-        node="n", budget_tokens=1000, sections={"plan": Section(fields=("route",))}
+    policy = ContextPolicy(
+        node="n",
+        version="n/1",
+        budget_tokens=1000,
+        sections={"plan": Section(fields=("route",))},
     )
     payload, decision = assemble(
-        manifest, {"plan": {"route": "x", "reason": "y"}, "secret": "z"}
+        policy, {"plan": {"route": "x", "reason": "y"}, "secret": "z"}
     )
     assert payload == {"plan": {"route": "x"}}
     assert decision.left_out == ["secret"]
@@ -72,8 +75,9 @@ def test_a_section_without_compressor_is_never_shortened():
 
 
 def test_cheaper_sections_are_compressed_only_as_far_as_needed():
-    manifest = ContextManifest(
+    policy = ContextPolicy(
         node="n",
+        version="n/1",
         budget_tokens=500,
         sections={
             "data_result": Section(compress=cap_data_rows),
@@ -83,7 +87,7 @@ def test_cheaper_sections_are_compressed_only_as_far_as_needed():
     rows = [["客户名称很长很长很长", i] for i in range(300)]
     long_chunk = "片段内容" * 150
     _, decision = assemble(
-        manifest,
+        policy,
         {
             "data_result": {"evidence": [{"rows": rows}]},
             "knowledge_result": {"evidences": [{"content": long_chunk}]},

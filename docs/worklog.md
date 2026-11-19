@@ -846,3 +846,9 @@
 - 基线（输入 token P50/P95/最大）：data system 632/1011/1025、prompt 569.5/1060/1113；knowledge system 178/203/211、prompt 371/2101/2395；reviewer system 289 固定、prompt 719/1372.5/1453；semantic_review system 411 固定、prompt 760.5/1345/1702。
 - 发现：auto 节点“计费 − 测量”约 0（−89～111，本地分词器与服务商的差异），planner 却稳定约 170，说明 planner 声明的 8 个部分漏了约 170 token 的模板文字，不是消息格式开销。
 - 遗留：本轮没有走到多轮工具调用（无 assistant/tool_results 部分），该路径只有单元测试覆盖。
+
+## 2026-11-13 C3 清单进账本（共建；分支 feat/c3-context-manifest，迁移 e7f8a9b0c1d2）
+- 做了什么：model_call_records 新增 context_policy、context_manifest 两列（只新增、可回滚）；新增 runtime/context/manifest.py，记录每段的原始和发送 token、处理方式（kept/filtered/compressed/left_out）、原因和内容哈希，不存原文；原来的策略类 ContextManifest 改名为 ContextPolicy 并加 version；证据复核不再丢弃预算判定，首次调用和修复调用都写入清单，与预占在同一次提交。
+- 验证（本机）：ruff 通过；新增和相关测试 33 passed；全量测试中非数据库测试只有评测夹具哈希 5 条失败（Windows 换行符导致，与本改动无关）。连测试库的测试（含新迁移和账本端到端）本机没有数据库密码，没有运行，交给 CI。
+- 遗留：迁移尚未在运行中的库上执行，冒烟尚未运行；其他节点仍只有 C2 计数，C4/C5 接入时补上清单；本机 lint-imports 报一条 ignore 未匹配，main 上相同。
+- 补全练习（2026-11-19）：_manifest 循环体由用户重写，测试通过。待办（C4 评估）：一段同时被白名单过滤和压缩时只记 compressed，丢失“被过滤”信息；清单不记被白名单去掉的字段名，上游新增字段被挡掉时无人提醒。
