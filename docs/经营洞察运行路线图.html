@@ -1,0 +1,511 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>经营洞察运行路线图</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&family=Noto+Serif+SC:wght@700;900&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout concept: a rail network. One main line, numbered stations, and coloured retry lines that loop back. */
+:root{
+  --bg:#f3f6f8; --surface:#ffffff; --sunk:#e8eef2; --ink:#14222e; --muted:#566878; --rule:#cfd9e0;
+  --main:#0b5e6b; --node:#2563c9; --route:#b76e00; --task:#7a3fc4; --crash:#c0316b;
+  --ok:#17794a; --ok-bg:#dcf3e6; --warn:#8f5a00; --warn-bg:#fbeccb; --bad:#b3262e; --bad-bg:#fbe0e0;
+  --node-bg:#dfe9fb; --route-bg:#fbeccb; --task-bg:#ece1fa; --hold-bg:#dcecef;
+  --serif:"Noto Serif SC","Songti SC",serif; --sans:"Noto Sans SC","PingFang SC","Microsoft YaHei",sans-serif; --mono:"JetBrains Mono",Consolas,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#10181f; --surface:#17222b; --sunk:#1f2d38; --ink:#e4edf2; --muted:#9db0bf; --rule:#31434f;
+  --main:#4cc0cf; --node:#7fa9f2; --route:#eba93b; --task:#b68cf0; --crash:#ef7aa8;
+  --ok:#62d398; --ok-bg:#16382a; --warn:#f0bb62; --warn-bg:#3d2e12; --bad:#f58b8f; --bad-bg:#43201f;
+  --node-bg:#1c2f50; --route-bg:#3d2e12; --task-bg:#30234a; --hold-bg:#183840; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#10181f; --surface:#17222b; --sunk:#1f2d38; --ink:#e4edf2; --muted:#9db0bf; --rule:#31434f;
+  --main:#4cc0cf; --node:#7fa9f2; --route:#eba93b; --task:#b68cf0; --crash:#ef7aa8;
+  --ok:#62d398; --ok-bg:#16382a; --warn:#f0bb62; --warn-bg:#3d2e12; --bad:#f58b8f; --bad-bg:#43201f;
+  --node-bg:#1c2f50; --route-bg:#3d2e12; --task-bg:#30234a; --hold-bg:#183840; color-scheme:dark}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+body{background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:16px;line-height:1.75}
+.shell{max-width:1240px;margin:0 auto;padding-block:40px 80px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:grid;grid-template-columns:190px minmax(0,1fr);gap:44px}
+nav.rail{position:sticky;top:calc(env(safe-area-inset-top,0px) + 20px);align-self:start;max-height:calc(100vh - 40px);overflow:auto;font-size:13.5px}
+nav.rail ol{list-style:none;margin:0;padding:0;border-left:3px solid var(--main)}
+nav.rail li a{display:block;padding:4px 0 4px 14px;color:var(--muted);text-decoration:none;position:relative;line-height:1.45}
+nav.rail li a::before{content:"";position:absolute;left:-7.5px;top:10px;width:9px;height:9px;border-radius:50%;background:var(--bg);border:2px solid var(--main)}
+nav.rail li a:hover,nav.rail li a:focus-visible{color:var(--ink)}
+nav.rail .group{margin:14px 0 4px;font-size:12px;letter-spacing:.08em;color:var(--muted);font-weight:700}
+main{min-width:0;display:grid;gap:56px}
+header h1{font-family:var(--serif);font-weight:900;font-size:clamp(32px,5vw,50px);line-height:1.2;margin:0 0 12px;text-wrap:balance}
+header p{margin:0;max-width:44em;color:var(--muted);font-size:17px}
+h2{font-family:var(--serif);font-size:27px;line-height:1.35;margin:0 0 10px;text-wrap:balance}
+h3{font-size:16.5px;margin:22px 0 8px}
+section>p,.lead{max-width:46em;margin:0 0 12px}
+.lead{color:var(--muted)}
+.st-head{display:flex;gap:14px;align-items:center;margin-bottom:8px}
+.st-no{flex:none;width:42px;height:42px;border-radius:50%;background:var(--surface);border:4px solid var(--main);display:grid;place-items:center;font-family:var(--mono);font-weight:500;font-size:16px;color:var(--main)}
+.st-head h2{margin:0}
+.who{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 12px}
+.chip{font-size:12.5px;padding:1px 9px;border-radius:4px;background:var(--sunk);color:var(--ink)}
+.chip b{font-weight:700}
+ol.steps{margin:0;padding:0;list-style:none;counter-reset:s;display:grid;gap:7px;max-width:50em}
+ol.steps>li{counter-increment:s;display:grid;grid-template-columns:26px minmax(0,1fr);gap:8px}
+ol.steps>li::before{content:counter(s);font-family:var(--mono);font-size:13px;color:var(--main);font-weight:500;padding-top:3px}
+code,.ref{font-family:var(--mono);font-size:.84em}
+.ref{color:var(--muted);white-space:nowrap}
+.tw{overflow-x:auto;border:1px solid var(--rule);border-radius:6px;background:var(--surface);margin:10px 0 0}
+table{border-collapse:collapse;width:100%;min-width:720px;font-size:14.5px;line-height:1.6}
+th{text-align:left;font-size:12.5px;letter-spacing:.04em;color:var(--muted);background:var(--sunk);font-weight:700;padding:8px 12px;white-space:nowrap}
+td{padding:9px 12px;border-top:1px solid var(--rule);vertical-align:top}
+td:first-child{font-weight:500}
+.p{display:inline-block;font-size:12.5px;font-weight:700;padding:0 7px;border-radius:4px;white-space:nowrap;line-height:1.7}
+.ok{background:var(--ok-bg);color:var(--ok)} .warn{background:var(--warn-bg);color:var(--warn)} .bad{background:var(--bad-bg);color:var(--bad)}
+.n{background:var(--node-bg);color:var(--node)} .r{background:var(--route-bg);color:var(--route)} .t{background:var(--task-bg);color:var(--task)} .h{background:var(--hold-bg);color:var(--main)}
+.map{overflow-x:auto;background:var(--surface);border:1px solid var(--rule);border-radius:6px;padding:10px}
+.map svg{display:block;width:100%;min-width:900px;height:auto}
+.legend{display:flex;flex-wrap:wrap;gap:6px 18px;margin:10px 0 0;font-size:13.5px;color:var(--muted)}
+.legend span{display:inline-flex;align-items:center;gap:7px}
+.legend i{width:26px;height:0;border-top:4px solid}
+.note{background:var(--surface);border:1px solid var(--rule);border-radius:6px;padding:14px 16px;max-width:52em;margin:12px 0 0}
+.note h3{margin:0 0 6px}
+.note ul,.plain{margin:0;padding-left:20px;display:grid;gap:6px}
+.slots{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:4px;margin:6px 0 4px;min-width:640px}
+.slot{background:var(--hold-bg);color:var(--ink);font-size:12.5px;padding:8px 6px;border-radius:4px;line-height:1.35;min-height:58px}
+.slot.empty{background:transparent;border:1.5px dashed var(--rule);color:var(--muted)}
+.slot.re{background:var(--route-bg);color:var(--route);font-weight:700}
+.slot.stop{background:var(--bad-bg);color:var(--bad);font-weight:700}
+.scroll{overflow-x:auto}
+.cap{font-size:13.5px;color:var(--muted);margin:14px 0 2px;font-weight:700}
+.bar{display:flex;height:30px;border-radius:4px;overflow:hidden;margin:10px 0 8px;gap:2px}
+.bar div{min-width:3px}
+.keys{display:flex;flex-wrap:wrap;gap:4px 16px;font-size:13.5px;color:var(--muted);font-variant-numeric:tabular-nums}
+.keys b{color:var(--ink)}
+.dot{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px}
+.doubt{display:grid;gap:12px}
+.doubt article{background:var(--surface);border:1px solid var(--rule);border-radius:6px;padding:14px 16px}
+.doubt h3{margin:0 0 4px}
+.doubt p{margin:0}
+@media (max-width:900px){
+  .shell{grid-template-columns:minmax(0,1fr);gap:28px;padding-block:24px 56px}
+  nav.rail{position:static;max-height:none}
+  nav.rail ol{border-left:0;display:flex;flex-wrap:wrap;gap:4px 6px}
+  nav.rail li a{padding:2px 9px;background:var(--sunk);border-radius:4px;color:var(--ink)}
+  nav.rail li a::before{display:none}
+  nav.rail .group{display:none}
+}
+</style>
+
+<div class="shell">
+<nav class="rail" aria-label="页面目录">
+  <ol>
+    <li><a href="#map">全线总图</a></li>
+    <li><a href="#ladder">五层恢复机制</a></li>
+    <li><a href="#budget">预算总闸</a></li>
+    <li class="group">沿线站点</li>
+    <li><a href="#s1">1 入口 API</a></li>
+    <li><a href="#s2">2 投递</a></li>
+    <li><a href="#s3">3 Worker 认领</a></li>
+    <li><a href="#s4">4 Planner</a></li>
+    <li><a href="#s5">5 计划复核</a></li>
+    <li><a href="#s6">6 Data</a></li>
+    <li><a href="#s7">7 Knowledge</a></li>
+    <li><a href="#s8">8 Reviewer</a></li>
+    <li><a href="#s9">9 智能路由</a></li>
+    <li><a href="#s10">10 保存与发布</a></li>
+    <li class="group">专题</li>
+    <li><a href="#crash">崩溃与取消</a></li>
+    <li><a href="#faults">故障速查</a></li>
+    <li><a href="#doubts">读码发现的疑点</a></li>
+  </ol>
+</nav>
+
+<main>
+<header>
+  <h1>经营洞察运行路线图</h1>
+  <p>从用户点发送，到看见结果，每一站做什么、会往哪里分流、失败后谁来重试。内容来自逐文件读码，数字取代码默认值，并用本地库 841 个真实任务核对。</p>
+</header>
+
+<section id="map">
+  <h2>全线总图</h2>
+  <p class="lead">主线只有一条。复杂之处在于三组回头线：智能路由把任务送回前面的节点，任务级重试和崩溃恢复把任务送回 Worker。</p>
+  <div class="map">
+  <svg viewBox="0 0 1080 600" role="img" aria-label="运行主链路线图：从发送消息经 Planner、Data、Knowledge、Reviewer、智能路由到五种最终状态，并标出重试回路">
+    <style>
+      .m{fill:none;stroke:var(--main);stroke-width:5}
+      .e{fill:none;stroke:var(--muted);stroke-width:2.5;stroke-dasharray:7 6}
+      .a{fill:none;stroke:var(--route);stroke-width:3}
+      .v{fill:none;stroke:var(--task);stroke-width:3}
+      .s{fill:var(--surface);stroke:var(--main);stroke-width:4}
+      .nm{fill:var(--ink);font:700 14px var(--sans);text-anchor:middle}
+      .sb{fill:var(--muted);font:400 12px var(--sans);text-anchor:middle}
+      .la{font:700 12.5px var(--sans)}
+      .oc{font:700 13px var(--sans);text-anchor:middle}
+      .oc2{font:400 11px var(--mono);text-anchor:middle}
+    </style>
+    <defs>
+      <marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--route)"/></marker>
+      <marker id="vh" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" fill="var(--task)"/></marker>
+    </defs>
+    <path class="e" d="M903 80H1020V505H960"/>
+    <path class="m" d="M70 80H890V290H290V440V505"/>
+    <path class="m" d="M170 505H960"/>
+    <path class="m" d="M170 505V540M370 505V540M570 505V540M770 505V540M960 505V540"/>
+    <path class="a" marker-end="url(#ah)" d="M290 276V225H872V274"/>
+    <path class="a" marker-end="url(#ah)" d="M690 225V274"/>
+    <path class="a" marker-end="url(#ah)" d="M720 225V98"/>
+    <path class="v" marker-end="url(#vh)" d="M890 358V388H550V98"/>
+    <path class="v" d="M690 358V388M490 358V388H550"/>
+    <g>
+      <circle class="s" cx="70" cy="80" r="13"/><circle class="s" cx="230" cy="80" r="13"/><circle class="s" cx="390" cy="80" r="13"/><circle class="s" cx="550" cy="80" r="13"/><circle class="s" cx="720" cy="80" r="13"/><circle class="s" cx="890" cy="80" r="13"/>
+      <circle class="s" cx="890" cy="290" r="13"/><circle class="s" cx="690" cy="290" r="13"/><circle class="s" cx="490" cy="290" r="13"/><circle class="s" cx="290" cy="290" r="13"/><circle class="s" cx="290" cy="440" r="13"/>
+    </g>
+    <text class="nm" x="70" y="50">发送消息</text><text class="sb" x="70" y="118">权限与准入</text>
+    <text class="nm" x="230" y="50">任务 + Outbox</text><text class="sb" x="230" y="118">同一事务写入</text>
+    <text class="nm" x="390" y="50">Celery · Redis</text><text class="sb" x="390" y="118">排队</text>
+    <text class="nm" x="550" y="50">Worker 认领</text><text class="sb" x="510" y="118">租约与快照</text>
+    <text class="nm" x="720" y="50">Planner</text><text class="sb" x="782" y="118">模型定计划</text>
+    <text class="nm" x="890" y="50">计划复核</text><text class="sb" x="945" y="118">模型可改写</text>
+    <text class="nm" x="890" y="330">Data</text><text class="sb" x="890" y="348">模型写 SQL，代码把关</text>
+    <text class="nm" x="690" y="330">Knowledge</text><text class="sb" x="690" y="348">检索 + 答案 + 核对</text>
+    <text class="nm" x="490" y="330">Reviewer</text><text class="sb" x="490" y="348">拼报告 + 复核 + 校验</text>
+    <text class="nm" x="290" y="330">智能路由</text><text class="sb" x="290" y="348">代码决定重试或结束</text>
+    <text class="nm" x="318" y="436" style="text-anchor:start">保存结果 · 决定状态</text><text class="sb" x="318" y="454" style="text-anchor:start">validate_report → decide_completion</text>
+    <text class="la" x="315" y="216" fill="var(--route)">路由级重试：最多 2 次（重新规划 / 重查数据 / 重检索）</text>
+    <text class="la" x="566" y="408" fill="var(--task)">任务级重试（最多 3 次）与崩溃恢复：重新认领后接着跑</text>
+    <text class="sb" x="1012" y="170" style="text-anchor:end">直接回答</text><text class="sb" x="1012" y="188" style="text-anchor:end">拒绝 / 追问</text><text class="sb" x="1012" y="206" style="text-anchor:end">不进入分析</text>
+    <g>
+      <rect x="95" y="540" width="150" height="46" rx="5" fill="var(--ok-bg)"/><text class="oc" x="170" y="559" fill="var(--ok)">完成发布</text><text class="oc2" x="170" y="576" fill="var(--ok)">completed</text>
+      <rect x="290" y="540" width="160" height="46" rx="5" fill="var(--hold-bg)"/><text class="oc" x="370" y="559" fill="var(--main)">等人工审核</text><text class="oc2" x="370" y="576" fill="var(--main)">awaiting_review</text>
+      <rect x="495" y="540" width="150" height="46" rx="5" fill="var(--warn-bg)"/><text class="oc" x="570" y="559" fill="var(--warn)">部分完成</text><text class="oc2" x="570" y="576" fill="var(--warn)">partial</text>
+      <rect x="680" y="540" width="180" height="46" rx="5" fill="var(--node-bg)"/><text class="oc" x="770" y="559" fill="var(--node)">等用户补充</text><text class="oc2" x="770" y="576" fill="var(--node)">needs_clarification</text>
+      <rect x="885" y="540" width="150" height="46" rx="5" fill="var(--bad-bg)"/><text class="oc" x="960" y="559" fill="var(--bad)">失败</text><text class="oc2" x="960" y="576" fill="var(--bad)">failed</text>
+    </g>
+  </svg>
+  </div>
+  <div class="legend">
+    <span><i style="border-color:var(--main)"></i>主线</span>
+    <span><i style="border-color:var(--route)"></i>路由级重试</span>
+    <span><i style="border-color:var(--task)"></i>任务级重试 / 崩溃恢复</span>
+    <span><i style="border-top-style:dashed;border-color:var(--muted)"></i>提前结束</span>
+  </div>
+  <div class="note">
+    <h3>这份路线图更正了课上的三个说法</h3>
+    <ul>
+      <li><b>检查点有两种。</b>进入节点时写“进入标记”，节点完成后写“完成快照”。你默写的“进入节点先埋检查点”是对的，我当时判错了。<span class="ref">tasks.py:308-324，execution.py:119-122</span></li>
+      <li><b>任务级重试写着 3 次，实际常被预算先拦下。</b>任务 305 就是这样结束的，详见<a href="#budget">预算总闸</a>。</li>
+      <li><b>重排崩溃默认不降级。</b>只有打开“模型调工具”模式才降级，而这个模式默认关闭。<span class="ref">tool.py:45，nodes.py:442，config/tool.py:14</span></li>
+    </ul>
+  </div>
+</section>
+
+<section id="ladder">
+  <h2>五层恢复机制</h2>
+  <p class="lead">失败时系统从小到大尝试：先在节点内再试，再由智能路由换路，再让 Celery 重跑，进程死了由 Beat 收尸。每一层只处理下一层解决不了的问题。</p>
+  <div class="tw"><table>
+    <tr><th>层</th><th>什么时候用</th><th>次数与等待</th><th>重跑范围</th><th>代码</th></tr>
+    <tr><td><span class="p h">备用模型</span></td><td>主模型临时故障时换模型</td><td>默认不生效，<code>fallback_models</code> 为空</td><td>同一次调用</td><td><span class="ref">repository.py:105</span></td></tr>
+    <tr><td><span class="p n">节点内重试</span></td><td>模型超时、限流、输出格式错，节点自己能再试</td><td>Planner 2 次，隔 1 秒<br>三类语义复核各 2 次，隔 1 秒，格式错再修 1 次<br>Data 整轮 2 次<br><b>Knowledge 的两个模型 0 次</b></td><td>当前节点内部</td><td><span class="ref">planning.py:271</span><br><span class="ref">semantic_review_service.py:364-401</span><br><span class="ref">data_agent.py:132</span></td></tr>
+    <tr><td><span class="p r">路由级重试</span></td><td>节点已返回结果，但结果说明要换路或再查</td><td>整个任务共 2 次，无等待</td><td>回到指定节点，并清掉它下游的结果</td><td><span class="ref">router.py:16</span><br><span class="ref">nodes.py:889-892</span></td></tr>
+    <tr><td><span class="p t">任务级重试</span></td><td>节点抛出异常：模型超时、数据库或网络闪断</td><td>最多 3 次，等约 2、4、8 秒（再乘 0.5～1.5）</td><td>新一次执行，从失败节点恢复</td><td><span class="ref">tasks.py:596</span><br><span class="ref">tasks.py:200-204</span><br><span class="ref">tasks.py:793-844</span></td></tr>
+    <tr><td><span class="p bad">崩溃恢复</span></td><td>Worker 进程被杀，没机会处理异常</td><td>租约 120 秒，Beat 每 10 秒扫描</td><td>新一次执行，从最近的完成快照恢复</td><td><span class="ref">execution.py:771-838</span><br><span class="ref">outbox_tasks.py:60-70</span></td></tr>
+  </table></div>
+  <h3>节点内重试和任务级重试怎么区分</h3>
+  <p>看错误有没有被节点接住。节点接住错误，就把结果写进状态，交给智能路由判断。节点没接住，异常一路抛到 <code>process_analysis_task</code>，由 <code>_is_retryable_exception</code> 判断：超时、连接错误、数据库闪断、<code>RetryableModelError</code> 走任务级重试，其他异常直接判失败。<span class="ref">tasks.py:187-197，878-941</span></p>
+</section>
+
+<section id="budget">
+  <h2>预算总闸</h2>
+  <p class="lead">所有重试共用一份预算，而且调用失败也不退次数。预算在建任务时冻结，运行中改配置不影响这个任务。默认值是：整个任务 8 次调用、每个节点 4 次、修复 2 次、16000 token、0.15 成本。<span class="ref">config/model.py:24-28</span></p>
+  <div class="scroll">
+    <p class="cap">任务 975（hybrid 路线）实际用了 7 次，只剩 1 次</p>
+    <div class="slots">
+      <div class="slot">1 Planner</div><div class="slot">2 计划复核</div><div class="slot">3 写 SQL</div><div class="slot">4 SQL 复核</div><div class="slot">5 答案模型</div><div class="slot">6 核对模型</div><div class="slot">7 证据复核</div><div class="slot empty">8 空</div>
+    </div>
+    <p class="cap">这时如果数字校验失败，需要重新规划</p>
+    <div class="slots">
+      <div class="slot">1 Planner</div><div class="slot">2 计划复核</div><div class="slot">3 写 SQL</div><div class="slot">4 SQL 复核</div><div class="slot">5 答案模型</div><div class="slot">6 核对模型</div><div class="slot">7 证据复核</div><div class="slot re">8 Planner 重跑</div>
+    </div>
+    <p class="cap">下一步是计划复核，第 9 次调用在预占时被拦下，任务结束</p>
+    <div class="slots" style="grid-template-columns:minmax(0,1fr)"><div class="slot stop" style="min-height:0">第 9 次：ModelBudgetExceeded → 任务状态 partial，不再重试</div></div>
+  </div>
+  <p style="margin-top:14px">本地库有 6 个任务这样结束。任务 185 和 488 的 Planner 跑了 2 次后耗尽预算。任务 305 的 Planner 持续超时：第 1 次执行用 2 次，第 2 次执行用 2 次，第 3 次执行时 Planner 已达每节点 4 次上限，于是停在 partial，没有等到“3 次任务级重试用完判失败”。<span class="ref">model_governance.py:290-310，tasks.py:845-877</span></p>
+</section>
+
+<section id="s1">
+  <div class="st-head"><div class="st-no">1</div><h2>入口 API</h2></div>
+  <div class="who"><span class="chip"><b>代码</b> 全程决定</span><span class="chip">POST /conversations/{id}/messages</span></div>
+  <ol class="steps">
+    <li><span>校验登录、公司成员身份和分析权限。<span class="ref">access.py:28-71</span></span></li>
+    <li><span>确认会话归属，计算用户可见的文档范围，确认数据源和表结构快照就绪。<span class="ref">service.py:173-248</span></span></li>
+    <li><span>准入检查：公司在途任务不超过 5 个，全局不超过 20 个。<span class="ref">repository.py:26-62</span></span></li>
+    <li><span>在<b>同一事务</b>里写用户消息、任务、Outbox 事件、助手占位消息。任务同时冻结配置、预算、模型策略和文档范围。<span class="ref">service.py:203-273</span></span></li>
+    <li><span>提交后马上尝试投递，并返回 202。<span class="ref">api.py:342</span></span></li>
+  </ol>
+  <div class="tw"><table>
+    <tr><th>情况</th><th>去向</th><th>为什么这样分流</th></tr>
+    <tr><td>账号停用</td><td><span class="p bad">401</span></td><td>身份已失效</td></tr>
+    <tr><td>不是已批准成员，或没有分析权限</td><td><span class="p bad">403</span></td><td>权限由代码判断，不交给模型</td></tr>
+    <tr><td>会话不存在或不属于当前公司</td><td><span class="p bad">404</span></td><td>不暴露别人的资源是否存在</td></tr>
+    <tr><td>选了无权查看的文档</td><td><span class="p bad">422</span></td><td>文档范围要在建任务前锁定</td></tr>
+    <tr><td>数据源或快照未就绪</td><td><span class="p bad">409</span></td><td>没有表结构就无法校验 SQL</td></tr>
+    <tr><td>在途任务超限</td><td><span class="p warn">429</span> 带 Retry-After</td><td>保护 Worker 和模型额度</td></tr>
+    <tr><td>容量信号不可用</td><td><span class="p warn">503</span> 带 Retry-After</td><td>宁可拒绝，也不盲目接单</td></tr>
+  </table></div>
+  <p style="margin-top:10px">为什么要同一事务：任务和投递事件必须同时存在。否则可能出现“任务建好了，却永远没人执行”。</p>
+</section>
+
+<section id="s2">
+  <div class="st-head"><div class="st-no">2</div><h2>投递：Outbox → Celery → Redis</h2></div>
+  <div class="who"><span class="chip"><b>代码</b> 全程决定</span><span class="chip">Beat 每 5 秒补发</span></div>
+  <div class="tw"><table>
+    <tr><th>情况</th><th>去向</th><th>为什么这样分流</th><th>代码</th></tr>
+    <tr><td>Redis 接收成功</td><td><span class="p ok">broker_accepted</span> 等 Worker 认领</td><td>“Redis 收到”不等于“有人执行”，所以还要等认领</td><td><span class="ref">outbox.py:176-210</span></td></tr>
+    <tr><td>Redis 不可用</td><td><span class="p t">回到 pending</span>，Beat 再发</td><td>事件已落库，不会丢</td><td><span class="ref">outbox.py:82-98</span></td></tr>
+    <tr><td>发布途中进程崩溃</td><td><span class="p t">30 秒后</span>重新发布</td><td>发布权有 30 秒租约</td><td><span class="ref">outbox.py:19、111-113</span></td></tr>
+    <tr><td>已接收，120 秒没人认领</td><td><span class="p t">重新发布</span></td><td>消息可能在 Redis 里丢了</td><td><span class="ref">outbox.py:20、114-117</span></td></tr>
+    <tr><td>同一任务被投递多次</td><td>只有一个 Worker 认领成功</td><td>认领是原子更新，重复消息自动退出</td><td><span class="ref">execution.py:285-333</span></td></tr>
+    <tr><td>用户在认领前取消</td><td><span class="p bad">事件 cancelled</span></td><td>不再投递</td><td><span class="ref">outbox.py:296-314</span></td></tr>
+  </table></div>
+  <p style="margin-top:10px">Outbox 用在三个地方：新建任务、手动重试、人工审核批准。这三处都要“改数据库”和“投递任务”同时成立。崩溃恢复不走 Outbox，Beat 直接调 <code>.delay()</code>。</p>
+</section>
+
+<section id="s3">
+  <div class="st-head"><div class="st-no">3</div><h2>Worker 认领与准备</h2></div>
+  <div class="who"><span class="chip"><b>代码</b> 全程决定</span><span class="chip">process_analysis_task</span></div>
+  <ol class="steps">
+    <li><span>原子地把任务从 queued 或 retrying 改成 running，创建一次执行记录，拿到 120 秒租约。<span class="ref">execution.py:279-378</span></span></li>
+    <li><span>决定从哪里开始：全新任务从 Planner，任务级重试从失败节点，崩溃恢复从最近的完成快照。<span class="ref">execution.py:381-451</span></span></li>
+    <li><span>套用建任务时的配置快照，绑定公司范围。<span class="ref">tasks.py:634-646</span></span></li>
+    <li><span>挑选长期记忆，校验数据源确实属于这家公司。<span class="ref">tasks.py:685-744</span></span></li>
+    <li><span>启动后台线程，每 40 秒续一次租约，然后运行工作流图。<span class="ref">tasks.py:393-422、747-778</span></span></li>
+  </ol>
+  <div class="tw"><table>
+    <tr><th>情况</th><th>去向</th><th>为什么这样分流</th></tr>
+    <tr><td>任务已被别人认领或已结束</td><td>直接退出</td><td>防止重复执行</td></tr>
+    <tr><td>任务已取消</td><td><span class="p bad">停止</span></td><td>运行前再确认一次 <span class="ref">tasks.py:655</span></td></tr>
+    <tr><td>审核已批准，带 <code>review_publish_only</code></td><td>跳过工作流，<a href="#s10">只做发布</a></td><td>报告已经生成，不能重跑 <span class="ref">tasks.py:658-661</span></td></tr>
+    <tr><td>数据源不属于本公司</td><td><span class="p bad">failed</span></td><td>属于越权数据，不重试 <span class="ref">tasks.py:738-744</span></td></tr>
+    <tr><td>快照对应的任务输入已变</td><td>丢弃快照，从 Planner 重跑</td><td>旧结果不能用在新输入上 <span class="ref">execution.py:119-170</span></td></tr>
+  </table></div>
+</section>
+
+<section id="s4">
+  <div class="st-head"><div class="st-no">4</div><h2>Planner</h2></div>
+  <div class="who"><span class="chip"><b>模型</b> 决定动作和路线</span><span class="chip"><b>代码</b> 校验结构，并强制修正部分路线</span></div>
+  <p>输入是问题、会话上下文、长期记忆和附件摘要。模型输出 JSON 决策，代码校验字段组合。如果用户明确要求文档依据，代码会强制修正路线。<span class="ref">planning.py:341-344</span></p>
+  <h3>五种动作</h3>
+  <div class="tw"><table>
+    <tr><th>动作</th><th>去向</th><th>什么时候</th></tr>
+    <tr><td><code>analyze</code> + <code>data_only</code></td><td>Data → Reviewer</td><td>只需要经营数据</td></tr>
+    <tr><td><code>analyze</code> + <code>knowledge_only</code></td><td>Knowledge → Reviewer</td><td>只需要公司文档</td></tr>
+    <tr><td><code>analyze</code> + <code>hybrid</code></td><td>Data → Knowledge → Reviewer</td><td>既要数字又要原因</td></tr>
+    <tr><td><code>needs_clarification</code></td><td><span class="p n">needs_clarification</span> 结束</td><td>缺时间、指标等条件，必须带追问内容</td></tr>
+    <tr><td><code>direct_response</code> / <code>scope_exit</code> / <code>refuse</code></td><td><span class="p ok">completed</span>，无报告</td><td>寒暄、超出范围、拒绝回答</td></tr>
+  </table></div>
+  <h3>失败分流</h3>
+  <div class="tw"><table>
+    <tr><th>情况</th><th>处理</th><th>最终</th><th>代码</th></tr>
+    <tr><td>模型超时或限流</td><td><span class="p n">节点内 2 次</span> → <span class="p t">任务级重试</span></td><td>恢复后继续，或预算耗尽 <span class="p warn">partial</span></td><td><span class="ref">planning.py:315-339</span><br><span class="ref">tasks.py:781-784</span></td></tr>
+    <tr><td>JSON 不合规</td><td><span class="p n">带修复提示再试 1 次</span></td><td>仍不合规 <span class="p bad">failed</span></td><td><span class="ref">planning.py:345-376</span></td></tr>
+    <tr><td>鉴权或请求错误</td><td>不重试</td><td><span class="p bad">failed</span></td><td><span class="ref">planner_agent.py:63-70</span></td></tr>
+  </table></div>
+</section>
+
+<section id="s5">
+  <div class="st-head"><div class="st-no">5</div><h2>计划复核</h2></div>
+  <div class="who"><span class="chip"><b>模型</b> 可保留或改写计划</span><span class="chip"><b>代码</b> 再次强制路线规则</span></div>
+  <div class="tw"><table>
+    <tr><th>情况</th><th>去向</th><th>为什么这样分流</th><th>代码</th></tr>
+    <tr><td>通过或改写</td><td>按新计划走</td><td>第二个模型纠正对问题的理解</td><td><span class="ref">nodes.py:357-378</span></td></tr>
+    <tr><td>要分析，但没说明需要哪些证据</td><td><span class="p n">改成追问</span></td><td>说不清要查什么就不能查</td><td><span class="ref">nodes.py:321-356</span></td></tr>
+    <tr><td>超时或限流，2 次都失败</td><td><span class="p t">任务级重试</span>，从本节点恢复</td><td>没复核的计划不能执行</td><td><span class="ref">nodes.py:302-314</span></td></tr>
+    <tr><td>输出不合规或永久错误</td><td><span class="p n">改成追问</span>“请稍后重试或补充条件”</td><td>同样不能带着未复核的计划往下走</td><td><span class="ref">nodes.py:273-301</span></td></tr>
+  </table></div>
+</section>
+
+<section id="s6">
+  <div class="st-head"><div class="st-no">6</div><h2>Data</h2></div>
+  <div class="who"><span class="chip"><b>模型</b> 写 SQL、判断 SQL 是否答对问题</span><span class="chip"><b>代码</b> 负责全部安全边界</span></div>
+  <ol class="steps">
+    <li><span><b>模型</b>生成 SQL 和查询契约（要查什么概念、结果长什么样）。<span class="ref">data_agent.py:135</span></span></li>
+    <li><span><b>代码</b>检查契约是否覆盖计划要求的业务能力。<span class="ref">data_agent.py:173-219</span></span></li>
+    <li><span><b>模型</b>做 SQL 语义复核：这条 SQL 能不能回答问题。它不是安全防线。<span class="ref">data_agent.py:224</span></span></li>
+    <li><span><b>代码</b>检查指标口径。<span class="ref">data_agent.py:276-304</span></span></li>
+    <li><span><b>代码</b>过工具运行时：工具白名单、当前授权、参数格式、任务范围、文档范围、工具预算。<span class="ref">tool_runtime.py:387-407</span></span></li>
+    <li><span><b>代码</b>做 AST 校验：只允许单条 SELECT，禁止写入、加锁和危险函数，表必须在本公司快照里。<span class="ref">sql_validator.py:10-129</span></span></li>
+    <li><span><b>代码</b>补 LIMIT 1000，解析本公司连接，用只读事务和语句超时执行。<span class="ref">sql_executor.py:109-136</span></span></li>
+    <li><span><b>代码</b>检查结果形状，生成确认事实。<span class="ref">data_agent.py:314-350</span></span></li>
+  </ol>
+  <p style="margin-top:10px">公司隔离靠每家公司独立的经营库，加上连接归属校验（<span class="ref">connections.py:59-76</span>）。经营库没有 RLS，RLS 只保护平台库。hybrid 路线下，Data 无论成败都会继续走 Knowledge。</p>
+  <div class="tw"><table>
+    <tr><th>情况（错误码）</th><th>节点内</th><th>智能路由</th><th>最终</th></tr>
+    <tr><td>查询成功</td><td>无</td><td>继续</td><td>进入下一站</td></tr>
+    <tr><td>写 SQL 的模型超时或格式错<br><code>sql_generation_*</code></td><td><span class="p n">再试 1 轮</span></td><td><span class="p r">retry_data</span></td><td>重试用完后看报告</td></tr>
+    <tr><td>经营库执行失败<br><code>business_db_execution_failed</code></td><td>不重试</td><td><span class="p r">retry_data</span>，重放同一条 SQL，不再调模型</td><td>见<a href="#doubts">疑点 3</a></td></tr>
+    <tr><td>语义复核说 SQL 不对<br><code>sql_semantic_unsupported</code></td><td><span class="p n">重写 1 轮</span></td><td><span class="p r">replan</span></td><td>通常预算耗尽 <span class="p warn">partial</span></td></tr>
+    <tr><td>契约没覆盖计划要求<br><code>query_contract_incomplete</code></td><td>不重试</td><td><span class="p r">replan</span></td><td>同上</td></tr>
+    <tr><td>查询没有匹配记录<br><code>no_matching_records</code></td><td>不重试</td><td>stop：空结果也是事实</td><td><span class="p warn">partial</span></td></tr>
+    <tr><td>表结构不够回答<br><code>insufficient_schema</code></td><td>不重试</td><td>stop</td><td>有文档证据 <span class="p warn">partial</span>；<code>data_only</code> <span class="p bad">failed</span></td></tr>
+    <tr><td>AST 拒绝或语句超时<br><code>sql_validation_error</code> 等</td><td><span class="p n">带原因重写 1 轮</span></td><td>stop：<code>data_denied</code></td><td><span class="p bad">failed</span></td></tr>
+    <tr><td>SQL 复核模型超时<br><code>sql_semantic_review_failed</code></td><td><span class="p n">调用层 2 次</span></td><td>stop：<code>data_denied</code></td><td><span class="p bad">failed</span></td></tr>
+    <tr><td>指标口径不符、连接不属于本公司、权限不足</td><td>口径问题重写 1 轮，其余不重试</td><td>stop：<code>data_denied</code></td><td><span class="p bad">failed</span></td></tr>
+  </table></div>
+  <p class="ref" style="white-space:normal;margin-top:8px">错误码到节点状态的映射见 nodes.py:657-763，路由规则见 router.py:85-110。</p>
+</section>
+
+<section id="s7">
+  <div class="st-head"><div class="st-no">7</div><h2>Knowledge</h2></div>
+  <div class="who"><span class="chip"><b>模型</b> 写答案、逐句核对</span><span class="chip"><b>代码</b> 检索、筛选、否决</span></div>
+  <ol class="steps">
+    <li><span><b>代码</b>把问题向量化，向量和关键词两路各取最多 10 条，按排名融合后留 10 条。<span class="ref">retrieval.py:80-118</span></span></li>
+    <li><span><b>本地重排模型</b>打分，取前 3 条，再丢掉低于 0.5 分的。<span class="ref">tool.py:158-195</span></span></li>
+    <li><span><b>代码</b>算留下片段的平均分，不够就回答“无法回答：资料不足”。<span class="ref">tool.py:198-215</span></span></li>
+    <li><span><b>答案模型</b>只根据这些片段回答，并列出引用。<span class="ref">agent.py:146</span></span></li>
+    <li><span><b>代码</b>检查引用是否都在本次允许的片段里。<span class="ref">agent.py:152-166</span></span></li>
+    <li><span><b>核对模型</b>逐句判断是否被资料支持。<span class="ref">agent.py:195，support.py:178</span></span></li>
+    <li><span><b>代码</b>做最后否决：漏判的句子删掉，引用不存在或文档已过期的句子删掉。<span class="ref">support.py:124-165</span></span></li>
+  </ol>
+  <div class="tw"><table>
+    <tr><th>情况</th><th>处理</th><th>结果</th><th>为什么</th></tr>
+    <tr><td>检索或重排故障</td><td><span class="p r">retry_knowledge</span> 最多 2 次</td><td>hybrid <span class="p warn">partial</span>；knowledge_only <span class="p bad">failed</span></td><td>hybrid 还有数据可交付，纯文档问题没有任何结果</td></tr>
+    <tr><td>证据不足</td><td>不重试</td><td>继续走 Reviewer，通常 <span class="p warn">partial</span></td><td>同样的问题再检索，结果不会变</td></tr>
+    <tr><td>答案或核对模型超时</td><td><b>没有节点内重试</b> → <span class="p t">任务级重试</span></td><td>从 Knowledge 恢复</td><td>异常没有被节点接住</td></tr>
+    <tr><td>答案 JSON 错，或引用了不允许的片段</td><td>不重试</td><td>答案换成固定句，证据清空</td><td>不可信的答案不能当证据，但数据结果要保留</td></tr>
+    <tr><td>核对结果 JSON 错</td><td>不重试</td><td>同上</td><td>没核对过的内容不发布</td></tr>
+    <tr><td>全部句子都被删</td><td>不重试</td><td>证据清空</td><td>宁可少说，也不说没依据的话</td></tr>
+    <tr><td>部分句子被删</td><td>不重试</td><td>保留通过的句子和对应引用</td><td>只删不改，代码不会编内容</td></tr>
+  </table></div>
+</section>
+
+<section id="s8">
+  <div class="st-head"><div class="st-no">8</div><h2>Reviewer</h2></div>
+  <div class="who"><span class="chip"><b>代码</b> 拼报告、拼答案、做校验</span><span class="chip"><b>模型</b> 只做一次证据语义复核</span><span class="chip">不调用任何工具</span></div>
+  <p>Reviewer 从工作流状态读取 Data 和 Knowledge 的结果，不重新查询。代码先拼出结构化报告，模型判断证据能否支持问题，然后代码按下表<b>从上到下</b>判断，命中第一条就返回。<span class="ref">reviewer_agent.py:270-719</span></p>
+  <div class="tw"><table>
+    <tr><th>顺序</th><th>条件</th><th>结果</th><th>代码行</th></tr>
+    <tr><td>1</td><td>数据明确反驳了问题里的数值断言</td><td><span class="p warn">partial</span>，说明断言不成立</td><td><span class="ref">372-388</span></td></tr>
+    <tr><td>2</td><td>有文档答案和引用，但复核超时或不支持</td><td><span class="p warn">partial</span>，删除原因假设和文档引用</td><td><span class="ref">389-438</span></td></tr>
+    <tr><td>3</td><td>复核结论是不支持，且没有文档引用</td><td><span class="p warn">partial</span>，提示补充资料</td><td><span class="ref">439-454</span></td></tr>
+    <tr><td>4</td><td>数据和文档都有</td><td>拼答案并校验：通过则 <span class="p ok">完整</span>；不通过则 <span class="p warn">partial</span>，删文档部分</td><td><span class="ref">455-506</span></td></tr>
+    <tr><td>5</td><td><code>data_only</code> 路线</td><td>拼数据摘要并校验</td><td><span class="ref">507-535</span></td></tr>
+    <tr><td>6</td><td>有数据，没有可用文档</td><td><span class="p warn">partial</span>，不下原因结论</td><td><span class="ref">536-568</span></td></tr>
+    <tr><td>7</td><td>只有文档</td><td>拼答案并校验</td><td><span class="ref">570-622</span></td></tr>
+    <tr><td>8</td><td>数据失败，也没有文档</td><td>报告状态 failed</td><td><span class="ref">624-639</span></td></tr>
+    <tr><td>9</td><td>数据不足，或文档答案没有引用</td><td><span class="p warn">partial</span></td><td><span class="ref">641-715</span></td></tr>
+    <tr><td>10</td><td>以上都不符合</td><td>节点失败，由路由停止</td><td><span class="ref">716-719</span></td></tr>
+  </table></div>
+  <h3>确定性校验查什么</h3>
+  <ul class="plain">
+    <li><b>格式：</b>答案结构是否合规，需要引用时有没有引用。</li>
+    <li><b>数字：</b>答案里每个数字都要能在本次 SQL 结果或引用原文里找到。长期记忆不算数据源。</li>
+    <li><b>引用：</b>引用的片段必须属于本次允许的范围。</li>
+  </ul>
+  <p style="margin-top:10px">语义复核超时不会重试：调用层已经试过 2 次，数据也已查完并校验，降级成 partial 就能把数据交给用户。<span class="ref">reviewer_agent.py:302-308</span></p>
+</section>
+
+<section id="s9">
+  <div class="st-head"><div class="st-no">9</div><h2>智能路由</h2></div>
+  <div class="who"><span class="chip"><b>代码</b> 全程决定，不调用模型</span></div>
+  <p>路由读取各节点的结构化结果，决定结束还是重试，同样从上到下匹配。如果路由级重试已用满 2 次，任何重试动作都改成停止。<span class="ref">router.py:70-168，nodes.py:889-892</span></p>
+  <div class="tw"><table>
+    <tr><th>顺序</th><th>条件</th><th>动作</th><th>为什么</th></tr>
+    <tr><td>1</td><td>引用校验失败</td><td><span class="p bad">stop</span></td><td>安全问题，重试没有意义</td></tr>
+    <tr><td>2</td><td>数字或格式校验失败</td><td><span class="p r">replan</span></td><td>换一种问法或口径可能写对</td></tr>
+    <tr><td>3</td><td>节点被取消或被拒绝</td><td><span class="p bad">stop</span></td><td>权限或规则问题，再试也一样</td></tr>
+    <tr><td>4</td><td>查询结果为空</td><td><span class="p bad">stop</span></td><td>空结果是有效事实</td></tr>
+    <tr><td>5</td><td>节点报告可修复错误</td><td>Data、Reviewer <span class="p r">replan</span><br>Knowledge <span class="p r">retry_knowledge</span></td><td>计划本身可能有问题</td></tr>
+    <tr><td>6</td><td>节点报告临时故障</td><td><span class="p r">retry_data</span> / <span class="p r">retry_knowledge</span> / <span class="p r">retry_reviewer</span></td><td>同样的输入再试一次可能成功</td></tr>
+    <tr><td>7</td><td>证据齐全，或证据不足已成定局</td><td><span class="p ok">stop</span></td><td>可以交付了</td></tr>
+    <tr><td>8</td><td>其他情况</td><td><span class="p bad">stop</span>，判失败</td><td>未知情况按失败处理</td></tr>
+  </table></div>
+  <p style="margin-top:10px">回到某个节点时，代码会清掉该节点及其下游的旧结果，防止新计划配上旧数据。<span class="ref">recovery.py:18-111</span></p>
+</section>
+
+<section id="s10">
+  <div class="st-head"><div class="st-no">10</div><h2>保存与发布</h2></div>
+  <div class="who"><span class="chip"><b>代码</b> 全程决定</span><span class="chip">人工审核由公司管理员操作</span></div>
+  <p>工作流图结束后，Worker 先用 <code>validate_report</code> 校验报告结构和引用范围，校验失败时任务判为 failed。然后 <code>decide_completion</code> 按下表从上到下决定状态。<span class="ref">tasks.py:444-530，publication.py:35-84</span></p>
+  <div class="tw"><table>
+    <tr><th>顺序</th><th>条件</th><th>任务状态</th><th>报告</th><th>长期记忆</th></tr>
+    <tr><td>1</td><td>需要追问</td><td><span class="p n">needs_clarification</span></td><td>无</td><td>不写</td></tr>
+    <tr><td>2</td><td>工作流失败，或没有最终答案</td><td><span class="p bad">failed</span></td><td>不发布</td><td>不写</td></tr>
+    <tr><td>3</td><td>复核状态或报告状态是 partial</td><td><span class="p warn">partial</span></td><td>带限制说明发布</td><td>写（置信度 0.6）</td></tr>
+    <tr><td>4</td><td>报告完成，且有原因假设</td><td><span class="p h">awaiting_review</span></td><td>存为草稿</td><td>批准后才写</td></tr>
+    <tr><td>5</td><td>有报告</td><td><span class="p ok">completed</span></td><td>发布</td><td>写（置信度 0.9）</td></tr>
+    <tr><td>6</td><td>没有报告（直接回答等）</td><td><span class="p ok">completed</span></td><td>无</td><td>不写</td></tr>
+  </table></div>
+  <h3>人工审核</h3>
+  <div class="tw"><table>
+    <tr><th>操作</th><th>流程</th><th>结果</th></tr>
+    <tr><td>批准</td><td>任务改回 queued，写 Outbox → Worker 认领 → 重新校验冻结范围 → 发布</td><td><span class="p ok">completed</span>，写长期记忆</td></tr>
+    <tr><td>批准后校验不通过</td><td>抛错，不发布，也不会自动删引用</td><td><span class="p bad">failed</span></td></tr>
+    <tr><td>拒绝</td><td>保留草稿和审核意见，不发布</td><td><span class="p warn">partial</span>，不写长期记忆</td></tr>
+  </table></div>
+  <p class="cap" style="margin-top:18px">本地库 841 个任务的最终状态</p>
+  <div class="bar" role="img" aria-label="completed 555，partial 97，awaiting_review 96，needs_clarification 68，failed 22，cancelled 3">
+    <div style="flex:555;background:var(--ok)"></div><div style="flex:97;background:var(--route)"></div><div style="flex:96;background:var(--main)"></div><div style="flex:68;background:var(--node)"></div><div style="flex:22;background:var(--bad)"></div><div style="flex:3;background:var(--muted)"></div>
+  </div>
+  <div class="keys">
+    <span><i class="dot" style="background:var(--ok)"></i>completed <b>555</b></span>
+    <span><i class="dot" style="background:var(--route)"></i>partial <b>97</b></span>
+    <span><i class="dot" style="background:var(--main)"></i>awaiting_review <b>96</b></span>
+    <span><i class="dot" style="background:var(--node)"></i>needs_clarification <b>68</b></span>
+    <span><i class="dot" style="background:var(--bad)"></i>failed <b>22</b></span>
+    <span><i class="dot" style="background:var(--muted)"></i>cancelled <b>3</b></span>
+  </div>
+</section>
+
+<section id="crash">
+  <h2>崩溃与取消</h2>
+  <h3>Worker 进程被杀</h3>
+  <ol class="steps">
+    <li><span>心跳线程随进程一起消失，租约不再续期，最多 120 秒后过期。</span></li>
+    <li><span>Beat 每 10 秒扫描。发现过期后把任务改成 retrying，这次执行标记 expired，还停在 reserved 的账本行改成 unknown。<span class="ref">execution.py:808-835</span></span></li>
+    <li><span>Beat 直接把任务投给 Celery，不经过 Outbox。<span class="ref">outbox_tasks.py:28-43、70</span></span></li>
+    <li><span>新 Worker 认领，读取最近的完成快照，从下一个节点继续。旧 Worker 如果还活着，写入会因为执行编号不符被拒绝。<span class="ref">execution.py:424-451、604-645</span></span></li>
+    <li><span>如果这次投递丢了，Beat 每 60 秒补投。补投超过 10 次或卡住超过 30 分钟，任务判 failed。<span class="ref">outbox_tasks.py:22-25、73-120</span></span></li>
+  </ol>
+  <h3>用户取消任务</h3>
+  <div class="tw"><table>
+    <tr><th>取消时机</th><th>发生什么</th><th>代码</th></tr>
+    <tr><td>还没被 Worker 认领</td><td>Outbox 事件作废</td><td><span class="ref">repository.py:198</span></td></tr>
+    <tr><td>正要发起模型调用</td><td>预占时发现已取消，请求不发出去</td><td><span class="ref">model_governance.py:272-273</span></td></tr>
+    <tr><td>模型调用已经发出</td><td>等它返回，保存结果前停止</td><td><span class="ref">tasks.py:786-787</span></td></tr>
+    <tr><td>正在保存结果</td><td>保存前再查一次；执行权已失效时写入被拒绝</td><td><span class="ref">tasks.py:464，execution.py:604-631</span></td></tr>
+  </table></div>
+</section>
+
+<section id="faults">
+  <h2>故障速查</h2>
+  <div class="tw"><table>
+    <tr><th>故障</th><th>经过哪一层</th><th>最终</th></tr>
+    <tr><td>Planner 模型持续超时</td><td><span class="p n">节点内</span> <span class="p t">任务级</span> 被预算拦下</td><td><span class="p warn">partial</span>，无报告（任务 305）</td></tr>
+    <tr><td>Planner 连续输出坏 JSON</td><td><span class="p n">节点内</span></td><td><span class="p bad">failed</span></td></tr>
+    <tr><td>计划复核超时</td><td><span class="p n">节点内</span> <span class="p t">任务级</span></td><td>恢复后继续</td></tr>
+    <tr><td>SQL 写错，AST 拒绝</td><td><span class="p n">节点内重写 1 轮</span></td><td>仍错 <span class="p bad">failed</span></td></tr>
+    <tr><td>SQL 复核模型超时</td><td><span class="p n">调用层 2 次</span></td><td><span class="p bad">failed</span></td></tr>
+    <tr><td>查询结果为空</td><td>不重试</td><td><span class="p warn">partial</span></td></tr>
+    <tr><td>重排模型崩溃（默认配置）</td><td><span class="p r">路由级</span></td><td>hybrid <span class="p warn">partial</span>；纯文档 <span class="p bad">failed</span></td></tr>
+    <tr><td>答案模型超时</td><td><span class="p t">任务级</span></td><td>恢复后继续</td></tr>
+    <tr><td>答案引用了不存在的片段</td><td>不重试</td><td>文档部分作废，数据保留</td></tr>
+    <tr><td>证据语义复核超时</td><td><span class="p n">调用层 2 次</span></td><td><span class="p warn">partial</span></td></tr>
+    <tr><td>答案数字对不上</td><td><span class="p r">replan</span></td><td>默认预算下多半 <span class="p warn">partial</span>，无报告</td></tr>
+    <tr><td>答案引用校验失败</td><td>不重试</td><td><span class="p warn">partial</span>，删文档部分后发布</td></tr>
+    <tr><td>报告带原因假设</td><td>人工审核</td><td><span class="p h">awaiting_review</span></td></tr>
+    <tr><td>Worker 被杀</td><td><span class="p bad">崩溃恢复</span></td><td>从完成快照继续</td></tr>
+    <tr><td>预算耗尽</td><td>不重试</td><td><span class="p warn">partial</span>，无报告</td></tr>
+  </table></div>
+</section>
+
+<section id="doubts">
+  <h2>读码发现的疑点</h2>
+  <p class="lead">这些是读代码时发现的设计问题，已记入 worklog 待办，没有改代码。</p>
+  <div class="doubt">
+    <article><h3>1. 默认预算撑不起一次完整的重新规划</h3><p>hybrid 路线平均用 7.0 次调用（102 个任务），上限是 8 次，所以“最多 replan 2 次”基本跑不完。<b>证据：</b>任务 185、488。</p></article>
+    <article><h3>2. 预算耗尽时，已有结果没有保留下来</h3><p>摘要写着“已保留当前可用结果与限制”，但 <code>result_data</code> 被整个替换成限制说明。<b>证据：</b>6 个预算耗尽的任务全部没有报告。<span class="ref">tasks.py:864-869</span></p></article>
+    <article><h3>3. 经营库持续故障时，失败的报告可能被标成 completed</h3><p>重试用完后，路由把结局记为 completed，<code>decide_completion</code> 没有处理报告状态为 failed 的情况。<b>证据等级：</b>只是读码推导，本地库 0 例，没有实际运行验证。<span class="ref">nodes.py:904-919，publication.py:52-81</span></p></article>
+    <article><h3>4. data_only 数字校验失败后，重试用完仍是 completed</h3><p>这条分支把复核状态写死为 completed，提示语还提到这条路线并不存在的文档。<b>证据等级：</b>读码推导，没有实际运行验证。<span class="ref">reviewer_agent.py:507-535</span></p></article>
+  </div>
+</section>
+</main>
+</div>
+
+</body></html>
