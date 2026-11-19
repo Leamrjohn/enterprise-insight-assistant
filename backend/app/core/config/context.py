@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import field_validator
 
 from app.core.config.base import ConfigDomain, require_positive
@@ -15,6 +17,9 @@ class ContextConfig(ConfigDomain):
     context_compress_at: float = 0.8
     context_max_rows_when_compressed: int = 20
     context_max_chunk_chars_when_compressed: int = 800
+    # analysis/planner/planning.py (C4): off runs no engine; shadow still sends
+    # the old prompt and records the engine's manifest as "<policy>:shadow".
+    context_planner_mode: Literal["off", "shadow"] = "shadow"
 
     @field_validator(
         "context_history_max_tokens",
