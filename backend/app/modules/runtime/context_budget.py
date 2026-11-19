@@ -165,29 +165,39 @@ def _manifest(
     over_budget: bool,
 ) -> ContextManifest:
     """Per section, in the order received: tokens given, tokens sent, and why."""
-    entries = []
+    entries: list[SectionEntry] = []
     for name, value in sections.items():
-        original = count_tokens(value)
         if name not in payload:
             entries.append(
-                SectionEntry(name, original, 0, "left_out", reason="not_in_policy")
+                SectionEntry(
+                    name=name,
+                    original_tokens=count_tokens(value),
+                    final_tokens=0,
+                    action="left_out",
+                    reason="not_in_policy",
+                    content_hash=None,
+                )
             )
             continue
-        sent = payload[name]
-        if name in compressed:
-            action, reason = "compressed", "near_budget"
+        elif name in compressed:
+            action = "compressed"
+            reason = "near_budget"
         elif name in filtered:
-            action, reason = "filtered", "field_whitelist"
+            action = "filtered"
+            reason = "field_whitelist"
         else:
-            action, reason = "kept", None
+            action = "kept"
+            reason = None
+        final_tokens = count_tokens(payload[name])
+        digest = content_hash(payload[name])
         entries.append(
             SectionEntry(
-                name,
-                original,
-                count_tokens(sent),
-                action,
+                name=name,
+                original_tokens=count_tokens(value),
+                final_tokens=final_tokens,
+                action=action,
                 reason=reason,
-                content_hash=content_hash(sent),
+                content_hash=digest,
             )
         )
     return ContextManifest(
