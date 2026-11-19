@@ -105,6 +105,7 @@ def test_business_reads_in_nodes_go_through_runtime_settings():
     """The K4 reads must not drift back to get_settings()."""
     backend = Path(config_snapshot.__file__).resolve().parents[3]
     for relative in (
+        "app/modules/analysis/planner/planning.py",
         "app/modules/knowledge/tool.py",
         "app/modules/knowledge/tool_agent.py",
         "app/modules/knowledge/rag/retrieval.py",

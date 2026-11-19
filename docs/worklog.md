@@ -858,3 +858,8 @@
 - 做了什么：新增 runtime/context/engine.py，build_context 按固定顺序过滤 → 单段上限压缩 → 近预算压缩 → 丢可丢段 → 判定 fits/reject/clarify；require_fit 放不下抛 ContextBudgetExceeded；清单新增 dropped（over_budget）和 section_cap 原因；context_budget.assemble 改为引擎的薄封装，超预算仍照发（C5 再改）。第 4、5 步由用户编写。
 - 验证（本机）：引擎/预算/清单 29 passed；runtime + reporting + 配置快照 236 passed；ruff、pyright 通过。
 - 遗留：Planner 和 SQL 尚未接入（C4b、C4c）；render 和各节点压缩函数放 C4b；没有跑冒烟。
+
+## 2026-11-19 C4b-1 Planner 接入引擎（旁路模式；训练 + 共建；分支 feat/c4b-planner-context）
+- 做了什么：新增策略 planner/1（预算 3000、预留 512、超预算反问；附件、记忆可丢，历史只留 messages/history_truncated/standing_constraints 并可压缩）和 compressors.compress_history（用户编写，只留最近 4 条）；新开关 CONTEXT_PLANNER_MODE（off/shadow，默认 shadow）；decide 在 shadow 下照发旧提示词，把引擎清单以 planner/1:shadow 写进账本。
+- 验证（本机）：新增 10 个测试（含 off 与 shadow 提示词逐字相同）；全量单元 1495 passed / 4 skipped；ruff、pyright 通过。
+- 遗留：冒烟未跑，账本里的 shadow 清单待部署后确认；清单不计提示词模板文字（约 170 token），C4b-2 render 时补；lint-imports 被 main 上已有的 ignore 未匹配错误挡住，新导入未经契约检查。
