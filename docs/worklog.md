@@ -853,3 +853,8 @@
 - 遗留：迁移尚未在运行中的库上执行，冒烟尚未运行；其他节点仍只有 C2 计数，C4/C5 接入时补上清单；本机 lint-imports 报一条 ignore 未匹配，main 上相同。
 - 补全练习（2026-11-19）：_manifest 循环体由用户重写，测试通过。待办（C4 评估）：一段同时被白名单过滤和压缩时只记 compressed，丢失“被过滤”信息；清单不记被白名单去掉的字段名，上游新增字段被挡掉时无人提醒。
 - 上线（2026-11-19，main 2a1548e）：备份 artifacts/backups/agent_platform_20261119_101531_c3.dump（sha256 记 manifest）后迁移 d6e7f8a9b0c1→e7f8a9b0c1d2；首次构建 Debian 源 404，重试成功；重启 api/worker/report-worker/beat，readiness 4 项 ok。冒烟 c3-deploy-r1（任务 989–998，$0.025083，66,071 token）9 成功 + 混合题待复核；reviewer 8 行均为 evidence_review/1 且无超预算，其余节点为 NULL（预期）。
+
+## 2026-11-19 C4a 上下文引擎（训练 + 共建；分支 feat/c4a-context-engine）
+- 做了什么：新增 runtime/context/engine.py，build_context 按固定顺序过滤 → 单段上限压缩 → 近预算压缩 → 丢可丢段 → 判定 fits/reject/clarify；require_fit 放不下抛 ContextBudgetExceeded；清单新增 dropped（over_budget）和 section_cap 原因；context_budget.assemble 改为引擎的薄封装，超预算仍照发（C5 再改）。第 4、5 步由用户编写。
+- 验证（本机）：引擎/预算/清单 29 passed；runtime + reporting + 配置快照 236 passed；ruff、pyright 通过。
+- 遗留：Planner 和 SQL 尚未接入（C4b、C4c）；render 和各节点压缩函数放 C4b；没有跑冒烟。

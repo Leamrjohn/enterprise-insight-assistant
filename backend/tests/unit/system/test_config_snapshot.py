@@ -111,6 +111,7 @@ def test_business_reads_in_nodes_go_through_runtime_settings():
         "app/modules/memory/service.py",
         "app/modules/reporting/semantic_review_service.py",
         "app/modules/runtime/context_budget.py",
+        "app/modules/runtime/context/engine.py",
         "app/modules/runtime/tool_loop.py",
         "app/modules/workflow/orchestration/nodes.py",
     ):
