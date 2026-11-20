@@ -6,6 +6,7 @@ import re
 from collections.abc import Callable
 from dataclasses import replace
 from time import sleep
+from typing import NamedTuple
 
 from app.core.config.snapshot import runtime_settings
 from app.core.exceptions import RetryableModelError, StructuredOutputError
@@ -16,7 +17,11 @@ from app.modules.analysis.planner.planner_decision import (
     PlannerDecision,
     enforce_explicit_document_evidence_contract,
 )
-from app.modules.runtime.context.engine import build_context
+from app.modules.runtime.context.engine import (
+    ContextBudgetExceeded,
+    build_context,
+    require_fit,
+)
 from app.modules.runtime.context.manifest import ContextManifest
 from app.modules.runtime.context.policies.planner import PLANNER
 from app.modules.runtime.context_measurement import declare_sections
@@ -141,44 +146,79 @@ def build_planning_user_prompt(
     )
 
 
-def planner_context_manifest(
-    question: str,
-    conversation_context: dict | None,
-    feedback: dict | None = None,
-    planner_memory: list[dict] | None = None,
-    retry_context: dict | None = None,
-    attachment_context: list[dict] | None = None,
-) -> ContextManifest | None:
-    """What the engine would send, recorded beside the prompt actually sent (C4 shadow)."""
-    if runtime_settings().context_planner_mode == "off":
-        return None
-    optional = {
-        "history": conversation_context,
-        "memory": planner_memory,
-        "feedback": feedback,
-        "retry": retry_context,
-        "attachments": attachment_context,
-    }
+class PlannerInputs(NamedTuple):
+    conversation_context: dict | None
+    feedback: dict | None
+    planner_memory: list[dict] | None
+    retry_context: dict | None
+    attachment_context: list[dict] | None
+
+
+# The policy section each prompt input becomes.
+_SECTIONS = {
+    "conversation_context": "history",
+    "feedback": "feedback",
+    "planner_memory": "memory",
+    "retry_context": "retry",
+    "attachment_context": "attachments",
+}
+
+
+def context_too_long_decision() -> PlannerDecision:
+    """Asked back without calling the model: nothing is reserved or charged."""
+    return PlannerDecision.model_validate(
+        {
+            "action": "needs_clarification",
+            "route": None,
+            "reason": "context_budget_exceeded",
+            "clarification_question": "问题或对话太长，请缩小范围后再问。",
+            "response_message": None,
+            "resolved_question": None,
+            "clarification": {"missing_slots": ["object"]},
+        }
+    )
+
+
+def planner_context(
+    question: str, inputs: PlannerInputs
+) -> tuple[PlannerInputs, ContextManifest | None]:
+    """The prompt inputs to send and the manifest the ledger records with them (C4).
+
+    off: as given, no manifest.  shadow: as given, the engine's manifest marked
+    ":shadow".  enforce: what the engine kept, or ContextBudgetExceeded.
+    """
+    mode = runtime_settings().context_planner_mode
+    if mode == "off":
+        return inputs, None
     # An empty section is absent, not "dropped": there was nothing to give up.
     build = build_context(
         PLANNER,
         {
             "system": build_planning_system_prompt(),
             "question": question,
-            **{name: value for name, value in optional.items() if value},
+            **{
+                _SECTIONS[name]: value
+                for name, value in inputs._asdict().items()
+                if value
+            },
         },
     )
-    if not build.fits:
-        logger.info(
-            "Planner context would not fit",
-            extra={
-                "context_policy": PLANNER.version,
-                "context_tokens": build.tokens,
-                "context_available_tokens": PLANNER.available_tokens,
-                "context_verdict": build.verdict,
-            },
-        )
-    return replace(build.manifest, policy=f"{build.manifest.policy}:shadow")
+    if mode == "shadow":
+        if not build.fits:
+            logger.info(
+                "Planner context would not fit",
+                extra={
+                    "context_policy": PLANNER.version,
+                    "context_tokens": build.tokens,
+                    "context_available_tokens": PLANNER.available_tokens,
+                    "context_verdict": build.verdict,
+                },
+            )
+        return inputs, replace(build.manifest, policy=f"{build.manifest.policy}:shadow")
+    payload = require_fit(build)
+    return PlannerInputs(
+        **{name: payload.get(value) for name, value in _SECTIONS.items()}
+    ), build.manifest
 
 
 def build_planning_repair_prompt(
@@ -302,15 +342,35 @@ class PlanningService:
         attachment_context: list[dict] | None = None,
     ) -> PlannerDecision:
         self.model_attempts = 0
-        prompt = build_planning_user_prompt(
-            question,
+        try:
+            inputs, manifest = planner_context(
+                question,
+                PlannerInputs(
+                    conversation_context,
+                    feedback,
+                    planner_memory,
+                    retry_context,
+                    attachment_context,
+                ),
+            )
+        except ContextBudgetExceeded as exceeded:
+            logger.info(
+                "Planner context does not fit; asking the user to narrow it",
+                extra={
+                    "context_policy": exceeded.build.manifest.policy,
+                    "context_tokens": exceeded.build.tokens,
+                },
+            )
+            return context_too_long_decision()
+        # From here on, every prompt (a repair included) uses what was kept.
+        (
             conversation_context,
             feedback,
             planner_memory,
             retry_context,
             attachment_context,
-        )
-        manifest = planner_context_manifest(
+        ) = inputs
+        prompt = build_planning_user_prompt(
             question,
             conversation_context,
             feedback,
