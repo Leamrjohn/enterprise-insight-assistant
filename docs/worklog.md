@@ -879,3 +879,15 @@
 - Planner（10 次，planner/1:shadow）：引擎估算均值 1424、最大 1605，计费均值 1620、最大 1801（差约 196，模板文字和消息格式未计）；可用 2488，最多用到 65%，未触发压缩、丢弃或反问；history 白名单把 97 token 降到 11（单轮对话里只剩选取记录）；系统提示词 1307，占估算 92%。
 - SQL（4 次，sql/1:shadow）：估算均值 1246、最大 1298，可用 3488，最多 37%，0 次超预算。data 节点另有 4 次调用无清单，是 SQL 语义复核（C5 范围）。
 - 结论：两节点在当前题量下远未触及预算；enforce 的收益主要是去掉 history 里的选取记录（每次约 86 token），大头在 Planner 系统提示词（C4d）。
+
+## 2026-11-20 C4 enforce 长对话评测（Planner，CONTEXT_PLANNER_MODE=enforce，main e3406a9 后）
+- 做了什么：路由评测每题只传问题，enforce 下提示词与 shadow 逐字相同，测不出差别，改跑长对话评测（8 题 × 有/无约束，3 轮，产物 artifacts/evaluation-20261120-c4-enforce-longconv-r1～r3）。
+- 结果：有约束 8、7、7/8（此前基线 6、7、8/8），无约束 1/8（基线 2/8）；每轮 16 次调用、估算 $0.0114，合计约 $0.034。
+- 离线核对：8 题每题约 1700 token（8 条消息上限），只触发 history 白名单（去掉选取记录），未达压缩阈值 1990，所以 compress_history 没有被任何评测覆盖，只有单元测试。
+- 遗留：要验证压缩，需要一个历史超过约 2000 token 的评测集；默认改 enforce 前先决定是否补这个评测。
+
+## 2026-11-20 C4 修复：Planner 历史压缩改为只截助手回复（训练 + 共建；分支 feat/c4-compress-history）
+- 起因：离线复现 enforce 缺陷——约束在会话服务最近 8 条内、但不在最后 4 条时，旧 compress_history 只留最后 4 条会把它丢掉，而 find_standing_constraints 只扫 8 条以外，约束从提示词消失（shadow/off 不受影响）。
+- 做了什么：compress_history 改为最后 2 条原样、更早的助手回复截到 80 字并标 content_truncated、用户消息一律不动（用户编写），放不下由引擎 clarify；策略升 planner/2；单元测试按新行为改期望（用户选方案 B 时同意），新增回归测试；长对话评测脚本加 --fixture 和 constraint_position=recent，新评测集 long_conversations_compress_v1（4 题，沿用 v1 题目和期望）。
+- 验证：单元 1509 passed / 4 skipped；ruff、pyright 通过；离线 4 题均触发压缩（历史 1376→507 token）且约束保留。付费 3 轮（约 $0.043）：带约束 off 2、1、1/4，enforce 1、1、0/4；逐题看，两种模式都只稳定执行“只看华东区”，“战略客户”“不包括西部”“默认已交付”即使完整历史在提示词里也不执行。
+- 结论与遗留：压缩不再丢约束文字，但 Planner 本身不会从普通历史里执行范围约束，只有进 standing_constraints 才执行（v1 带约束 8/8、不带 1/8）。根因在“最近 8 条里的约束不进 standing_constraints”，属 C6 会话状态范围；在此之前 Planner 默认保持 shadow。
