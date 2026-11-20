@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+from dataclasses import replace
 from time import sleep
 from typing import Any, get_args
 
@@ -27,6 +28,13 @@ from app.modules.reporting.semantic_review import (
     EvidenceSemanticReview,
     SQLSemanticReview,
 )
+from app.modules.runtime.context.engine import (
+    ContextPolicy,
+    build_context,
+    require_fit,
+)
+from app.modules.runtime.context.manifest import ContextManifest
+from app.modules.runtime.context.policies.review import REVIEW_PLAN, REVIEW_SQL
 from app.modules.runtime.context_budget import EVIDENCE_REVIEW, assemble
 from app.modules.runtime.model_governance import model_context_scope
 from app.modules.runtime.prompts import get_prompt_registry
@@ -150,6 +158,30 @@ def _credible_memory_flags(
     return credible
 
 
+def _review_context(
+    policy: ContextPolicy, system_prompt: str, payload: dict[str, Any]
+) -> tuple[dict[str, Any], ContextManifest | None]:
+    """The payload to send and the manifest the ledger records with it (C5).
+
+    off: as given, no manifest.  shadow: as given, the manifest marked
+    ":shadow".  enforce: what the engine kept, or ContextBudgetExceeded.
+    """
+    mode = runtime_settings().context_review_mode
+    if mode == "off":
+        return payload, None
+    build = build_context(
+        policy,
+        {
+            "system": system_prompt,
+            **payload,
+        },
+    )
+    if mode == "shadow":
+        return payload, replace(build.manifest, policy=f"{policy.version}:shadow")
+    kept = require_fit(build)
+    return {name: kept[name] for name in payload if name in kept}, build.manifest
+
+
 class SemanticReviewService:
     """Use a model as a semantic critic over already-scoped inputs."""
 
@@ -216,18 +248,20 @@ class SemanticReviewService:
         payload: dict[str, Any],
         proposed_plan: dict[str, Any],
     ) -> PlannerDecision:
-        raw_output = self._chat(system_prompt=system_prompt, payload=payload)
-        preserved_plan = self._preserved_plan_from_review(raw_output, proposed_plan)
-        if preserved_plan is not None:
-            return preserved_plan
-        return self._parse_with_repair(
-            PlannerDecision,
-            raw_output,
-            "Planner 语义复核结果不符合 JSON 契约",
-            system_prompt,
-            payload,
-            normalize=_complete_plan_output,
-        )
+        payload, manifest = _review_context(REVIEW_PLAN, system_prompt, payload)
+        with model_context_scope(manifest):
+            raw_output = self._chat(system_prompt=system_prompt, payload=payload)
+            preserved_plan = self._preserved_plan_from_review(raw_output, proposed_plan)
+            if preserved_plan is not None:
+                return preserved_plan
+            return self._parse_with_repair(
+                PlannerDecision,
+                raw_output,
+                "Planner 语义复核结果不符合 JSON 契约",
+                system_prompt,
+                payload,
+                normalize=_complete_plan_output,
+            )
 
     @staticmethod
     def _preserved_plan_from_review(
@@ -283,14 +317,16 @@ class SemanticReviewService:
     def _review_sql_once(
         self, system_prompt: str, payload: dict[str, Any]
     ) -> SQLSemanticReview:
-        raw_output = self._chat(system_prompt=system_prompt, payload=payload)
-        return self._parse_with_repair(
-            SQLSemanticReview,
-            raw_output,
-            "SQL 语义复核结果不符合 JSON 契约",
-            system_prompt,
-            payload,
-        )
+        payload, manifest = _review_context(REVIEW_SQL, system_prompt, payload)
+        with model_context_scope(manifest):
+            raw_output = self._chat(system_prompt=system_prompt, payload=payload)
+            return self._parse_with_repair(
+                SQLSemanticReview,
+                raw_output,
+                "SQL 语义复核结果不符合 JSON 契约",
+                system_prompt,
+                payload,
+            )
 
     def review_evidence(
         self,
@@ -337,6 +373,7 @@ class SemanticReviewService:
                 "deterministic_report": report,
                 **({"memories_used": memories_used} if memories_used else {}),
             },
+            enforce=runtime_settings().context_review_mode == "enforce",
         )
         if memories_used:
             system_prompt += (

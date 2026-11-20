@@ -19,6 +19,7 @@ from app.modules.runtime.context.engine import (
     SectionRule,
     build_context,
     count_tokens,
+    require_fit,
 )
 from app.modules.runtime.context.manifest import ContextManifest
 
@@ -79,14 +80,16 @@ def cap_chunk_text(knowledge_result: dict) -> dict:
 
 
 def assemble(
-    policy: ContextPolicy, sections: dict[str, Any]
+    policy: ContextPolicy, sections: dict[str, Any], *, enforce: bool = False
 ) -> tuple[dict[str, Any], ContextDecision]:
     """The payload a node may send, and a record of what was done to it.
 
-    Still sends an over-budget payload, as before C4: the evidence review moves
-    to require_fit in C5.
+    enforce (C5): an over-budget payload raises ContextBudgetExceeded instead
+    of being sent; without it, the payload is still sent as before.
     """
     build = build_context(policy, sections)
+    if enforce:
+        require_fit(build)
     actions = {entry.name: entry.action for entry in build.manifest.sections}
     decision = ContextDecision(
         node=policy.node,

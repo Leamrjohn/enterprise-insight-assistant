@@ -31,6 +31,7 @@ from app.modules.knowledge.tool_agent import ToolCallingKnowledgeAgent
 from app.modules.reporting.citation_validation import validate_citations
 from app.modules.reporting.reviewer_agent import ReviewerAgent
 from app.modules.reporting.semantic_review_service import SemanticReviewService
+from app.modules.runtime.context.engine import ContextBudgetExceeded
 from app.modules.runtime.model_governance import model_node_scope
 from app.modules.runtime.tool_guard import (
     CircuitBreaker,
@@ -268,7 +269,13 @@ def planner_semantic_review_node(state: WorkflowState) -> dict:
             reviewed_plan = enforce_explicit_document_evidence_contract(
                 state["question"], reviewed_plan
             )
-    except (PermanentModelError, RetryableModelError, StructuredOutputError) as error:
+    except (
+        PermanentModelError,
+        RetryableModelError,
+        StructuredOutputError,
+        # C5: refused before any model call, so not worth retrying either.
+        ContextBudgetExceeded,
+    ) as error:
         retryable = isinstance(error, RetryableModelError)
         update = {
             "plan": {

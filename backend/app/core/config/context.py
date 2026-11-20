@@ -24,6 +24,9 @@ class ContextConfig(ConfigDomain):
     # analysis/data/sql_generation.py (C4): the same three modes; enforce
     # refuses an SQL call that cannot fit instead of sending it.
     context_sql_mode: Literal["off", "shadow", "enforce"] = "shadow"
+    # reporting/semantic_review_service.py (C5): plan, SQL and evidence review.
+    # enforce refuses a review that cannot fit instead of sending it.
+    context_review_mode: Literal["off", "shadow", "enforce"] = "shadow"
 
     @field_validator(
         "context_history_max_tokens",

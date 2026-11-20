@@ -26,6 +26,7 @@ from app.modules.reporting.schemas import (
 )
 from app.modules.reporting.semantic_review import EvidenceSemanticReview
 from app.modules.reporting.semantic_review_service import SemanticReviewService
+from app.modules.runtime.context.engine import ContextBudgetExceeded
 
 logger = logging.getLogger(__name__)
 
@@ -303,6 +304,9 @@ class ReviewerAgent(Agent):
                 PermanentModelError,
                 RetryableModelError,
                 StructuredOutputError,
+                # C5: refused before any model call; publishing still rests on
+                # the deterministic checks, as for any review that did not finish.
+                ContextBudgetExceeded,
             ) as error:
                 semantic_review = None
                 semantic_review_error = f"证据语义复核未完成: {error}"
