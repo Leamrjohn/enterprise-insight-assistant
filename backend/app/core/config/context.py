@@ -21,6 +21,9 @@ class ContextConfig(ConfigDomain):
     # the old prompt and records the engine's manifest as "<policy>:shadow";
     # enforce sends what the engine kept and asks back when it cannot fit.
     context_planner_mode: Literal["off", "shadow", "enforce"] = "shadow"
+    # analysis/data/sql_generation.py (C4): the same three modes; enforce
+    # refuses an SQL call that cannot fit instead of sending it.
+    context_sql_mode: Literal["off", "shadow", "enforce"] = "shadow"
 
     @field_validator(
         "context_history_max_tokens",

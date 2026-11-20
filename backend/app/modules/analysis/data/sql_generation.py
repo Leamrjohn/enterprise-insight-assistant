@@ -1,6 +1,9 @@
 import json
+import logging
+from dataclasses import replace
 from typing import cast
 
+from app.core.config.snapshot import runtime_settings
 from app.core.exceptions import StructuredOutputError
 from app.core.gateway.base import ModelGateway
 from app.core.gateway.factory import get_model_gateway
@@ -19,7 +22,13 @@ from app.modules.analysis.catalog.semantic_catalog import (
 from app.modules.analysis.catalog.snapshot_catalog import SnapshotCatalog
 from app.modules.analysis.data.sql_candidate import SQLCandidate
 from app.modules.analysis.metrics.metric_catalog import METRIC_DEFINITIONS
+from app.modules.runtime.context.engine import build_context, require_fit
+from app.modules.runtime.context.manifest import ContextManifest
+from app.modules.runtime.context.policies.sql import SQL
+from app.modules.runtime.model_governance import model_context_scope
 from pydantic import ValidationError
+
+logger = logging.getLogger(__name__)
 
 _REPAIR_GUIDANCE = {
     "sql_generation_invalid_output": "上一次输出不是符合约定的 SQL JSON。",
@@ -281,6 +290,43 @@ def _catalog_contains_column(catalog: SnapshotCatalog, column: str) -> bool:
     return catalog.has_table(table) and field in catalog.columns_for(table)
 
 
+def sql_context_manifest(
+    question: str,
+    system_prompt: str,
+    instructions: str,
+    previous_sql: str | None,
+) -> ContextManifest | None:
+    """The manifest recorded with one SQL call; enforce refuses one that cannot fit.
+
+    sql/1 shrinks nothing, so a call that fits is sent exactly as built.
+    """
+    mode = runtime_settings().context_sql_mode
+    if mode == "off":
+        return None
+    optional = {"instructions": instructions, "previous_sql": previous_sql}
+    build = build_context(
+        SQL,
+        {
+            "system": system_prompt,
+            "question": question,
+            **{name: value for name, value in optional.items() if value},
+        },
+    )
+    if mode == "shadow":
+        if not build.fits:
+            logger.info(
+                "SQL context would not fit",
+                extra={
+                    "context_policy": SQL.version,
+                    "context_tokens": build.tokens,
+                    "context_available_tokens": SQL.available_tokens,
+                },
+            )
+        return replace(build.manifest, policy=f"{build.manifest.policy}:shadow")
+    require_fit(build)
+    return build.manifest
+
+
 class SQLGenerationService:
     """调用模型生成候选 SQL，不负责校验或执行 SQL。"""
 
@@ -322,46 +368,51 @@ class SQLGenerationService:
                 repair_reason,
                 "上一次候选 SQL 不符合受控查询要求。",
             )
-            raw_output = self._gateway.chat(
-                prompt=(
-                    "请针对以下用户问题生成候选 SQL。\n"
-                    "<question>\n"
-                    f"{question}\n"
-                    "</question>\n"
-                    "<previous_sql>\n"
-                    f"{previous_sql or '无有效 SQL'}\n"
-                    "</previous_sql>\n"
-                    f"{guidance}\n"
-                    f"{concepts_instruction}"
-                    f"{scope_instruction}"
-                    '重新生成完整 JSON：{"sql":"...","purpose":"...",'
-                    '"query_contract":{"required_concepts":["..."],"expected_columns":["中文列名"],'
-                    '"result_kind":"aggregate","empty_result_policy":"no_matching_records",'
-                    '"metric_definition_ref":"...","time_scope_column":"..."}}。'
-                ),
-                # A failed attempt may have failed for lack of a table: show them all.
-                system_prompt=build_sql_generation_system_prompt(self._catalog),
-                json_mode=True,
+            prompt = (
+                "请针对以下用户问题生成候选 SQL。\n"
+                "<question>\n"
+                f"{question}\n"
+                "</question>\n"
+                "<previous_sql>\n"
+                f"{previous_sql or '无有效 SQL'}\n"
+                "</previous_sql>\n"
+                f"{guidance}\n"
+                f"{concepts_instruction}"
+                f"{scope_instruction}"
+                '重新生成完整 JSON：{"sql":"...","purpose":"...",'
+                '"query_contract":{"required_concepts":["..."],"expected_columns":["中文列名"],'
+                '"result_kind":"aggregate","empty_result_policy":"no_matching_records",'
+                '"metric_definition_ref":"...","time_scope_column":"..."}}。'
             )
+            # A failed attempt may have failed for lack of a table: show them all.
+            system_prompt = build_sql_generation_system_prompt(self._catalog)
         else:
+            prompt = (
+                "请针对以下用户问题生成候选 SQL。\n"
+                "<question>\n"
+                f"{question}\n"
+                "</question>\n"
+                "同时在 query_contract 中说明回答该问题必需的业务概念、中文结果列、"
+                "结果类型、空结果策略、登记指标引用和业务时间列。\n"
+                f"{concepts_instruction}"
+                f"{scope_instruction}"
+            )
+            system_prompt = build_sql_generation_system_prompt(
+                self._catalog,
+                shown_tables=self._tables_for(
+                    question, required_concepts, evaluation_scope
+                ),
+            )
+        # Raises ContextBudgetExceeded under enforce, before anything is reserved.
+        manifest = sql_context_manifest(
+            question,
+            system_prompt,
+            concepts_instruction + scope_instruction,
+            (previous_sql or None) if repair_reason is not None else None,
+        )
+        with model_context_scope(manifest):
             raw_output = self._gateway.chat(
-                prompt=(
-                    "请针对以下用户问题生成候选 SQL。\n"
-                    "<question>\n"
-                    f"{question}\n"
-                    "</question>\n"
-                    "同时在 query_contract 中说明回答该问题必需的业务概念、中文结果列、"
-                    "结果类型、空结果策略、登记指标引用和业务时间列。\n"
-                    f"{concepts_instruction}"
-                    f"{scope_instruction}"
-                ),
-                system_prompt=build_sql_generation_system_prompt(
-                    self._catalog,
-                    shown_tables=self._tables_for(
-                        question, required_concepts, evaluation_scope
-                    ),
-                ),
-                json_mode=True,
+                prompt=prompt, system_prompt=system_prompt, json_mode=True
             )
         try:
             return SQLCandidate.model_validate_json(raw_output)

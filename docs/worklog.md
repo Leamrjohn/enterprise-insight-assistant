@@ -868,3 +868,8 @@
 - 做了什么：CONTEXT_PLANNER_MODE 增加 enforce（默认仍为 shadow）；planner_context 按模式返回提示词输入和清单，enforce 下用 require_fit 后的内容（用户编写映射）重建首次与修复提示词，清单记 planner/1；放不下时 decide 不调用模型，直接返回 needs_clarification“问题或对话太长，请缩小范围后再问。”。没有新建 render.py，复用 build_planning_user_prompt 拼接。
 - 验证（本机）：新增 6 个测试（含无需裁剪时与 off 逐字相同、放不下时模型调用 0 次、修复提示词用裁剪后内容）；全量单元 1501 passed / 4 skipped；ruff、pyright 通过。
 - 遗留：提示词模板约 170 token 未计入预算；默认改 enforce 前需跑路由评测（≥43/48，付费，先报费用）；冒烟未跑。
+
+## 2026-11-20 C4c SQL 生成接入引擎（训练 + 共建；分支 feat/c4c-sql-context）
+- 做了什么：新增策略 sql/1（预算 4000、预留 512、超预算 reject，不压缩任何区段）和开关 CONTEXT_SQL_MODE（off/shadow/enforce，默认 shadow）；generate 两个分支只拼提示词，统一在一处经 sql_context_manifest 检查后调用模型，提示词不变；enforce 放不下抛 ContextBudgetExceeded，data_agent 不重试、不计模型调用，返回 sql_context_budget_exceeded（用户编写）。
+- 验证（本机）：新增 7 个测试（三种模式提示词逐字相同、放不下时模型调用 0 次、Data Agent 不重试）；全量单元 1508 passed / 4 skipped；ruff、pyright 通过。
+- 遗留：表结构在系统提示词里，引擎只能测量和拦截，拆成可压缩区段需改提示词并跑 SQL 评测（随 C4d）；冒烟未跑；lint-imports 交给 CI。
