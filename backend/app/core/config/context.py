@@ -18,8 +18,9 @@ class ContextConfig(ConfigDomain):
     context_max_rows_when_compressed: int = 20
     context_max_chunk_chars_when_compressed: int = 800
     # analysis/planner/planning.py (C4): off runs no engine; shadow still sends
-    # the old prompt and records the engine's manifest as "<policy>:shadow".
-    context_planner_mode: Literal["off", "shadow"] = "shadow"
+    # the old prompt and records the engine's manifest as "<policy>:shadow";
+    # enforce sends what the engine kept and asks back when it cannot fit.
+    context_planner_mode: Literal["off", "shadow", "enforce"] = "shadow"
 
     @field_validator(
         "context_history_max_tokens",

@@ -863,3 +863,8 @@
 - 做了什么：新增策略 planner/1（预算 3000、预留 512、超预算反问；附件、记忆可丢，历史只留 messages/history_truncated/standing_constraints 并可压缩）和 compressors.compress_history（用户编写，只留最近 4 条）；新开关 CONTEXT_PLANNER_MODE（off/shadow，默认 shadow）；decide 在 shadow 下照发旧提示词，把引擎清单以 planner/1:shadow 写进账本。
 - 验证（本机）：新增 10 个测试（含 off 与 shadow 提示词逐字相同）；全量单元 1495 passed / 4 skipped；ruff、pyright 通过。
 - 遗留：冒烟未跑，账本里的 shadow 清单待部署后确认；清单不计提示词模板文字（约 170 token），C4b-2 render 时补；lint-imports 被 main 上已有的 ignore 未匹配错误挡住，新导入未经契约检查。
+
+## 2026-11-20 C4b-2 Planner 切换模式（enforce；训练 + 共建；分支 feat/c4b2-planner-enforce）
+- 做了什么：CONTEXT_PLANNER_MODE 增加 enforce（默认仍为 shadow）；planner_context 按模式返回提示词输入和清单，enforce 下用 require_fit 后的内容（用户编写映射）重建首次与修复提示词，清单记 planner/1；放不下时 decide 不调用模型，直接返回 needs_clarification“问题或对话太长，请缩小范围后再问。”。没有新建 render.py，复用 build_planning_user_prompt 拼接。
+- 验证（本机）：新增 6 个测试（含无需裁剪时与 off 逐字相同、放不下时模型调用 0 次、修复提示词用裁剪后内容）；全量单元 1501 passed / 4 skipped；ruff、pyright 通过。
+- 遗留：提示词模板约 170 token 未计入预算；默认改 enforce 前需跑路由评测（≥43/48，付费，先报费用）；冒烟未跑。
