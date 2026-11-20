@@ -1,0 +1,50 @@
+{
+  "version": "long-conversations-compress-v1",
+  "status": "draft_pending_user_review",
+  "note": "C4：约束说在会话服务最近 8 条消息里、但不在最后 4 条；助手回复很长，使 Planner 历史超过压缩阈值。用来验证 enforce 压缩历史时不丢用户的约束。题目和期望沿用 long_conversations_v1。",
+  "filler_turns": 4,
+  "filler_answer": "报告可以在任务详情页查看，也可以导出为PDF或Excel，导出后会保留证据链接和口径说明。报告可以在任务详情页查看，也可以导出为PDF或Excel，导出后会保留证据链接和口径说明。报告可以在任务详情页查看，也可以导出为PDF或Excel，导出后会保留证据链接和口径说明。报告可以在任务详情页查看，也可以导出为PDF或Excel，导出后会保留证据链接和口径说明。报告可以在任务详情页查看，也可以导出为PDF或Excel，导出后会保留证据链接和口径说明。",
+  "cases": [
+    {
+      "case_id": "region-east-recent",
+      "split": "development",
+      "constraint": "后面都只看华东区。",
+      "question": "2025年8月已交付订单销售额是多少？",
+      "must_contain": [
+        "华东"
+      ],
+      "constraint_position": "recent"
+    },
+    {
+      "case_id": "tier-strategic-recent",
+      "split": "development",
+      "constraint": "以后都只看战略客户。",
+      "question": "2025年全年已交付订单销售额是多少？",
+      "must_contain": [
+        "战略"
+      ],
+      "constraint_position": "recent"
+    },
+    {
+      "case_id": "status-delivered-recent",
+      "split": "development",
+      "constraint": "默认都按已交付订单统计。",
+      "question": "华南区2025年8月的订单有多少笔？",
+      "must_contain": [
+        "已交付",
+        "delivered"
+      ],
+      "constraint_position": "recent"
+    },
+    {
+      "case_id": "exclude-west-recent",
+      "split": "development",
+      "constraint": "接下来都不包括西部区域。",
+      "question": "2025年8月各区域已交付订单销售额分别是多少？",
+      "must_contain": [
+        "西部"
+      ],
+      "constraint_position": "recent"
+    }
+  ]
+}

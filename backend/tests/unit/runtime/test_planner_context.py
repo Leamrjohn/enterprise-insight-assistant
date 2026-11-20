@@ -5,7 +5,8 @@ from app.core.settings import get_settings
 from app.modules.analysis.planner.planning import PlanningService
 from app.modules.runtime import model_governance
 from app.modules.runtime.context.compressors import (
-    HISTORY_KEEP_MESSAGES,
+    ASSISTANT_REPLY_CHARS,
+    HISTORY_RECENT_MESSAGES,
     compress_history,
 )
 
@@ -38,6 +39,28 @@ def _messages(count: int, content: str = "上一轮问的是华北") -> list[dic
     ]
 
 
+LONG_REPLY = "华东区销售额环比变化的原因包括季节性和大客户暂停采购。" * 10
+CONSTRAINT = "后面都只看华东区"
+
+
+def _long_conversation(turns: int, constraint_at: int | None = None) -> list[dict]:
+    """Short user turns and long assistant replies; a scope may sit in any turn."""
+    messages = []
+    for turn in range(turns):
+        question = (
+            CONSTRAINT if turn == constraint_at else f"第{turn}轮：报告在哪里看？"
+        )
+        messages += [
+            {"id": 2 * turn, "role": "user", "content": question},
+            {
+                "id": 2 * turn + 1,
+                "role": "assistant",
+                "content": f"{turn}:{LONG_REPLY}",
+            },
+        ]
+    return messages
+
+
 def _plan(mode: str, monkeypatch, **context) -> dict:
     monkeypatch.setattr(get_settings(), "context_planner_mode", mode)
     gateway = RecordingGateway()
@@ -52,17 +75,29 @@ def _actions(manifest) -> dict:
     return {entry.name: (entry.action, entry.reason) for entry in manifest.sections}
 
 
-def test_compress_history_keeps_the_latest_turns_and_says_so():
+def test_compress_history_shortens_older_replies_and_keeps_every_user_turn():
     context = {
-        "messages": _messages(10),
+        "messages": _long_conversation(4, constraint_at=0),
         "history_truncated": False,
         "standing_constraints": ["只看华东区"],
     }
     shrunk = compress_history(context)
-    assert shrunk["messages"] == context["messages"][-HISTORY_KEEP_MESSAGES:]
+    older, recent = (
+        shrunk["messages"][:-HISTORY_RECENT_MESSAGES],
+        shrunk["messages"][-HISTORY_RECENT_MESSAGES:],
+    )
+    assert [m["content"] for m in shrunk["messages"] if m["role"] == "user"] == [
+        m["content"] for m in context["messages"] if m["role"] == "user"
+    ]
+    assert all(
+        len(m["content"]) == ASSISTANT_REPLY_CHARS and m["content_truncated"]
+        for m in older
+        if m["role"] == "assistant"
+    )
+    assert recent == context["messages"][-HISTORY_RECENT_MESSAGES:]
     assert shrunk["history_truncated"] is True
     assert shrunk["standing_constraints"] == ["只看华东区"]
-    assert len(context["messages"]) == 10  # the original is not changed
+    assert len(context["messages"][1]["content"]) > ASSISTANT_REPLY_CHARS  # unchanged
 
 
 @pytest.mark.parametrize(
@@ -71,7 +106,8 @@ def test_compress_history_keeps_the_latest_turns_and_says_so():
         None,
         "not a dict",
         {"messages": []},
-        {"messages": _messages(HISTORY_KEEP_MESSAGES)},
+        {"messages": _messages(10)},  # every reply already short
+        {"messages": _long_conversation(1)},  # only the latest exchange
     ],
 )
 def test_compress_history_leaves_short_or_odd_history_alone(context):
@@ -88,7 +124,7 @@ def test_shadow_sends_exactly_the_prompt_off_sends(monkeypatch):
     shadow = _plan("shadow", monkeypatch, **dict(context))
     assert shadow["prompt"] == off["prompt"]
     assert off["manifest"] is None
-    assert shadow["manifest"].policy == "planner/1:shadow"
+    assert shadow["manifest"].policy == "planner/2:shadow"
 
 
 def test_shadow_records_the_whitelist_on_history(monkeypatch):
@@ -105,12 +141,12 @@ def test_shadow_records_the_whitelist_on_history(monkeypatch):
     assert "memory" not in actions  # nothing given, so nothing recorded
 
 
-def test_shadow_shows_a_long_history_would_be_cut(monkeypatch):
-    conversation = {"messages": _messages(12, "华东区销售额环比变化" * 30)}
+def test_shadow_shows_a_long_history_would_be_shortened(monkeypatch):
+    conversation = {"messages": _long_conversation(4)}
     call = _plan("shadow", monkeypatch, conversation_context=conversation)
     assert _actions(call["manifest"])["history"] == ("compressed", "near_budget")
     assert call["manifest"].over_budget is False
-    assert "0:华东区" in call["prompt"]  # shadow: the full history is still sent
+    assert LONG_REPLY in call["prompt"]  # shadow: the full history is still sent
 
 
 def test_shadow_shows_memory_would_be_dropped_first(monkeypatch):
@@ -134,7 +170,7 @@ def test_enforce_sends_the_old_prompt_when_nothing_needs_cutting(monkeypatch):
     off = _plan("off", monkeypatch, **dict(context))
     enforce = _plan("enforce", monkeypatch, **dict(context))
     assert enforce["prompt"] == off["prompt"]
-    assert enforce["manifest"].policy == "planner/1"
+    assert enforce["manifest"].policy == "planner/2"
 
 
 def test_enforce_leaves_the_selection_record_out_of_the_prompt(monkeypatch):
@@ -148,11 +184,16 @@ def test_enforce_leaves_the_selection_record_out_of_the_prompt(monkeypatch):
     assert "1:上一轮问的是华北" in call["prompt"]
 
 
-def test_enforce_sends_only_the_latest_turns_of_a_long_history(monkeypatch):
-    conversation = {"messages": _messages(12, "华东区销售额环比变化" * 30)}
+def test_enforce_keeps_a_recent_scope_that_never_reached_standing_constraints(
+    monkeypatch,
+):
+    """The C4 regression: dropping turns lost a scope said within the last 8."""
+    conversation = {"messages": _long_conversation(4, constraint_at=0)}
     call = _plan("enforce", monkeypatch, conversation_context=conversation)
-    assert '"0:华东区' not in call["prompt"]
-    assert '"11:华东区' in call["prompt"]
+    assert _actions(call["manifest"])["history"] == ("compressed", "near_budget")
+    assert CONSTRAINT in call["prompt"]
+    assert f"3:{LONG_REPLY}" in call["prompt"]  # the latest reply stays whole
+    assert f"0:{LONG_REPLY}" not in call["prompt"]
     assert '"history_truncated": true' in call["prompt"]
 
 
@@ -184,4 +225,4 @@ def test_enforce_repair_prompt_uses_what_was_kept(monkeypatch):
     PlanningService(gateway=gateway).decide(QUESTION, conversation_context=conversation)
     assert len(gateway.calls) == 2
     assert "conversation-context/v2" not in gateway.calls[1]["prompt"]
-    assert gateway.calls[1]["manifest"].policy == "planner/1"
+    assert gateway.calls[1]["manifest"].policy == "planner/2"

@@ -8,7 +8,8 @@ from app.modules.runtime.context.engine import ContextPolicy, SectionRule
 
 PLANNER = ContextPolicy(
     node="planner",
-    version="planner/1",
+    # 2: history is compressed by shortening assistant replies, not dropping turns.
+    version="planner/2",
     budget_tokens=3000,
     output_reserve_tokens=512,
     sections={

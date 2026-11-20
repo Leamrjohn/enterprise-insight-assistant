@@ -9,24 +9,45 @@ from __future__ import annotations
 
 from typing import Any
 
-# Earlier turns kept when the Planner's history has to shrink.
-HISTORY_KEEP_MESSAGES = 4
+# The latest exchange is always sent whole.
+HISTORY_RECENT_MESSAGES = 2
+# Older assistant replies are cut to this many characters.
+ASSISTANT_REPLY_CHARS = 80
 
 
 def compress_history(conversation_context: Any) -> Any:
-    """Keep the latest messages and say that earlier ones were left out.
+    """Shorten older assistant replies; never drop or cut what the user said.
 
-    standing_constraints stay whole: they exist because old turns get cut.
+    A user's scope ("only East China from now on") can sit in any turn the
+    conversation service selected, and only some of those reach
+    standing_constraints, so dropping turns could lose one silently.  If the
+    history still does not fit, the Planner asks back instead (clarify).
     """
     if not isinstance(conversation_context, dict):
         return conversation_context
     messages = conversation_context.get("messages") or []
-    if len(messages) <= HISTORY_KEEP_MESSAGES:
+    older = messages[:-HISTORY_RECENT_MESSAGES]
+    if not any(_is_long_reply(m) for m in older):
         return conversation_context
-    else:
-        shrunk = {
-            **conversation_context,
-            "history_truncated": True,
-            "messages": messages[-HISTORY_KEEP_MESSAGES:],
+    shortened = [
+        {
+            **m,
+            "content": m["content"][:ASSISTANT_REPLY_CHARS],
+            "content_truncated": True,
         }
-        return shrunk
+        if _is_long_reply(m)
+        else m
+        for m in older
+    ]
+    return {
+        **conversation_context,
+        "messages": [*shortened, *messages[-HISTORY_RECENT_MESSAGES:]],
+        "history_truncated": True,
+    }
+
+
+def _is_long_reply(message: dict) -> bool:
+    return (
+        message.get("role") == "assistant"
+        and len(message.get("content", "")) > ASSISTANT_REPLY_CHARS
+    )

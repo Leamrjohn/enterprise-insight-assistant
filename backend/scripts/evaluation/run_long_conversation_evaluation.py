@@ -35,11 +35,22 @@ FILLER_QUESTION = "顺便问一下，这个系统的报告在哪里看？"
 FILLER_ANSWER = "报告可以在任务详情页查看，也可以导出。"
 
 
-def build_messages(case: dict, filler_turns: int) -> list[SimpleNamespace]:
-    """Constraint first, then unrelated turns; an override sits in the recent window."""
-    contents = [("user", case["constraint"]), ("assistant", "好的，已记下。")]
-    for _ in range(filler_turns):
-        contents += [("user", FILLER_QUESTION), ("assistant", FILLER_ANSWER)]
+# A "recent" constraint has this many unrelated turns after it: inside the
+# conversation service's window of 8 messages, but not in its last 4.
+RECENT_TURNS_AFTER = 2
+
+
+def build_messages(
+    case: dict, filler_turns: int, filler_answer: str = FILLER_ANSWER
+) -> list[SimpleNamespace]:
+    """Constraint first (or, if "recent", near the end), then unrelated turns;
+    an override sits in the recent window."""
+    filler = [("user", FILLER_QUESTION), ("assistant", filler_answer)]
+    constraint = [("user", case["constraint"]), ("assistant", "好的，已记下。")]
+    if case.get("constraint_position") == "recent":
+        contents = filler * filler_turns + constraint + filler * RECENT_TURNS_AFTER
+    else:
+        contents = constraint + filler * filler_turns
     if case.get("override"):
         contents += [("user", case["override"]), ("assistant", "好的。")]
     return [
@@ -48,8 +59,14 @@ def build_messages(case: dict, filler_turns: int) -> list[SimpleNamespace]:
     ]
 
 
-def context_for(case: dict, filler_turns: int, *, with_constraints: bool) -> dict:
-    messages = build_messages(case, filler_turns)
+def context_for(
+    case: dict,
+    filler_turns: int,
+    *,
+    with_constraints: bool,
+    filler_answer: str = FILLER_ANSWER,
+) -> dict:
+    messages = build_messages(case, filler_turns, filler_answer)
     context = build_conversation_context(messages)
     older = messages[:-MAX_CONTEXT_MESSAGES]
     constraints = find_standing_constraints(older) if with_constraints else []
@@ -92,7 +109,10 @@ def evaluate(gateway: ModelGateway, fixture: dict, *, with_constraints: bool) ->
         decision = service.decide(
             case["question"],
             conversation_context=context_for(
-                case, fixture["filler_turns"], with_constraints=with_constraints
+                case,
+                fixture["filler_turns"],
+                with_constraints=with_constraints,
+                filler_answer=fixture.get("filler_answer", FILLER_ANSWER),
             ),
         )
         rows.append(score_case(case, decision))
@@ -110,6 +130,7 @@ def main() -> None:
     parser.add_argument("--cassette-dir", type=Path, required=True)
     parser.add_argument("--max-cost", type=Decimal, default=Decimal("0.03"))
     parser.add_argument("--report", type=Path)
+    parser.add_argument("--fixture", type=Path, default=FIXTURE)
     args = parser.parse_args()
 
     guard: BudgetGuardGateway | None = None
@@ -123,7 +144,7 @@ def main() -> None:
         )
         gateway = RecordReplayGateway(args.cassette_dir, mode="record", inner=guard)
 
-    fixture = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    fixture = json.loads(args.fixture.read_text(encoding="utf-8"))
     report = {
         "with_standing_constraints": evaluate(gateway, fixture, with_constraints=True),
         "without_standing_constraints": evaluate(
