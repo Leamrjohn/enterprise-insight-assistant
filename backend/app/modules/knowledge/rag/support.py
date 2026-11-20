@@ -8,13 +8,18 @@ confirmed is removed.
 
 import json
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import date
 from typing import Literal
 
+from app.core.config.snapshot import runtime_settings
 from app.core.exceptions import StructuredOutputError
 from app.core.gateway.base import ModelGateway
 from app.modules.knowledge.rag.validity import ValidityWindow
+from app.modules.runtime.context.engine import build_context, require_fit
+from app.modules.runtime.context.manifest import ContextManifest
+from app.modules.runtime.context.policies.support import SUPPORT
+from app.modules.runtime.model_governance import model_context_scope
 from app.modules.runtime.prompts import get_prompt_registry
 from pydantic import BaseModel, ConfigDict, ValidationError
 
@@ -165,6 +170,37 @@ def apply_code_checks(
     return SupportOutcome(tuple(checked))
 
 
+def support_context_manifest(
+    question: str,
+    sentences: list[str],
+    evidences: list[dict],
+    confirmed_facts: list[str],
+    system_prompt: str,
+) -> ContextManifest | None:
+    """The manifest recorded with one support check; enforce refuses one that
+    cannot fit.
+
+    support/1 shrinks nothing, so a check that fits is sent exactly as built.
+    """
+    mode = runtime_settings().context_knowledge_mode
+    if mode == "off":
+        return None
+    build = build_context(
+        SUPPORT,
+        {
+            "system": system_prompt,
+            "question": question,
+            "sentences": sentences,
+            "evidences": evidences,
+            "confirmed_facts": confirmed_facts,
+        },
+    )
+    if mode == "shadow":
+        return replace(build.manifest, policy=f"{SUPPORT.version}:shadow")
+    require_fit(build)
+    return build.manifest
+
+
 def check_support(
     gateway: ModelGateway,
     *,
@@ -175,11 +211,18 @@ def check_support(
     confirmed_facts: list[str] | None = None,
 ) -> SupportOutcome:
     sentences = split_sentences(answer)
-    raw_output = gateway.chat(
-        prompt=_render_prompt(question, sentences, evidences, confirmed_facts or []),
-        system_prompt=_system_prompt(bool(confirmed_facts)),
-        json_mode=True,
+    system_prompt = _system_prompt(bool(confirmed_facts))
+    manifest = support_context_manifest(
+        question, sentences, evidences, confirmed_facts or [], system_prompt
     )
+    with model_context_scope(manifest):
+        raw_output = gateway.chat(
+            prompt=_render_prompt(
+                question, sentences, evidences, confirmed_facts or []
+            ),
+            system_prompt=system_prompt,
+            json_mode=True,
+        )
     return apply_code_checks(
         sentences,
         _parse(raw_output),

@@ -902,3 +902,8 @@
 - 做了什么：新开关 CONTEXT_REVIEW_MODE（off/shadow/enforce，默认 shadow）；新策略 review_plan/1、review_sql/1（3000/256，reject），计划和 SQL 复核经 _review_context（用户编写）记录清单，修复调用同一份清单；证据复核 assemble 加 enforce，超预算抛 ContextBudgetExceeded；4 个调用方接住：SQL 复核返回 sql_review_context_budget_exceeded 且不执行查询，计划复核走反问不重试，证据复核记为未完成、发布仍由确定性校验决定。
 - 验证：新增 11 个测试；单元 1520 passed / 4 skipped；ruff、pyright 通过。未部署、未跑付费评测，线上仍为 shadow 前的版本。
 - 遗留：shadow 账本数据要部署后才有，enforce 默认不开。
+
+## 2026-11-20 C5c 支持检查接入上下文引擎（训练 + 共建；分支 feat/c5c-support-context）
+- 做了什么：新开关 CONTEXT_KNOWLEDGE_MODE（off/shadow/enforce，默认 shadow，C5b 将共用）；新策略 support/1（3000/512，不压缩片段，reject）；check_support 经 support_context_manifest 记录清单，发出文字不变；KnowledgeAgent 接住 ContextBudgetExceeded（用户编写），返回兜底回答、不引用任何片段，错误码 knowledge_support_context_budget_exceeded，success=True 使数据证据仍可走 partial。
+- 验证：新增 6 个测试；单元 1526 passed / 4 skipped；ruff、pyright 通过。未部署、未跑付费评测。
+- 遗留：片段压缩不做（截短会误删有支持的句子），需要时另开工单并跑支持检查评测。

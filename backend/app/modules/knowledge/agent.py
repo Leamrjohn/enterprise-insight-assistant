@@ -16,6 +16,7 @@ from app.modules.knowledge.rag.validity import (
 )
 from app.modules.knowledge.schemas import RetrievalBrief
 from app.modules.knowledge.tool import RAGTool
+from app.modules.runtime.context.engine import ContextBudgetExceeded
 
 logger = logging.getLogger(__name__)
 
@@ -206,6 +207,15 @@ class KnowledgeAgent(Agent):
                     answer="无法根据现有文档形成可引用的原因判断。",
                     evidence=[],
                     error_code="knowledge_invalid_output",
+                    attempts=attempts,
+                )
+            except ContextBudgetExceeded:
+                # 当前分支，只是预算不足，但检索已有结果，有加入报告和保留的价值
+                return AgentOutput(
+                    success=True,
+                    answer="无法根据现有文档形成可引用的原因判断。",
+                    evidence=[],
+                    error_code="knowledge_support_context_budget_exceeded",
                     attempts=attempts,
                 )
             removed = sum(not sentence.kept for sentence in outcome.sentences)
