@@ -873,3 +873,9 @@
 - 做了什么：新增策略 sql/1（预算 4000、预留 512、超预算 reject，不压缩任何区段）和开关 CONTEXT_SQL_MODE（off/shadow/enforce，默认 shadow）；generate 两个分支只拼提示词，统一在一处经 sql_context_manifest 检查后调用模型，提示词不变；enforce 放不下抛 ContextBudgetExceeded，data_agent 不重试、不计模型调用，返回 sql_context_budget_exceeded（用户编写）。
 - 验证（本机）：新增 7 个测试（三种模式提示词逐字相同、放不下时模型调用 0 次、Data Agent 不重试）；全量单元 1508 passed / 4 skipped；ruff、pyright 通过。
 - 遗留：表结构在系统提示词里，引擎只能测量和拦截，拆成可压缩区段需改提示词并跑 SQL 评测（随 C4d）；冒烟未跑；lint-imports 交给 CI。
+
+## 2026-11-20 C4 上线与冒烟（main e3406a9，含 #39～#42）
+- 上线：无新迁移；构建 migrate/api/worker/report-worker/beat 镜像，重启 4 个应用服务，readiness 4 项 ok。冒烟 c4-deploy-r1（任务 999–1008，$0.024983，65,813 token）9 成功 + 混合题待复核，与 C3 一致。
+- Planner（10 次，planner/1:shadow）：引擎估算均值 1424、最大 1605，计费均值 1620、最大 1801（差约 196，模板文字和消息格式未计）；可用 2488，最多用到 65%，未触发压缩、丢弃或反问；history 白名单把 97 token 降到 11（单轮对话里只剩选取记录）；系统提示词 1307，占估算 92%。
+- SQL（4 次，sql/1:shadow）：估算均值 1246、最大 1298，可用 3488，最多 37%，0 次超预算。data 节点另有 4 次调用无清单，是 SQL 语义复核（C5 范围）。
+- 结论：两节点在当前题量下远未触及预算；enforce 的收益主要是去掉 history 里的选取记录（每次约 86 token），大头在 Planner 系统提示词（C4d）。
