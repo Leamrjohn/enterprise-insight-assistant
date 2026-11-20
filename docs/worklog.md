@@ -897,3 +897,8 @@
 - 验证：单元测试改 3 个锁定原文的期望后 1508 passed；付费路由评测 3 轮 27、26、26/39（每轮 1～2 题结构化输出修复后仍失败），长对话评测 3 轮都因同样的结构化输出错误中途退出；合计约 $0.07。
 - 原因（读录下的回复）：系统和流程类问题被分到 direct_response/scope_exit——删掉了“direct_response 仅用于”的“仅”，并把 scope_exit 的“与企业经营助手职责无关”改成“与企业经营无关”；模型漏写 clarification 等字段——旧提示词用三句强调“九个字段都要出现”，压成一句后变弱。
 - 处理：用户决定放弃，已恢复旧提示词、清单和测试，未提交任何提示词改动。教训：看似重复的句子和限定词可能在起作用，大幅改写前要先在同一套题上测旧版基线，再逐处改、逐处评测。该路由评测集现为 39 题，与历史记录的 43/48 不是同一套，旧版在 39 题上的基线未测。
+
+## 2026-11-20 C5a 三种语义复核接入上下文引擎（训练 + 共建；分支 feat/c5a-review-context）
+- 做了什么：新开关 CONTEXT_REVIEW_MODE（off/shadow/enforce，默认 shadow）；新策略 review_plan/1、review_sql/1（3000/256，reject），计划和 SQL 复核经 _review_context（用户编写）记录清单，修复调用同一份清单；证据复核 assemble 加 enforce，超预算抛 ContextBudgetExceeded；4 个调用方接住：SQL 复核返回 sql_review_context_budget_exceeded 且不执行查询，计划复核走反问不重试，证据复核记为未完成、发布仍由确定性校验决定。
+- 验证：新增 11 个测试；单元 1520 passed / 4 skipped；ruff、pyright 通过。未部署、未跑付费评测，线上仍为 shadow 前的版本。
+- 遗留：shadow 账本数据要部署后才有，enforce 默认不开。

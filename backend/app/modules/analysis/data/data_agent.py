@@ -238,6 +238,14 @@ class DataAgent(Agent):
                         catalog=self._snapshot_catalog,
                     )
                     attempts["semantic_review_attempts"] += 1
+                except ContextBudgetExceeded:
+                    # Refused before any model call; the same candidate cannot fit later.
+                    return AgentOutput(
+                        success=False,
+                        attempts=attempts,
+                        error="SQL 语义复核所需上下文超出预算，未调用模型。",
+                        error_code="sql_review_context_budget_exceeded",
+                    )
                 except (
                     PermanentModelError,
                     RetryableModelError,

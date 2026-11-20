@@ -49,6 +49,7 @@ from app.modules.analysis.metrics.claim_validation import assess_numeric_asserti
 from app.modules.analysis.metrics.metric_validation import assess_metric_query
 from app.modules.analysis.tool_protocol import ToolInput, ToolOutput
 from app.modules.reporting.semantic_review_service import SemanticReviewService
+from app.modules.runtime.context.engine import ContextBudgetExceeded
 from app.modules.runtime.tool_guard import outcome_of_failure
 from app.modules.runtime.tool_loop import (
     LoopLimits,
@@ -330,6 +331,13 @@ class _DataToolSession:
                 catalog=self._catalog,
             )
             self.attempts["semantic_review_attempts"] += 1
+        except ContextBudgetExceeded:
+            return self._stop(
+                "sql_review_context_budget_exceeded",
+                "SQL 语义复核所需上下文超出预算，未调用模型。",
+                candidate.sql,
+                candidate.purpose,
+            )
         except (
             PermanentModelError,
             RetryableModelError,
