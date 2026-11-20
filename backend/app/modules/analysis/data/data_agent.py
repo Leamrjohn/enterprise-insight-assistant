@@ -21,6 +21,7 @@ from app.modules.analysis.planner.planner_decision import EvaluationScope
 from app.modules.analysis.tool_protocol import Tool, ToolInput
 from app.modules.organizations.models import BusinessDataSource
 from app.modules.reporting.semantic_review_service import SemanticReviewService
+from app.modules.runtime.context.engine import ContextBudgetExceeded
 from pydantic import ValidationError
 
 
@@ -139,6 +140,15 @@ class DataAgent(Agent):
                     required_concepts=data_required_capabilities or None,
                     evaluation_scope=evaluation_scope,
                 )
+            except ContextBudgetExceeded:
+                attempts["model_attempts"] -= 1
+                return AgentOutput(
+                    success=False,
+                    attempts=attempts,
+                    error="经营数据查询所需上下文超出预算，未调用模型",
+                    error_code="sql_context_budget_exceeded",
+                )
+
             except PermanentModelError as error:
                 return AgentOutput(
                     success=False,
