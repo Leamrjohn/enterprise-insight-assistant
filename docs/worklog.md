@@ -929,6 +929,16 @@
 - 验证：新增 3 个测试（提示词文字逐字不变，先在旧代码上跑通；清单哈希与 token 等于资料文字；多带检索字段计量不变）；原测试期望 support/1 → support/2；单元 1541 passed / 4 skipped；ruff 通过。提示词未变，未部署，未跑付费评测。
 - 遗留：部署后看账本 support/2:shadow 是否还有超预算，再决定 Knowledge 是否开 enforce。
 
+## 2026-11-21 C5f 部署与冒烟（代做；main 80e7981）
+- 做了什么：重建并重启 api/worker/report-worker/beat（无迁移，其他容器未动），readiness 4 项 ok；容器内确认 support/2 与 _render_material 已就位。
+- 冒烟 c5f-deploy-r1（任务 1019–1028，$0.025768，67,879 token）：9 成功、1 失败。hybrid 失败与 C3～C5 部署时相同；knowledge-quality-batch-evidence 本次通过。
+- 账本：support/2:shadow 6 次、0 次超预算，最大估计 2843（实际 2591，可用 3488）；估计比实际高约 5～10%（上次 support/1 同题 3183 对 2591）。其他策略均未超预算。
+- 遗留：Knowledge 是否开 enforce，等另一会话的 Knowledge 端到端评测结果再定。
+
+## 2026-11-21 C5 Knowledge 端到端评测（代做；main 80e7981）
+- 做了什么：评测容器跑 run_support_evaluation（record、fixed、paragraph_jieba_rrf_rerank_v1），CONTEXT_KNOWLEDGE_MODE=enforce 只对本次评测生效；evaluation 镜像过旧缺 opentelemetry.sdk，已重建（未改依赖）；产物在 artifacts/evaluation-20261121-c5f-knowledge-enforce/。
+- 验证：脚本分 48/57（基线 fix_support_r1 49/57），第二评分 52/57（基线 52），真错题与基线相同 4 题（2025-01 毛利率、QR-0028 退款、销售额口径、逾期定义）；引用片段有答案 53（基线 52）；不可回答题带引用 0/10（基线 1/10）；句子 24 题支持率 1.0、误删 0；0 次超预算拒绝；135 次调用 $0.0575。
+- 遗留：脚本分少的 1 题是写法差异（宽松评分多接受 1 题），按原评分未达“不低于 49/57”；用户按第二评分 52/57（与基线相同）认定 C5 过验收；第一次漏挂 /data，多花 24 次调用约 $0.005（用户已批准重跑）。
 ## 2026-11-21 C8 长对话评测扩题（训练；分支 feat/c8-long-conversation-cases）
 - 做了什么：新题库 long_conversations_v2.json 43 题（v1 的 8 题原样在前，新增 35 题：远距离 8、注入 7、多约束 5、部分更正 4、撤销 3、指代 3、对照 3、噪声 2；留出 16）；build_messages 支持每题轮数、无约束和 inserts（用户写轮数一行，其余按用户要求由我完成）；score_case 加 must_contain_all；--max-calls 参数；默认题库改为 v2，原测试固定读 v1。
 - 验证：新增 11 个测试（含旧 8 题拼出的对话哈希不变）；单元 1552 passed / 4 skipped；ruff、pyright 通过。免费检查：现行正则在 ref-region-early-30、ref-tier-early、noise-flood-30 丢失约束，partial-override-far-30 找不到远处更正。未做付费录制。
