@@ -24,13 +24,11 @@ from app.modules.conversations.service import (
 )
 from scripts.evaluation.run_planner_route_evaluation import BudgetGuardGateway
 
-FIXTURE = (
-    Path(__file__).resolve().parents[2]
-    / "tests"
-    / "fixtures"
-    / "evaluation_context"
-    / "long_conversations_v1.json"
+FIXTURE_DIR = (
+    Path(__file__).resolve().parents[2] / "tests" / "fixtures" / "evaluation_context"
 )
+FIXTURE_V1 = FIXTURE_DIR / "long_conversations_v1.json"
+FIXTURE = FIXTURE_DIR / "long_conversations_v2.json"
 FILLER_QUESTION = "顺便问一下，这个系统的报告在哪里看？"
 FILLER_ANSWER = "报告可以在任务详情页查看，也可以导出。"
 
@@ -44,13 +42,35 @@ def build_messages(
     case: dict, filler_turns: int, filler_answer: str = FILLER_ANSWER
 ) -> list[SimpleNamespace]:
     """Constraint first (or, if "recent", near the end), then unrelated turns;
-    an override sits in the recent window."""
-    filler = [("user", FILLER_QUESTION), ("assistant", filler_answer)]
-    constraint = [("user", case["constraint"]), ("assistant", "好的，已记下。")]
+    an override sits in the recent window.
+
+    A case may set its own "filler_turns" and may have no "constraint".
+    Each of its "inserts" is a user/assistant pair placed after the
+    "after_pair"-th pair of that layout (0: before everything), counted before
+    any insert is placed; inserts at the same place keep their listed order.
+    """
+    filler_turns = case.get("filler_turns", filler_turns)
+    filler = (("user", FILLER_QUESTION), ("assistant", filler_answer))
+    constraint = (
+        [(("user", case["constraint"]), ("assistant", "好的，已记下。"))]
+        if case.get("constraint")
+        else []
+    )
     if case.get("constraint_position") == "recent":
-        contents = filler * filler_turns + constraint + filler * RECENT_TURNS_AFTER
+        pairs = [filler] * filler_turns + constraint + [filler] * RECENT_TURNS_AFTER
     else:
-        contents = constraint + filler * filler_turns
+        pairs = constraint + [filler] * filler_turns
+    inserts = case.get("inserts", [])
+    placed = []
+    for position in range(len(pairs) + 1):
+        placed += [
+            (("user", insert["user"]), ("assistant", insert["assistant"]))
+            for insert in inserts
+            if insert["after_pair"] == position
+        ]
+        if position < len(pairs):
+            placed.append(pairs[position])
+    contents = [message for pair in placed for message in pair]
     if case.get("override"):
         contents += [("user", case["override"]), ("assistant", "好的。")]
     return [
@@ -84,12 +104,16 @@ def score_case(case: dict, decision) -> dict:
         ]
     )
     required = case.get("must_contain") or []
+    # Several standing constraints: one word from every group must be there.
+    groups = case.get("must_contain_all") or []
     forbidden = [word for word in case.get("must_not_contain", []) if word in text]
     if decision.action != "analyze":
         passed = bool(case.get("allow_non_analyze")) and not forbidden
     else:
-        passed = (not required or any(word in text for word in required)) and (
-            not forbidden
+        passed = (
+            (not required or any(word in text for word in required))
+            and all(any(word in text for word in group) for group in groups)
+            and not forbidden
         )
     return {
         "case_id": case["case_id"],
@@ -128,6 +152,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--mode", choices=("record", "replay"), required=True)
     parser.add_argument("--cassette-dir", type=Path, required=True)
+    parser.add_argument("--max-calls", type=int, default=40)
     parser.add_argument("--max-cost", type=Decimal, default=Decimal("0.03"))
     parser.add_argument("--report", type=Path)
     parser.add_argument("--fixture", type=Path, default=FIXTURE)
@@ -140,7 +165,7 @@ def main() -> None:
         from app.core.gateway.factory import get_model_gateway
 
         guard = BudgetGuardGateway(
-            get_model_gateway(), max_calls=40, max_cost=args.max_cost
+            get_model_gateway(), max_calls=args.max_calls, max_cost=args.max_cost
         )
         gateway = RecordReplayGateway(args.cassette_dir, mode="record", inner=guard)
 
