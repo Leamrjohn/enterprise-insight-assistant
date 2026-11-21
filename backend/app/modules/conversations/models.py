@@ -6,6 +6,7 @@ from datetime import datetime
 
 from app.db.base import Base
 from sqlalchemy import CheckConstraint, DateTime, ForeignKey, String, Text, func
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 
@@ -88,3 +89,32 @@ class ConversationMessage(Base):
     )
 
     conversation: Mapped[Conversation] = relationship(back_populates="messages")
+
+
+class ConversationState(Base):
+    """Standing constraints and current subject of one conversation (C6).
+
+    Written only by code after a task is published; ``version`` is the
+    optimistic lock, so a stale writer updates nothing.
+    """
+
+    __tablename__ = "conversation_states"
+    __table_args__ = (CheckConstraint("version >= 1", name="version_positive"),)
+
+    conversation_id: Mapped[int] = mapped_column(
+        ForeignKey("conversations.id", ondelete="CASCADE"), primary_key=True
+    )
+    company_id: Mapped[int] = mapped_column(
+        ForeignKey("companies.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    version: Mapped[int] = mapped_column(nullable=False, server_default="1")
+    state: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    last_task_id: Mapped[int | None] = mapped_column(
+        ForeignKey("analysis_tasks.id", ondelete="SET NULL"), nullable=True
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
