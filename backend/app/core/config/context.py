@@ -27,8 +27,8 @@ class ContextConfig(ConfigDomain):
     # reporting/semantic_review_service.py (C5): plan, SQL and evidence review.
     # enforce refuses a review that cannot fit instead of sending it.
     context_review_mode: Literal["off", "shadow", "enforce"] = "shadow"
-    # knowledge/rag/support.py (C5): the support check; Knowledge answer later.
-    # enforce refuses a check that cannot fit instead of sending it.
+    # knowledge/rag/support.py and knowledge/agent.py (C5): the support check
+    # and the Knowledge answer; enforce refuses a call that cannot fit.
     context_knowledge_mode: Literal["off", "shadow", "enforce"] = "shadow"
 
     @field_validator(
