@@ -923,3 +923,8 @@
 - 冒烟 c5-deploy-r1（任务 1009–1018，$0.025596，67,726 token）：8 成功、1 结果错误、1 失败。hybrid 失败与 C3、C4 部署时相同；knowledge-quality-batch-evidence 结果错误（document_qualifications_supported），c2-baseline 出现过同一违规，C3、C4 部署时通过，本次未单独复现，不能确定是否与改动无关。
 - 账本：7 个新策略名都已出现；最大估计 token：planner/2 1606、sql/1 1298、review_sql/1 1395、review_plan/1 2122、evidence_review/2 1814、knowledge_answer/1 2045，均未超预算；support/1 6 次中 2 次超预算（最大 3183 > 可用 2488）。
 - 遗留：support/1 量的是带分数等元数据的完整片段字典，比实际提示词多算；修正计量前不能对 Knowledge 开 enforce。
+
+## 2026-11-21 C5f 支持检查按实际文字计量（训练 + 共建；分支 feat/c5f-support-rendered-context）
+- 做了什么：账本核实多算（任务 1018 清单估计 3183，同一计数器数实际提示词 2591）；新策略 support/2：evidences 区段改为量 _render_material 拼出的资料文字（与 _render_prompt 共用，用户编写），不再含分数、文件名等检索字段；预算 3000 → 4000（与 knowledge_answer/1 一致，用户选定），因改准后 2591 仍超旧可用 2488。
+- 验证：新增 3 个测试（提示词文字逐字不变，先在旧代码上跑通；清单哈希与 token 等于资料文字；多带检索字段计量不变）；原测试期望 support/1 → support/2；单元 1541 passed / 4 skipped；ruff 通过。提示词未变，未部署，未跑付费评测。
+- 遗留：部署后看账本 support/2:shadow 是否还有超预算，再决定 Knowledge 是否开 enforce。

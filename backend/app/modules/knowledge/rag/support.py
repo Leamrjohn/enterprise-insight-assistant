@@ -89,12 +89,12 @@ def _valid_in_window(evidence: dict, window: ValidityWindow) -> bool:
     return ends is None or date.fromisoformat(ends) >= window.start
 
 
-def _render_prompt(
-    question: str,
-    sentences: list[str],
-    evidences: list[dict],
-    confirmed_facts: list[str],
-) -> str:
+def _render_material(evidences: list[dict]) -> str:
+    """The chunks exactly as the model reads them: id, validity, scope, words.
+
+    Retrieval fields such as scores and document names are not shown, so the
+    manifest does not count them either.
+    """
     material = "\n".join(
         f'<evidence chunk_id="{e["chunk_id"]}"'
         + (
@@ -107,6 +107,16 @@ def _render_prompt(
         + f">\n{e['content']}\n</evidence>"
         for e in evidences
     )
+    return material
+
+
+def _render_prompt(
+    question: str,
+    sentences: list[str],
+    evidences: list[dict],
+    confirmed_facts: list[str],
+) -> str:
+    material = _render_material(evidences)
     numbered = "\n".join(
         f"{index}. {sentence.strip()}" for index, sentence in enumerate(sentences)
     )
@@ -180,7 +190,7 @@ def support_context_manifest(
     """The manifest recorded with one support check; enforce refuses one that
     cannot fit.
 
-    support/1 shrinks nothing, so a check that fits is sent exactly as built.
+    The policy shrinks nothing, so a check that fits is sent exactly as built.
     """
     mode = runtime_settings().context_knowledge_mode
     if mode == "off":
@@ -191,7 +201,7 @@ def support_context_manifest(
             "system": system_prompt,
             "question": question,
             "sentences": sentences,
-            "evidences": evidences,
+            "evidences": _render_material(evidences),
             "confirmed_facts": confirmed_facts,
         },
     )
