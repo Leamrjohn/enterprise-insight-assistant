@@ -1,5 +1,5 @@
 """C5c: the support check records its context and, under enforce, refuses
-what cannot fit."""
+what cannot fit.  C5f: it measures the chunks as the model reads them."""
 
 import json
 from datetime import date
@@ -13,11 +13,31 @@ from app.modules.knowledge.agent import KnowledgeAgent
 from app.modules.knowledge.rag.support import check_support
 from app.modules.knowledge.rag.validity import ValidityWindow
 from app.modules.runtime import model_governance
-from app.modules.runtime.context.engine import ContextBudgetExceeded
+from app.modules.runtime.context.engine import ContextBudgetExceeded, count_tokens
+from app.modules.runtime.context.manifest import content_hash
 
 TODAY = date(2026, 11, 2)
 CHUNK = {"chunk_id": 1, "document_id": 1, "content": "上限520元", "score": 0.9}
 HUGE = {**CHUNK, "content": "差旅报销上限520元。" * 600}
+# Retrieval fields the prompt never shows.
+RICH = {
+    **CHUNK,
+    "score": 0.1,
+    "rerank_score": 0.2,
+    "document_name": "差旅制度.md",
+    "paragraph_index": 3,
+}
+# Validity and scope are shown, so they are measured.
+SCOPED = {
+    **CHUNK,
+    "effective_from": "2026-01-01",
+    "effective_to": None,
+    "applies_to": "华东",
+}
+SCOPED_MATERIAL = (
+    '<evidence chunk_id="1" valid_from="2026-01-01" valid_to="至今"'
+    ' applies_to="华东">\n上限520元\n</evidence>'
+)
 VERDICTS = json.dumps(
     {"verdicts": [{"index": 0, "verdict": "supported", "chunk_ids": [1]}]}
 )
@@ -71,10 +91,37 @@ def test_the_check_sends_the_same_text_in_every_mode(mode, monkeypatch):
 
 
 def test_shadow_and_enforce_name_their_manifests(monkeypatch):
-    assert _check(monkeypatch, "shadow")[0]["manifest"].policy == "support/1:shadow"
+    assert _check(monkeypatch, "shadow")[0]["manifest"].policy == "support/2:shadow"
     manifest = _check(monkeypatch, "enforce")[0]["manifest"]
-    assert manifest.policy == "support/1"
+    assert manifest.policy == "support/2"
     assert all(entry.action == "kept" for entry in manifest.sections)
+
+
+def _evidences_entry(calls: list[dict]):
+    return next(e for e in calls[0]["manifest"].sections if e.name == "evidences")
+
+
+def test_the_prompt_text_is_unchanged(monkeypatch):
+    prompt = _check(monkeypatch, "off", evidence=SCOPED)[0]["prompt"]
+    assert prompt == (
+        f"资料：\n{SCOPED_MATERIAL}\n问题：上限是多少？"
+        "\n已确认经营事实：\n- 八月销售额 100 元\n待核对的句子：\n0. 上限520元。"
+    )
+
+
+def test_the_manifest_measures_the_chunks_as_the_prompt_shows_them(monkeypatch):
+    entry = _evidences_entry(_check(monkeypatch, "shadow", evidence=SCOPED))
+    assert entry.content_hash == content_hash(SCOPED_MATERIAL)
+    assert entry.original_tokens == count_tokens(SCOPED_MATERIAL)
+
+
+def test_fields_the_model_never_sees_are_not_counted(monkeypatch):
+    plain = _evidences_entry(_check(monkeypatch, "shadow"))
+    rich = _evidences_entry(_check(monkeypatch, "shadow", evidence=RICH))
+    assert (rich.content_hash, rich.original_tokens) == (
+        plain.content_hash,
+        plain.original_tokens,
+    )
 
 
 def test_shadow_still_sends_a_check_that_would_not_fit(monkeypatch):
