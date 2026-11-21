@@ -934,3 +934,8 @@
 - 冒烟 c5f-deploy-r1（任务 1019–1028，$0.025768，67,879 token）：9 成功、1 失败。hybrid 失败与 C3～C5 部署时相同；knowledge-quality-batch-evidence 本次通过。
 - 账本：support/2:shadow 6 次、0 次超预算，最大估计 2843（实际 2591，可用 3488）；估计比实际高约 5～10%（上次 support/1 同题 3183 对 2591）。其他策略均未超预算。
 - 遗留：Knowledge 是否开 enforce，等另一会话的 Knowledge 端到端评测结果再定。
+
+## 2026-11-21 C5 Knowledge 端到端评测（代做；main 80e7981）
+- 做了什么：评测容器跑 run_support_evaluation（record、fixed、paragraph_jieba_rrf_rerank_v1），CONTEXT_KNOWLEDGE_MODE=enforce 只对本次评测生效；evaluation 镜像过旧缺 opentelemetry.sdk，已重建（未改依赖）；产物在 artifacts/evaluation-20261121-c5f-knowledge-enforce/。
+- 验证：脚本分 48/57（基线 fix_support_r1 49/57），第二评分 52/57（基线 52），真错题与基线相同 4 题（2025-01 毛利率、QR-0028 退款、销售额口径、逾期定义）；引用片段有答案 53（基线 52）；不可回答题带引用 0/10（基线 1/10）；句子 24 题支持率 1.0、误删 0；0 次超预算拒绝；135 次调用 $0.0575。
+- 遗留：脚本分少的 1 题是写法差异（宽松评分多接受 1 题），按原评分未达“不低于 49/57”，是否算过 C5 验收待用户决定；第一次漏挂 /data，多花 24 次调用约 $0.005（用户已批准重跑）。
