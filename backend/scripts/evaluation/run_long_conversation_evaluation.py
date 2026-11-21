@@ -16,7 +16,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 from app.core.gateway.base import ModelGateway
-from app.core.gateway.replay import RecordReplayGateway
+from app.core.gateway.replay import RecordReplayGateway, request_key
 from app.modules.conversations.service import (
     MAX_CONTEXT_MESSAGES,
     build_conversation_context,
@@ -36,6 +36,17 @@ FILLER_ANSWER = "报告可以在任务详情页查看，也可以导出。"
 # A "recent" constraint has this many unrelated turns after it: inside the
 # conversation service's window of 8 messages, but not in its last 4.
 RECENT_TURNS_AFTER = 2
+
+
+class ResumingGateway(RecordReplayGateway):
+    """Record mode that reads a request already on disk instead of paying for it
+    again, so a run stopped by the budget guard can be finished."""
+
+    def chat(self, prompt, system_prompt=None, *, json_mode=False) -> str:
+        path = self._path(request_key(prompt, system_prompt, json_mode=json_mode))
+        if path.exists():
+            return json.loads(path.read_text(encoding="utf-8"))["response"]
+        return super().chat(prompt, system_prompt, json_mode=json_mode)
 
 
 def build_messages(
@@ -153,6 +164,9 @@ def main() -> None:
     parser.add_argument("--mode", choices=("record", "replay"), required=True)
     parser.add_argument("--cassette-dir", type=Path, required=True)
     parser.add_argument("--max-calls", type=int, default=40)
+    parser.add_argument(
+        "--resume", action="store_true", help="record: reuse cassettes on disk"
+    )
     parser.add_argument("--max-cost", type=Decimal, default=Decimal("0.03"))
     parser.add_argument("--report", type=Path)
     parser.add_argument("--fixture", type=Path, default=FIXTURE)
@@ -167,7 +181,8 @@ def main() -> None:
         guard = BudgetGuardGateway(
             get_model_gateway(), max_calls=args.max_calls, max_cost=args.max_cost
         )
-        gateway = RecordReplayGateway(args.cassette_dir, mode="record", inner=guard)
+        recorder = ResumingGateway if args.resume else RecordReplayGateway
+        gateway = recorder(args.cassette_dir, mode="record", inner=guard)
 
     fixture = json.loads(args.fixture.read_text(encoding="utf-8"))
     report = {
