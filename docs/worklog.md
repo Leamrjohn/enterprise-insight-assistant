@@ -917,3 +917,9 @@
 - 做了什么：记忆规则从代码搬进提示词注册表 review.evidence_memory_rule（1.0.0，文字原样）；新策略 evidence_review/2 = /1 加 system 区段；_evidence_context（用户编写）：off 照旧 /1，shadow 仍发 /1、清单记 /2:shadow，enforce 发 /2 且 payload 不含 system；assemble 去掉 C5a 加的 enforce 参数。原方案 A 开工前放弃：系统提示词计入同一次组装会让压缩提前触发、改变发出内容。
 - 验证：新增 5 个测试（420 行数据下 shadow 与 off 逐字相同而 /2 清单记压缩；记忆规则三种模式下文字不变）；test_context_manifest 期望改为 evidence_review/2:shadow（用户同意）；单元 1538 passed / 4 skipped；ruff、pyright 通过。未部署、未跑付费评测。
 - 遗留：enforce 下证据复核会比现在更早压缩，开 enforce 前需跑证据复核评测。
+
+## 2026-11-20 C5 部署与冒烟（代做；main 32b1a7a）
+- 做了什么：重建并重启 api/worker/report-worker/beat（无迁移，其他容器未动），readiness 4 项 ok；容器内确认新策略文件和 evidence_memory_rule.md 已就位。线上首次带上 planner/2（#44）和 C5 全部 shadow 清单。
+- 冒烟 c5-deploy-r1（任务 1009–1018，$0.025596，67,726 token）：8 成功、1 结果错误、1 失败。hybrid 失败与 C3、C4 部署时相同；knowledge-quality-batch-evidence 结果错误（document_qualifications_supported），c2-baseline 出现过同一违规，C3、C4 部署时通过，本次未单独复现，不能确定是否与改动无关。
+- 账本：7 个新策略名都已出现；最大估计 token：planner/2 1606、sql/1 1298、review_sql/1 1395、review_plan/1 2122、evidence_review/2 1814、knowledge_answer/1 2045，均未超预算；support/1 6 次中 2 次超预算（最大 3183 > 可用 2488）。
+- 遗留：support/1 量的是带分数等元数据的完整片段字典，比实际提示词多算；修正计量前不能对 Knowledge 开 enforce。
