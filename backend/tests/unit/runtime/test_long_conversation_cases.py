@@ -4,11 +4,13 @@ import hashlib
 import json
 from types import SimpleNamespace
 
+from app.core.gateway.replay import RecordReplayGateway
 from scripts.evaluation.run_long_conversation_evaluation import (
     FILLER_ANSWER,
     FILLER_QUESTION,
     FIXTURE,
     FIXTURE_V1,
+    ResumingGateway,
     build_messages,
     score_case,
 )
@@ -109,6 +111,24 @@ def test_must_contain_all_needs_one_word_from_every_group():
     assert score_case(case, decision("华东区已交付订单"))["passed"] is True
     assert score_case(case, decision("华东区 delivered 订单"))["passed"] is True
     assert score_case(case, decision("华东区订单"))["passed"] is False
+
+
+class CountingGateway:
+    def __init__(self):
+        self.calls = 0
+
+    def chat(self, prompt, system_prompt=None, *, json_mode=False):
+        self.calls += 1
+        return f"live {self.calls}"
+
+
+def test_resume_reads_what_is_recorded_and_pays_only_for_the_rest(tmp_path):
+    inner = CountingGateway()
+    RecordReplayGateway(tmp_path, mode="record", inner=inner).chat("a")  # type: ignore[arg-type]
+    resuming = ResumingGateway(tmp_path, mode="record", inner=inner)  # type: ignore[arg-type]
+    assert resuming.chat("a") == "live 1"
+    assert resuming.chat("b") == "live 2"
+    assert inner.calls == 2
 
 
 def pairs_in(case: dict, default_turns: int) -> int:
