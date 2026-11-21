@@ -56,5 +56,11 @@
       "qualification_rule"
     ],
     "sha256": "c2ccdf04a6da8b01f74d2782aebaff6f416de152d778ad631c7fe3596ad0ac03"
+  },
+  "review.evidence_memory_rule": {
+    "version": "1.0.0",
+    "file": "review/evidence_memory_rule.md",
+    "variables": [],
+    "sha256": "ad0bc076affdcee5bbf7f0e9ab3d3ce38ce893796725974d010fd9cbaca21107"
   }
 }

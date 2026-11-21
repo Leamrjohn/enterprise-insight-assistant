@@ -172,5 +172,6 @@ def test_evidence_review_and_its_repair_carry_the_manifest():
 
     assert len(gateway.manifests) == 2  # first answer was repaired
     assert all(m is not None for m in gateway.manifests)
-    assert {m.policy for m in gateway.manifests} == {"evidence_review/1"}
+    # Shadow by default: /1 is sent, /2 recorded (C5d).
+    assert {m.policy for m in gateway.manifests} == {"evidence_review/2:shadow"}
     assert model_governance._context_manifest.get() is None  # reset afterwards

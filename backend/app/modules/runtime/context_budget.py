@@ -9,7 +9,7 @@ constraint and is never touched, even if that leaves the call over budget.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Any
 
 from app.core.config.context import ContextConfig
@@ -19,7 +19,6 @@ from app.modules.runtime.context.engine import (
     SectionRule,
     build_context,
     count_tokens,
-    require_fit,
 )
 from app.modules.runtime.context.manifest import ContextManifest
 
@@ -80,16 +79,10 @@ def cap_chunk_text(knowledge_result: dict) -> dict:
 
 
 def assemble(
-    policy: ContextPolicy, sections: dict[str, Any], *, enforce: bool = False
+    policy: ContextPolicy, sections: dict[str, Any]
 ) -> tuple[dict[str, Any], ContextDecision]:
-    """The payload a node may send, and a record of what was done to it.
-
-    enforce (C5): an over-budget payload raises ContextBudgetExceeded instead
-    of being sent; without it, the payload is still sent as before.
-    """
+    """The payload a node may send, and a record of what was done to it."""
     build = build_context(policy, sections)
-    if enforce:
-        require_fit(build)
     actions = {entry.name: entry.action for entry in build.manifest.sections}
     decision = ContextDecision(
         node=policy.node,
@@ -144,4 +137,12 @@ EVIDENCE_REVIEW = ContextPolicy(
         "plan": Section(fields=_PLAN_FIELDS),
         "question": Section(),
     },
+)
+
+# C5d: the same sections plus the system prompt, which /1 never counted.
+# Counting it starts compression earlier, so shadow only records /2.
+EVIDENCE_REVIEW_V2 = replace(
+    EVIDENCE_REVIEW,
+    version="evidence_review/2",
+    sections={**EVIDENCE_REVIEW.sections, "system": Section(required=True)},
 )

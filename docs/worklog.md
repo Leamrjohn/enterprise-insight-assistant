@@ -912,3 +912,8 @@
 - 做了什么：方案 A 只计量——新策略 knowledge_answer/1（4000/1024，不压缩、不丢片段，reject），与 C5c 共用 CONTEXT_KNOWLEDGE_MODE；KnowledgeAgent 用 answer_context_manifest 量模型真正看到的内容（检索问题、追加规则后的系统提示词、build_prompt 选中的片段、事实句子，用户编写），enforce 超预算返回兜底回答、错误码 knowledge_answer_context_budget_exceeded，不调用模型也不进支持检查。
 - 验证：新增 7 个测试（含按内容哈希核对四个区段）；C5c 的 agent 测试改输入不改期望（改为回答放得下、核对 900 句放不下）；单元 1533 passed / 4 skipped；ruff、pyright 通过。提示词未变，未跑付费评测，未部署。
 - 遗留（待办）：C5c 支持检查的 evidences 区段量的是完整片段字典（含分数等元数据），比实际提示词多算，enforce 下可能误拒；按 token 丢片段为 knowledge_answer/2，需 Knowledge 评测。
+
+## 2026-11-20 C5d 证据复核计入系统提示词（训练 + 共建；分支 feat/c5d-evidence-system-context）
+- 做了什么：记忆规则从代码搬进提示词注册表 review.evidence_memory_rule（1.0.0，文字原样）；新策略 evidence_review/2 = /1 加 system 区段；_evidence_context（用户编写）：off 照旧 /1，shadow 仍发 /1、清单记 /2:shadow，enforce 发 /2 且 payload 不含 system；assemble 去掉 C5a 加的 enforce 参数。原方案 A 开工前放弃：系统提示词计入同一次组装会让压缩提前触发、改变发出内容。
+- 验证：新增 5 个测试（420 行数据下 shadow 与 off 逐字相同而 /2 清单记压缩；记忆规则三种模式下文字不变）；test_context_manifest 期望改为 evidence_review/2:shadow（用户同意）；单元 1538 passed / 4 skipped；ruff、pyright 通过。未部署、未跑付费评测。
+- 遗留：enforce 下证据复核会比现在更早压缩，开 enforce 前需跑证据复核评测。
