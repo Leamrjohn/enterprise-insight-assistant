@@ -949,3 +949,8 @@
 - 结果：开 31/43、关 8/43（开发 20/27、留出 11/16）。分类（开/关）：远距离 7/8、0/8；多约束 5/5、0/5；注入 7/7、1/7；对照 3/3、3/3；噪声 1/2；撤销 2/3；部分更正 0/4；指代 0/3；v1 6/8（year-2025 反问、later-override 仍按华东）。
 - 发现：近期窗口里的更正和撤销常被远处原约束盖过（later-override、partial-* 共 4 题）；指代题都反问；noise-flood-30 如预期丢失约束。withdraw-status-far-30 回答正确（“不按已交付筛选”），因 must_not_contain 撞上否定句被判错，是题目期望的问题；用户同意后 must_not_contain 改为“已交付订单”（范围里没有状态字段，只能看文字），录制文件免费重算：开 32/43、关 8/43 不变。
 - 验证：新增 1 个测试（续录只为未录请求付费）；长对话相关 24 passed；ruff、pyright 通过。
+
+## 2026-11-21 C6a 会话状态表与读写（共建；分支 feat/c6a-conversation-states，迁移 f8a9b0c1d2e3）
+- 做了什么：用户批准方案 A 与拆分（C6a→C6b→C6c→C6d→M7）及新表；新增 conversation_states（每会话一行，version 乐观锁，RLS 按 app.company_id）、ORM 模型、conversations/state.py（empty_state / load_state / save_state，版本对不上返回 False 不写）；尚无调用方，行为不变。
+- 验证：集成 5 个新测试（插入、更新、过期写入、副本、跨公司 RLS）通过；测试库迁移降级再升级通过；单元 1553 passed / 4 skipped；ruff、pyright、import-linter 通过。全量集成本地 120 passed / 28 failed，失败全在 test_sql_execution_layer（本地无 5435 演示库、平台服务不能当数据源），以 CI 为准。
+- 遗留：ORM 批量 insert 的 rowcount 不可靠，改用表级语句 + RETURNING；线上迁移需先备份，部署放到 M7。
