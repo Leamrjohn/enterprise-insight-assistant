@@ -18,7 +18,7 @@ from app.modules.runtime.context_budget import (
     count_tokens,
 )
 from scripts.evaluation.run_long_conversation_evaluation import (
-    FIXTURE,
+    FIXTURE_V1,
     build_messages,
     context_for,
 )
@@ -161,7 +161,7 @@ def test_standing_constraints_are_bounded_and_keep_the_newest():
 
 
 def test_long_conversation_fixture_loses_the_constraint_without_the_feature():
-    fixture = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    fixture = json.loads(FIXTURE_V1.read_text(encoding="utf-8"))
     for case in fixture["cases"]:
         messages = build_messages(case, fixture["filler_turns"])
         without = context_for(case, fixture["filler_turns"], with_constraints=False)
