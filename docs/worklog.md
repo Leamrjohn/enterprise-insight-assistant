@@ -928,3 +928,9 @@
 - 做了什么：账本核实多算（任务 1018 清单估计 3183，同一计数器数实际提示词 2591）；新策略 support/2：evidences 区段改为量 _render_material 拼出的资料文字（与 _render_prompt 共用，用户编写），不再含分数、文件名等检索字段；预算 3000 → 4000（与 knowledge_answer/1 一致，用户选定），因改准后 2591 仍超旧可用 2488。
 - 验证：新增 3 个测试（提示词文字逐字不变，先在旧代码上跑通；清单哈希与 token 等于资料文字；多带检索字段计量不变）；原测试期望 support/1 → support/2；单元 1541 passed / 4 skipped；ruff 通过。提示词未变，未部署，未跑付费评测。
 - 遗留：部署后看账本 support/2:shadow 是否还有超预算，再决定 Knowledge 是否开 enforce。
+
+## 2026-11-21 C5f 部署与冒烟（代做；main 80e7981）
+- 做了什么：重建并重启 api/worker/report-worker/beat（无迁移，其他容器未动），readiness 4 项 ok；容器内确认 support/2 与 _render_material 已就位。
+- 冒烟 c5f-deploy-r1（任务 1019–1028，$0.025768，67,879 token）：9 成功、1 失败。hybrid 失败与 C3～C5 部署时相同；knowledge-quality-batch-evidence 本次通过。
+- 账本：support/2:shadow 6 次、0 次超预算，最大估计 2843（实际 2591，可用 3488）；估计比实际高约 5～10%（上次 support/1 同题 3183 对 2591）。其他策略均未超预算。
+- 遗留：Knowledge 是否开 enforce，等另一会话的 Knowledge 端到端评测结果再定。
