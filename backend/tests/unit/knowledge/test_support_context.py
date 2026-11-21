@@ -97,21 +97,21 @@ def test_enforce_refuses_an_oversized_check_before_any_model_call(monkeypatch):
     assert gateway.calls == []
 
 
-class _HugeTool(Tool):
+class _ReadyTool(Tool):
     @property
     def name(self) -> str:
         return "rag_search"
 
     @property
     def description(self) -> str:
-        return "returns one very long chunk"
+        return "returns one short chunk"
 
     def execute(self, input: ToolInput) -> ToolOutput:
         return ToolOutput(
             success=True,
             data={
                 "status": "ready",
-                "evidences": [HUGE],
+                "evidences": [CHUNK],
                 "system_prompt": "s",
                 "user_prompt": "u",
                 "allowed_chunk_ids": [1],
@@ -121,12 +121,14 @@ class _HugeTool(Tool):
 
 def test_agent_cites_nothing_when_the_check_cannot_fit(monkeypatch):
     _mode(monkeypatch, "enforce")
+    # The answer call is small and fits; checking its many sentences does not.
     answer = json.dumps(
-        {"answer": "上限520元。", "citations": [{"chunk_id": 1}]}, ensure_ascii=False
+        {"answer": "上限520元。" * 900, "citations": [{"chunk_id": 1}]},
+        ensure_ascii=False,
     )
     gateway = _Gateway(answer, VERDICTS)
     output = KnowledgeAgent(
-        rag_tool=_HugeTool(), gateway=gateway, support_check=True
+        rag_tool=_ReadyTool(), gateway=gateway, support_check=True
     ).run(AgentInput(question="上限是多少？", user_id=1, context={"company_id": 1}))
     # The answer was written, the check was refused: nothing unchecked is cited.
     assert len(gateway.calls) == 1

@@ -907,3 +907,8 @@
 - 做了什么：新开关 CONTEXT_KNOWLEDGE_MODE（off/shadow/enforce，默认 shadow，C5b 将共用）；新策略 support/1（3000/512，不压缩片段，reject）；check_support 经 support_context_manifest 记录清单，发出文字不变；KnowledgeAgent 接住 ContextBudgetExceeded（用户编写），返回兜底回答、不引用任何片段，错误码 knowledge_support_context_budget_exceeded，success=True 使数据证据仍可走 partial。
 - 验证：新增 6 个测试；单元 1526 passed / 4 skipped；ruff、pyright 通过。未部署、未跑付费评测。
 - 遗留：片段压缩不做（截短会误删有支持的句子），需要时另开工单并跑支持检查评测。
+
+## 2026-11-20 C5b Knowledge 回答接入上下文引擎（训练 + 共建；分支 feat/c5b-knowledge-answer-context）
+- 做了什么：方案 A 只计量——新策略 knowledge_answer/1（4000/1024，不压缩、不丢片段，reject），与 C5c 共用 CONTEXT_KNOWLEDGE_MODE；KnowledgeAgent 用 answer_context_manifest 量模型真正看到的内容（检索问题、追加规则后的系统提示词、build_prompt 选中的片段、事实句子，用户编写），enforce 超预算返回兜底回答、错误码 knowledge_answer_context_budget_exceeded，不调用模型也不进支持检查。
+- 验证：新增 7 个测试（含按内容哈希核对四个区段）；C5c 的 agent 测试改输入不改期望（改为回答放得下、核对 900 句放不下）；单元 1533 passed / 4 skipped；ruff、pyright 通过。提示词未变，未跑付费评测，未部署。
+- 遗留（待办）：C5c 支持检查的 evidences 区段量的是完整片段字典（含分数等元数据），比实际提示词多算，enforce 下可能误拒；按 token 丢片段为 knowledge_answer/2，需 Knowledge 评测。

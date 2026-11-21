@@ -109,6 +109,7 @@ def test_business_reads_in_nodes_go_through_runtime_settings():
         "app/modules/analysis/planner/planning.py",
         "app/modules/knowledge/tool.py",
         "app/modules/knowledge/tool_agent.py",
+        "app/modules/knowledge/agent.py",
         "app/modules/knowledge/rag/support.py",
         "app/modules/knowledge/rag/retrieval.py",
         "app/modules/memory/service.py",
