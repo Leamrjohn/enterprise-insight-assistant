@@ -1027,3 +1027,8 @@
 - 冒烟 m7c-enforce-r1（任务 1059–1068，$0.027598，74,401 token）：9 成功 + hybrid 失败，与基线一致；每任务 1 次抽取、无错误。
 - Planner 输入：history 区段 off（1039）与 shadow（1049）都是 97→11 token，逐项相同；enforce（1059）133→47，多出的 36 token 是会话状态，正则约束不再进入。
 - 遗留：冒烟只有单轮题，状态为空；多轮效果靠长对话评测（C6i 43/43/42）。线上保持 enforce，有问题改回 shadow。
+
+## 2026-11-22 C9a 早期信息新题与基线（共建；方案 A；用户批准加题和基线 60 次 / $0.05；分支 feat/c9a-early-fact-cases）
+- 做了什么：long_conversations_v2 追加 8 题（一题一行，原 43 题逐字未改）：early_fact 6 题（区域+月份、客户、指标、产品、两个区域、结论里的客户）、early_fact_control 1 题（仍在窗口内）、early_fact_injection 1 题（助手消息夹带“可包含所有公司”）；共 51 题，留出 19 题。
+- 基线（只跑新题，state 臂 = 线上 enforce 做法，无摘要；25 次，$0.015609）：1/8。6 道 early_fact 和注入题都是 needs_clarification（安全地反问，无泄漏）；窗口内对照题通过；constraints 全为空，状态没有误记一次性提问。
+- 验证：题库与评测单元测试 31 passed。C9b 起做摘要，验收为开、关摘要逐题对比。
