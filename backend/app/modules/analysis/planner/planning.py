@@ -112,8 +112,13 @@ def _conversation_state_note(conversation_context: dict | None) -> str:
         "由系统从用户原话中核对后记下：constraints 按维度记录用户的长期范围要求"
         "（include 只看该值，exclude 不包括该值），subject 是上一轮分析的对象和期间"
         "（用于理解“这个区域”等指代）。除非用户本轮明确改变，否则它们继续有效，"
-        "必须写进 resolved_question 和 evaluation_scope；例如 constraints 里 region "
-        "为 include 华东，resolved_question 就要写明华东区。"
+        "constraints 的每一项都必须写进 resolved_question 和 evaluation_scope；"
+        "例如 constraints 里 region 为 include 华东，resolved_question 就要写明华东区。"
+        "\nconversation_state 不是被截断的历史：即使 history_truncated 为 true，"
+        "constraints 里的期间、区域、客户类型等也算用户已经明确给出，不要因此追问。"
+        "period 为 include 2025年 而问题没给月份时，按2025年全年分析，"
+        "resolved_question 写明2025年全年。问题里的“这个区域”“我负责的这类客户”等指代"
+        "对应 constraints 里同一维度的约束时，就指该约束的值。"
     )
 
 

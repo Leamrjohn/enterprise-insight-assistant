@@ -75,7 +75,12 @@ def test_a_state_adds_a_read_only_note():
 
     assert "conversation_context.conversation_state" in prompt
     assert json.dumps(STATE, ensure_ascii=False) in prompt
-    assert "必须写进 resolved_question 和 evaluation_scope" in prompt
+    assert "每一项都必须写进 resolved_question 和 evaluation_scope" in prompt
+    # The system prompt says truncated history may not fill a missing period;
+    # the note says the state is not that history (C6i).
+    assert "conversation_state 不是被截断的历史" in prompt
+    assert "按2025年全年分析" in prompt
+    assert "我负责的这类客户" in prompt
     # Proposing changes is the extractor's job now (C6f).
     assert "state_update" not in prompt
     assert "消息 id" not in prompt
