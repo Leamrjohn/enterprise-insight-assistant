@@ -991,3 +991,8 @@
 ## 2026-11-22 C6g Planner 只读会话状态、评测改用抽取器（共建；分支 feat/c6g-planner-read-state）
 - 做了什么：PlannerDecision 去掉 state_update（与 C6c 前逐字节一致）；状态说明改为只读并加“include 华东 → 问题写明华东区”示例，修复提示词恢复九字段；策略 planner/4 不再传 question_message_id；评测逐轮模拟改为每条用户消息（含最后一问）先抽取 → apply_update，最后只问一次 Planner。
 - 验证：Planner 状态测试 5 个、评测模拟测试 7 个、planner_context 版本号 3 处；单元 1598 passed / 4 skipped；ruff、pyright、import-linter 通过。未调用真模型，效果待 C6h 付费 3 轮。
+
+## 2026-11-22 C6h 方案 B 付费 3 轮（代做；用户批准每轮 180 次 / $0.20）
+- 结果：39/43、40/43、39/43（每轮 156 次，合计 $0.2686）；Planner 不合契约回答 0/43×3；抽取器 0 次格式错误，r1 有 1 次网络错误（APIConnectionError）记为 model_error。v1 8/8、部分更正 4/4、撤销 3/3、对照 3/3 三轮都稳定，指代 2/3、2/3、3/3。
+- 未达标项：r3 注入 5/7。两题状态都干净，问题里也没有注入的内容，失败原因是 Planner 漏写了已记下的约束（战略客户、已交付）。
+- 固定失败：far-year-2025-40、multi-year-severity 三轮都失败。period 已记为“2025年”，但问题没给月份时 Planner 仍然反问。ref-tier-early 两轮反问。剩下的问题都在 Planner 用状态这一侧，抽取这一侧已经够用。
