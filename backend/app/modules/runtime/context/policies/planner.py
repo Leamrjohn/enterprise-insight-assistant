@@ -10,7 +10,8 @@ PLANNER = ContextPolicy(
     node="planner",
     # 2: history is compressed by shortening assistant replies, not dropping turns.
     # 3: history may carry the conversation state and the question's message id.
-    version="planner/3",
+    # 4: the state is read-only, so the question's message id is no longer sent.
+    version="planner/4",
     budget_tokens=3000,
     output_reserve_tokens=512,
     sections={
@@ -24,7 +25,6 @@ PLANNER = ContextPolicy(
                 "history_truncated",
                 "standing_constraints",
                 "conversation_state",
-                "question_message_id",
             ),
             compress=compress_history,
         ),

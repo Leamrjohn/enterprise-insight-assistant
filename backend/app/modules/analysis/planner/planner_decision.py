@@ -2,15 +2,7 @@ import re
 from typing import Literal
 
 from app.modules.analysis.data.query_contract import ClarificationSpec, QuestionIntent
-from pydantic import (
-    BaseModel,
-    Field,
-    field_validator,
-    model_serializer,
-    model_validator,
-)
-
-MAX_STATE_UPDATES = 8
+from pydantic import BaseModel, Field, model_validator
 
 PlanAction = Literal[
     "analyze",
@@ -137,29 +129,6 @@ class PlannerDecision(BaseModel):
         default=None,
         description="供评测读取的结构化实体和业务期间；仅 analyze 可填写。",
     )
-    state_update: list[dict] = Field(
-        default_factory=list,
-        description=(
-            "对会话状态的提议（C6），仅在提示中给出会话状态时出现；"
-            "是否采纳由代码逐项校验，模型不能直接改状态。"
-        ),
-    )
-
-    @field_validator("state_update", mode="before")
-    @classmethod
-    def keep_only_proposal_objects(cls, value: object) -> list[dict]:
-        """A malformed proposal is dropped, never a reason to fail the plan."""
-        if not isinstance(value, list):
-            return []
-        return [item for item in value if isinstance(item, dict)][:MAX_STATE_UPDATES]
-
-    @model_serializer(mode="wrap")
-    def leave_out_an_empty_state_update(self, handler) -> dict:
-        """Without proposals a dumped plan is exactly what it was before C6c."""
-        data = handler(self)
-        if not data.get("state_update"):
-            data.pop("state_update", None)
-        return data
 
     @model_validator(mode="after")
     def validate_action_contract(self) -> "PlannerDecision":

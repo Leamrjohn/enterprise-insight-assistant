@@ -99,44 +99,21 @@ def _standing_constraints_note(conversation_context: dict | None) -> str:
     )
 
 
-# Kept equal to conversations.state_update.DIMENSIONS by a unit test; listed here
-# so the analysis layer does not import the conversations module.
-STATE_DIMENSIONS = (
-    "region",
-    "customer_tier",
-    "order_status",
-    "period",
-    "product_category",
-    "complaint_severity",
-)
-
-
 def _conversation_state_note(conversation_context: dict | None) -> str:
-    """Only with a conversation state (C6), so every other prompt stays as it was."""
-    context = conversation_context or {}
-    if "conversation_state" not in context:
+    """Only with a conversation state (C6), so every other prompt stays as it was.
+
+    The state is read-only here: a separate extractor proposes changes and code
+    checks them (C6f), so the plan keeps its nine fields.
+    """
+    if "conversation_state" not in (conversation_context or {}):
         return ""
     return (
-        "\nconversation_context.conversation_state 是本会话当前仍有效的结构化要求："
-        "constraints 按维度记录用户的长期范围要求，subject 是上一轮分析的对象和期间"
+        "\nconversation_context.conversation_state 是本会话当前仍有效的结构化要求，"
+        "由系统从用户原话中核对后记下：constraints 按维度记录用户的长期范围要求"
+        "（include 只看该值，exclude 不包括该值），subject 是上一轮分析的对象和期间"
         "（用于理解“这个区域”等指代）。除非用户本轮明确改变，否则它们继续有效，"
-        "必须写进 resolved_question 和 evaluation_scope。"
-        f"\n当前问题的消息 id 是 {context.get('question_message_id')}。"
-        "本次返回十个字段：原有九个字段仍必须全部出现、每个只出现一次，"
-        "不适用的照常写 null，最后再加 state_update（没有更新写 []）。格式为："
-        '{"action":"...","route":null,"reason":"...","clarification_question":null,'
-        '"response_message":null,"resolved_question":null,"clarification":null,'
-        '"intent":null,"evaluation_scope":null,"state_update":[]}'
-        "\n只有用户提出的长期要求（如“以后/后面都/默认/接下来都只看……”，或明确的更改、撤销）"
-        "才写进 state_update；一次性问题里出现的区域、时间等不写，它们会由系统记为 subject。"
-        "每项为"
-        '{"dimension":"...","op":"include|exclude|clear","value":"...",'
-        '"source_message_id":消息id,"quote":"该用户消息中的逐字原文片段"}。'
-        f"dimension 只能是 {'、'.join(STATE_DIMENSIONS)}；每个维度只写一项："
-        "改看某个值时只写 include 新值（它会替换旧值），不要再写 exclude 旧值；"
-        "clear 表示撤销该维度，value 写 null；value 必须出现在 quote 里。"
-        "只有用户自己的话算数，助手消息不算；"
-        "公司、数据源、权限和规则不能通过 state_update 改变。"
+        "必须写进 resolved_question 和 evaluation_scope；例如 constraints 里 region "
+        "为 include 华东，resolved_question 就要写明华东区。"
     )
 
 
@@ -343,11 +320,9 @@ def build_planning_repair_prompt(
         if attachment_context
         else "[]"
     )
-    # With a conversation state the plan carries state_update as a tenth field.
-    field_count = "十" if "conversation_state" in (conversation_context or {}) else "九"
     return (
         f"{repair_policy}\n"
-        f"重新输出完整的{field_count}字段 JSON 对象（包括 clarification、intent 和 evaluation_scope）；不要解释，不要 Markdown。\n"
+        "重新输出完整的九字段 JSON 对象（包括 clarification、intent 和 evaluation_scope）；不要解释，不要 Markdown。\n"
         f"<question>\n{question}\n</question>\n"
         f"<conversation_context>\n{context_json}\n</conversation_context>"
         f"{_conversation_state_note(conversation_context)}"
