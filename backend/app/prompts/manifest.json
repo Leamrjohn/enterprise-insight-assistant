@@ -68,5 +68,11 @@
     "file": "conversation/state_extract.md",
     "variables": [],
     "sha256": "bb9b0d044cbdf39d00aa788e61d62b7ae20cdc6244f0a0c48d74bd38b9eee24b"
+  },
+  "conversation.summary": {
+    "version": "1.0.0",
+    "file": "conversation/summary.md",
+    "variables": [],
+    "sha256": "40b862a11ac8e5f42f80f2c2c771057a194b13d8fe70f7e302f9f3ab78eba507"
   }
 }

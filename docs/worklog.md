@@ -1038,3 +1038,8 @@
 - 验证：会话单元 + 集成测试 89 passed 1 skipped；测试库迁移往返 ok；ruff、pyright 0 错误。线上库未迁移。
 - 待办：test_off_freezes_nothing 依赖本机配置的 CONVERSATION_STATE_MODE（本机为 enforce 时失败），应在测试里固定为 off；本次未改。
 - 下一步：摘要提示词待用户确认后登记 manifest，再写摘要调用。
+
+## 2026-11-22 C9b-2 摘要提示词与摘要调用（共建；用户确认提示词；分支 feat/c9b-summarizer，从 C9b-1 切出）
+- 做了什么：登记提示词 conversation.summary；上下文策略 summary/1（4000 token，留 1024 给输出，旧要点和新消息都不可丢，放不下则拒绝）；summarizer.summarize 一次 JSON 调用，失败一律返回空提议加原因，不抛异常。
+- 验证：单元测试 1640 passed 4 skipped；ruff、pyright 0 错误；import-linter 2 kept。未调用真实模型，未接主链。
+- 下一步：C9c 发布后的后台摘要任务和 Planner 的 history_summary 区段（改主链，先问）。
