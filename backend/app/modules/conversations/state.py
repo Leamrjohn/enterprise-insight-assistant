@@ -3,7 +3,7 @@
 The state replaces the regex-found standing constraints: what the user asked to
 keep applying, one value per dimension, plus the subject of the last analysis.
 Only code writes it, after a task is published; how a Planner proposal becomes
-a new state is decided elsewhere (``apply_update``, C6b).
+a new state is decided in ``state_update.apply_update`` (C6b).
 """
 
 from __future__ import annotations
