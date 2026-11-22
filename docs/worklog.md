@@ -969,3 +969,8 @@
 - 做了什么：run_long_conversation_evaluation.py 新增 state_context / simulate_state / decide_with_state / evaluate_with_state 和 --arms（standing、none、state；默认前两组，旧命令结果不变）；每条非闲聊用户消息逐轮问 Planner，提议过 apply_update，analyze 的范围设为主题，最后提问；报告记每题最终约束和被拒提议。simulate_state 按用户要求由我写。
 - 验证：新增 6 个测试（只问非闲聊轮、每轮只见之前历史和当时状态、后者覆盖、引用助手被拒并记 message_id、范围成主题、最终问题 id）；单元 1589 passed / 4 skipped；ruff、pyright 通过；C8 录制回放默认两组仍 32/43、8/43，0 次调用。
 - 遗留：付费 3 轮见下一条。
+
+## 2026-11-21 C6d 会话状态付费 3 轮（代做；用户批准每轮 130 次 / $0.20）
+- 结果：r1 39/43（114 次 $0.1255；部分更正 4/4、指代 2/3、注入 7/7、对照 3/3，达标）；r3 36/43（117 次 $0.1275；对照 2/3，未达标）；r2 在第 32 条回答处崩溃（Planner 连续返回不合契约的 JSON，重试用完抛 StructuredOutputError，续跑复用录制稳定复现）。三轮验收未通过。
+- 发现：带状态说明后 Planner 回答出现不合契约（缺 response_message、clarification 键重复）：r1 1/86、r2 3/32、r3 2/87，C8 基线 0/80，原因是说明里“额外加第十个字段”让模型打乱字段。另两类稳定失败：“改看华南区，不再看华东区”只记成排除华东（同维度 include 与 exclude 抢一个槽，后者覆盖）；一次性提问被记成长期约束（control-one-off）。
+- 待办：说明里给出完整十字段骨架、规定“改看 X 只写 include X”、一次性提问的范围只进主题不进约束；评测脚本把 Planner 失败记为该题失败而非崩溃；改完重跑 3 轮。
