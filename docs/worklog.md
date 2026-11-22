@@ -964,3 +964,8 @@
 - 做了什么：PlannerDecision 加可选 state_update（非列表视为空、非对象项丢弃、最多 8 项；为空时不进 model_dump，持久化内容不变）；planning.py 加 _conversation_state_note，仅当会话上下文含 conversation_state 时追加说明（当前消息 id、6 个维度、只认用户原话、公司和权限不能改），普通和修复提示词都接；上下文策略升 planner/3，history 放行 conversation_state、question_message_id。
 - 验证：新增 12 个测试（无状态时 3 种提示词哈希与改前一致、维度与 C6b 白名单一致、enforce 保留状态）；test_planner_context 3 处版本号 planner/2→planner/3（用户同意）；单元 1583 passed / 4 skipped；ruff、pyright、import-linter 通过。
 - 遗留：真实模型是否按说明提议未验证，待 C6d 付费评测。
+
+## 2026-11-21 C6d 长对话评测逐轮模拟会话状态（训练；分支 feat/c6d-state-evaluation）
+- 做了什么：run_long_conversation_evaluation.py 新增 state_context / simulate_state / decide_with_state / evaluate_with_state 和 --arms（standing、none、state；默认前两组，旧命令结果不变）；每条非闲聊用户消息逐轮问 Planner，提议过 apply_update，analyze 的范围设为主题，最后提问；报告记每题最终约束和被拒提议。simulate_state 按用户要求由我写。
+- 验证：新增 6 个测试（只问非闲聊轮、每轮只见之前历史和当时状态、后者覆盖、引用助手被拒并记 message_id、范围成主题、最终问题 id）；单元 1589 passed / 4 skipped；ruff、pyright 通过；C8 录制回放默认两组仍 32/43、8/43，0 次调用。
+- 遗留：付费 3 轮见下一条。

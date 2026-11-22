@@ -11,9 +11,11 @@ from __future__ import annotations
 
 import argparse
 import json
+from collections.abc import Callable
 from decimal import Decimal
 from pathlib import Path
 from types import SimpleNamespace
+from typing import Any
 
 from app.core.gateway.base import ModelGateway
 from app.core.gateway.replay import RecordReplayGateway, request_key
@@ -21,6 +23,11 @@ from app.modules.conversations.service import (
     MAX_CONTEXT_MESSAGES,
     build_conversation_context,
     find_standing_constraints,
+)
+from app.modules.conversations.state import empty_state
+from app.modules.conversations.state_update import (
+    apply_update,
+    set_subject,
 )
 from scripts.evaluation.run_planner_route_evaluation import BudgetGuardGateway
 
@@ -135,6 +142,96 @@ def score_case(case: dict, decision) -> dict:
     }
 
 
+# (question, conversation_context) -> PlannerDecision; a function so tests can
+# script the Planner without a gateway.
+Planner = Callable[[str, dict], Any]
+
+
+def state_context(
+    history: list[SimpleNamespace], state: dict, question_message_id: int
+) -> dict:
+    """What the Planner sees with a conversation state (C6): recent history as
+    the conversation service selects it, the state, and the question's id."""
+    context = build_conversation_context(history)
+    context["conversation_state"] = state
+    context["question_message_id"] = question_message_id
+    return context
+
+
+def simulate_state(
+    planner: Planner, messages: list[SimpleNamespace]
+) -> tuple[dict, list[dict]]:
+    """Replay the conversation turn by turn and return (state, rejected items).
+
+    Starting from ``empty_state()``, every user message that is not the
+    filler question is asked as the current question, with the messages
+    before it as history and the state so far (``state_context``).  Its
+    ``state_update`` goes through ``apply_update`` with the messages up to and
+    including that one; each rejected item is logged with ``message_id``.  If
+    the Planner chose ``analyze`` with an ``evaluation_scope``, that scope
+    becomes the subject (``set_subject``).
+    """
+    state = empty_state()
+    rejected: list[dict] = []
+    for position, message in enumerate(messages):
+        if message.role != "user" or message.content == FILLER_QUESTION:
+            continue
+        decision = planner(
+            message.content, state_context(messages[:position], state, message.id)
+        )
+        state, dropped = apply_update(
+            state, decision.state_update, messages[: position + 1]
+        )
+        rejected += [{"message_id": message.id, **item} for item in dropped]
+        scope = decision.evaluation_scope
+        if decision.action == "analyze" and scope is not None:
+            state = set_subject(state, scope.entities, scope.period)
+    return state, rejected
+
+
+def decide_with_state(
+    planner: Planner, case: dict, filler_turns: int, filler_answer: str = FILLER_ANSWER
+) -> tuple[Any, dict, list[dict]]:
+    """The final question after the simulated turns; its id follows the last one."""
+    messages = build_messages(case, filler_turns, filler_answer)
+    state, rejected = simulate_state(planner, messages)
+    decision = planner(
+        case["question"], state_context(messages, state, len(messages) + 1)
+    )
+    return decision, state, rejected
+
+
+def evaluate_with_state(gateway: ModelGateway, fixture: dict) -> dict:
+    from app.modules.analysis.planner.planning import PlanningService
+
+    def planner(question: str, context: dict):
+        service = PlanningService(gateway=gateway, sleeper=lambda _seconds: None)
+        return service.decide(question, conversation_context=context)
+
+    rows = []
+    for case in fixture["cases"]:
+        decision, state, rejected = decide_with_state(
+            planner,
+            case,
+            fixture["filler_turns"],
+            fixture.get("filler_answer", FILLER_ANSWER),
+        )
+        rows.append(
+            {
+                **score_case(case, decision),
+                "constraints": state["constraints"],
+                "rejected": rejected,
+            }
+        )
+    return {
+        "passed": sum(r["passed"] for r in rows),
+        "cases": len(rows),
+        "failed": [r["case_id"] for r in rows if not r["passed"]],
+        "rejected_items": sum(len(r["rejected"]) for r in rows),
+        "rows": rows,
+    }
+
+
 def evaluate(gateway: ModelGateway, fixture: dict, *, with_constraints: bool) -> dict:
     from app.modules.analysis.planner.planning import PlanningService
 
@@ -170,7 +267,15 @@ def main() -> None:
     parser.add_argument("--max-cost", type=Decimal, default=Decimal("0.03"))
     parser.add_argument("--report", type=Path)
     parser.add_argument("--fixture", type=Path, default=FIXTURE)
+    parser.add_argument(
+        "--arms",
+        default="standing,none",
+        help="comma list of standing (regex constraints), none, state (C6)",
+    )
     args = parser.parse_args()
+    arms = set(args.arms.split(","))
+    if not arms <= {"standing", "none", "state"}:
+        parser.error(f"unknown arm in {args.arms}")
 
     guard: BudgetGuardGateway | None = None
     if args.mode == "replay":
@@ -185,14 +290,19 @@ def main() -> None:
         gateway = recorder(args.cassette_dir, mode="record", inner=guard)
 
     fixture = json.loads(args.fixture.read_text(encoding="utf-8"))
-    report = {
-        "with_standing_constraints": evaluate(gateway, fixture, with_constraints=True),
-        "without_standing_constraints": evaluate(
+    report: dict = {}
+    if "standing" in arms:
+        report["with_standing_constraints"] = evaluate(
+            gateway, fixture, with_constraints=True
+        )
+    if "none" in arms:
+        report["without_standing_constraints"] = evaluate(
             gateway, fixture, with_constraints=False
-        ),
-        "model_calls": guard.calls if guard else 0,
-        "estimated_cost_usd": str(guard.estimated_cost) if guard else "0",
-    }
+        )
+    if "state" in arms:
+        report["with_conversation_state"] = evaluate_with_state(gateway, fixture)
+    report["model_calls"] = guard.calls if guard else 0
+    report["estimated_cost_usd"] = str(guard.estimated_cost) if guard else "0"
     if args.report:
         args.report.write_text(
             json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8"
