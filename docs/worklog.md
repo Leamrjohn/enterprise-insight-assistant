@@ -1011,6 +1011,7 @@
 - 冒烟 m7b-deploy-r1（任务 1029–1038，$0.028941，77,667 token）：2 成功、7 结果错误、1 失败；6 题只违反 within_budget，knowledge-quality-batch-evidence 任务预算用完（model_budget_exhausted）只得部分结果。state_extraction 记录在、提议 0 条；根因是抽取调用算进了任务 8 次上限和用例的 max_model_calls。
 - 回退：用户改回 off，重建 4 个服务；冒烟 m7b-off-r1（任务 1039–1048，$0.024973，65,848 token）9 成功 + hybrid 失败，回到 C5f 基线。迁移和表保留。
 - 遗留：M7c 让状态抽取不占任务原有调用预算，之后再开 shadow。
+
 ## 2026-11-22 M7c 状态抽取单独额度（共建；方案 A；分支 feat/m7c-state-extract-budget）
 - 做了什么：冻结了状态的任务在预算快照里多 state_extract_max_calls=1 和 token +4024（策略 3000 + 输出上限 1024），费用上限不变；reserve_model_call 对抽取节点只查自己的额度（旧任务为 0 不能抽取），其他节点计数扣除抽取次数；抽取器遇到额度用完返回 model_budget_exhausted 不提议；评测 _answer_path 让用例调用/token 上限不计抽取，费用仍计入。
 - 验证：单元 1611 passed / 4 skipped（新增 2 个）；集成新增 3 个通过，全量 126 passed / 28 failed（已知本地 test_sql_execution_layer）；ruff、pyright、import-linter 通过。未部署，用例期望未改。
