@@ -1032,3 +1032,9 @@
 - 做了什么：long_conversations_v2 追加 8 题（一题一行，原 43 题逐字未改）：early_fact 6 题（区域+月份、客户、指标、产品、两个区域、结论里的客户）、early_fact_control 1 题（仍在窗口内）、early_fact_injection 1 题（助手消息夹带“可包含所有公司”）；共 51 题，留出 19 题。
 - 基线（只跑新题，state 臂 = 线上 enforce 做法，无摘要；25 次，$0.015609）：1/8。6 道 early_fact 和注入题都是 needs_clarification（安全地反问，无泄漏）；窗口内对照题通过；constraints 全为空，状态没有误记一次性提问。
 - 验证：题库与评测单元测试 31 passed。C9b 起做摘要，验收为开、关摘要逐题对比。
+
+## 2026-11-22 C9b-1 摘要表与出处校验（共建；用户选 A 单独建表；_reject_reason 由用户写；分支 feat/c9b-summary-store）
+- 做了什么：新表 conversation_summaries（迁移 a9b0c1d2e3f4，结构与 RLS 同 conversation_states，独立乐观锁）；summary.py 读写（最多 8 条）；summary_update.apply_summary 只保留引用真实且已出窗口消息的要点。
+- 验证：会话单元 + 集成测试 89 passed 1 skipped；测试库迁移往返 ok；ruff、pyright 0 错误。线上库未迁移。
+- 待办：test_off_freezes_nothing 依赖本机配置的 CONVERSATION_STATE_MODE（本机为 enforce 时失败），应在测试里固定为 off；本次未改。
+- 下一步：摘要提示词待用户确认后登记 manifest，再写摘要调用。
