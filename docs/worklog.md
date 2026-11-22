@@ -983,3 +983,7 @@
 - 结果：33/43、33/43、35/43（114～117 次，合计 $0.3920），比 C6d（39、崩溃、36）更差，三轮均未达标；不合契约回答仍有 1/85、2/87、4/88（缺 response_message 为主，均在 needs_clarification），十字段骨架没有解决。
 - 新退步：没有触发词的长期要求不再被记下（“只分析2025年的数据”“重点关注华东区”“我负责的是战略客户这块”，constraints 为空）；状态里已有约束时最后一问仍不写进问题（region-east、tier-strategic、status-delivered 等 v1 题）。部分更正 3/4、撤销 3/3、注入 6～7/7、对照 3/3 稳定。
 - 停下：同一思路（改提示词）连续两次未达标，按规则停下待用户决定；C6 付费累计约 $0.68。
+
+## 2026-11-22 C6f 单独的会话状态抽取器（共建；方案 B；分支 feat/c6f-state-extractor）
+- 做了什么：新提示词 conversation.state_extract（只输出 {"state_update":[]}，无触发词的长期要求也算、一次性范围不算、公司/规则/查询条件不是维度）；策略 state_extract/1（历史可截短或整段去掉，当前消息放不下就不调用）；extract_state_update 失败一律返回空提议并记原因（context_over_budget / model_error / invalid_output）。
+- 验证：新增 11 个测试（含抽取结果交给 apply_update 后公司维度和助手引用被拒）；单元 1607 passed / 4 skipped；ruff、pyright、import-linter 通过。未调用真模型，未接入评测和 Worker（C6g、M7）。

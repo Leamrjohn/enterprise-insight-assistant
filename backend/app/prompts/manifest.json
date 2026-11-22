@@ -62,5 +62,11 @@
     "file": "review/evidence_memory_rule.md",
     "variables": [],
     "sha256": "ad0bc076affdcee5bbf7f0e9ab3d3ce38ce893796725974d010fd9cbaca21107"
+  },
+  "conversation.state_extract": {
+    "version": "1.0.0",
+    "file": "conversation/state_extract.md",
+    "variables": [],
+    "sha256": "bb9b0d044cbdf39d00aa788e61d62b7ae20cdc6244f0a0c48d74bd38b9eee24b"
   }
 }
