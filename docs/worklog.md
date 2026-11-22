@@ -1015,3 +1015,9 @@
 ## 2026-11-22 M7c 状态抽取单独额度（共建；方案 A；分支 feat/m7c-state-extract-budget）
 - 做了什么：冻结了状态的任务在预算快照里多 state_extract_max_calls=1 和 token +4024（策略 3000 + 输出上限 1024），费用上限不变；reserve_model_call 对抽取节点只查自己的额度（旧任务为 0 不能抽取），其他节点计数扣除抽取次数；抽取器遇到额度用完返回 model_budget_exhausted 不提议；评测 _answer_path 让用例调用/token 上限不计抽取，费用仍计入。
 - 验证：单元 1611 passed / 4 skipped（新增 2 个）；集成新增 3 个通过，全量 126 passed / 28 failed（已知本地 test_sql_execution_layer）；ruff、pyright、import-linter 通过。未部署，用例期望未改。
+
+## 2026-11-22 M7c 部署、shadow 冒烟回到基线（代做；main 404da8b）
+- 上线：重建并重启 api/worker/report-worker/beat（无迁移），readiness 4 项 ok，四个服务读到 CONVERSATION_STATE_MODE=shadow。
+- 冒烟 m7c-shadow-r1（任务 1049–1058，$0.027465，73,480 token）：9 成功 + hybrid 失败，与 C5f 基线一致；知识题不再预算用完。比 off 多约 7,600 token、$0.0025（每任务 1 次抽取）。
+- 状态：10 个任务都有 state_extraction（error null、提议 0 条，单轮题符合预期），每任务恰 1 次 state_extract/1 调用，预算快照带 state_extract_max_calls=1；conversation_states 已写入 19 行（均为 version 1）。
+- 遗留：shadow 下 Planner 仍用正则约束；切 enforce 前需要线上多轮对话的数据或再跑长对话评测，由用户决定。
