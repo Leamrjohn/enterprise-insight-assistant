@@ -28,3 +28,5 @@ SUMMARY = ContextPolicy(
     },
     on_over_budget="reject",
 )
+# Calls a task may spend on its summary, outside its max_calls.
+SUMMARY_MAX_CALLS = 1

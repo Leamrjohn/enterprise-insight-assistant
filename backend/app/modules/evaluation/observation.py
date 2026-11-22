@@ -19,7 +19,7 @@ from app.modules.evaluation.business_schemas import (
 from app.modules.observability.rejection_audit import AnalysisRequestRejection
 from app.modules.reporting.schemas import FinalAnalysisReport
 from app.modules.reviews.models import ReviewRequest
-from app.modules.runtime.context.policies.state_extract import STATE_EXTRACT
+from app.modules.runtime.model_governance import OWN_ALLOWANCES
 from app.modules.workflow.audit.events_models import WorkflowEvent
 from app.modules.workflow.audit.model_call import ModelCallRecord
 from app.modules.workflow.audit.tool_call import ToolCallRecord
@@ -223,12 +223,13 @@ def _citation_security_status(
 
 
 def _answer_path(calls: list[ModelCallRecord]) -> list[ModelCallRecord]:
-    """The calls a case's call and token limits apply to (M7c).
+    """The calls a case's call and token limits apply to (M7c, C9).
 
-    State extraction has its own allowance per task, so it is left out here;
-    its cost still counts, and provider_model_calls_by_node still lists it.
+    State extraction and the summary have their own allowance per task, so
+    they are left out here; their cost still counts, and
+    provider_model_calls_by_node still lists them.
     """
-    return [call for call in calls if call.node_name != STATE_EXTRACT.node]
+    return [call for call in calls if call.node_name not in OWN_ALLOWANCES]
 
 
 def _model_cost_observation(

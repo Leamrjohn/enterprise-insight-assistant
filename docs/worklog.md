@@ -1043,3 +1043,8 @@
 - 做了什么：登记提示词 conversation.summary；上下文策略 summary/1（4000 token，留 1024 给输出，旧要点和新消息都不可丢，放不下则拒绝）；summarizer.summarize 一次 JSON 调用，失败一律返回空提议加原因，不抛异常。
 - 验证：单元测试 1640 passed 4 skipped；ruff、pyright 0 错误；import-linter 2 kept。未调用真实模型，未接主链。
 - 下一步：C9c 发布后的后台摘要任务和 Planner 的 history_summary 区段（改主链，先问）。
+
+## 2026-11-22 C9c-1a 摘要开关与单独额度（共建；用户批准改主链、选 A 直接投递；分支 feat/c9c-summary-allowance，从 C9b-2 切出）
+- 做了什么：新配置 CONVERSATION_SUMMARY_MODE（off/shadow/enforce，默认 off）；非 off 时会话任务创建即得 summary_max_calls=1 与额外 token；model_governance 用 OWN_ALLOWANCES 统一抽取和摘要的单独额度，答题路径的 max_calls 不被占；评测的 _answer_path 也排除摘要调用。
+- 验证：单元 1640 passed 4 skipped；workflow 集成 54 passed 3 skipped（含额度 4 例）；ruff、pyright 0 错误；import-linter 2 kept。默认 off，线上无变化。
+- 下一步：C9c-1b 发布后投递摘要任务。

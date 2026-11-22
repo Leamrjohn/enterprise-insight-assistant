@@ -13,6 +13,7 @@ from app.core.settings import MAX_LLM_TIMEOUT_SECONDS
 from app.db.clock import database_now
 from app.modules.runtime.context.manifest import ContextManifest
 from app.modules.runtime.context.policies.state_extract import STATE_EXTRACT
+from app.modules.runtime.context.policies.summary import SUMMARY
 from app.modules.runtime.context_measurement import (
     context_usage,
     gateway_sections,
@@ -22,6 +23,13 @@ from app.modules.workflow.audit.model_call import ModelCallRecord
 from app.modules.workflow.lifecycle.execution_attempt import TaskExecutionAttempt
 from app.modules.workflow.models import AnalysisTask
 from sqlalchemy.orm import Session
+
+# Nodes with an allowance of their own, outside max_calls (M7c, C9): the budget
+# key holding it (0 on tasks without one) and the error once it is spent.
+OWN_ALLOWANCES = {
+    STATE_EXTRACT.node: ("state_extract_max_calls", "state extraction budget"),
+    SUMMARY.node: ("summary_max_calls", "summary budget"),
+}
 
 
 class ModelBudgetExceeded(RuntimeError):
@@ -302,13 +310,15 @@ def reserve_model_call(
     repairs = int(usage.get("repairs", 0))
     current_cost = Decimal(str(usage.get("cost", "0")))
     current_reserved_cost = Decimal(str(usage.get("reserved_cost", "0")))
-    if scope.node_name == STATE_EXTRACT.node:
-        # M7c: extraction has its own allowance (0 on tasks without one).
-        if node_calls >= int(budget.get("state_extract_max_calls", 0)):
-            raise ModelBudgetExceeded("state extraction budget exhausted")
-    elif calls - int(calls_by_node.get(STATE_EXTRACT.node, 0)) >= int(
-        budget.get("max_calls", 0)
-    ) or node_calls >= int(budget.get("max_calls_per_node", 0)):
+    own_allowance = OWN_ALLOWANCES.get(scope.node_name)
+    answer_calls = calls - sum(int(calls_by_node.get(n, 0)) for n in OWN_ALLOWANCES)
+    if own_allowance is not None:
+        key, name = own_allowance
+        if node_calls >= int(budget.get(key, 0)):
+            raise ModelBudgetExceeded(f"{name} exhausted")
+    elif answer_calls >= int(budget.get("max_calls", 0)) or node_calls >= int(
+        budget.get("max_calls_per_node", 0)
+    ):
         raise ModelBudgetExceeded("model call budget exhausted")
     reserved_tokens = estimated_prompt_tokens + reserved_completion_tokens
     reserved_cost = _priced_cost(

@@ -34,6 +34,10 @@ class ContextConfig(ConfigDomain):
     # saves the state but the Planner still sees the regex constraints;
     # enforce gives the Planner the state instead of them.
     conversation_state_mode: Literal["off", "shadow", "enforce"] = "off"
+    # conversations/summarizer.py (C9): off summarizes nothing; shadow
+    # summarizes after each publish but the Planner does not see it; enforce
+    # gives the Planner the summary as an untrusted section.
+    conversation_summary_mode: Literal["off", "shadow", "enforce"] = "off"
 
     @field_validator(
         "context_history_max_tokens",

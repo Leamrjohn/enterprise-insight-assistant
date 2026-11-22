@@ -115,7 +115,11 @@ def create_task(
             },
         },
         model_budget_snapshot=configured_model_budget(
-            settings, state_extract=STATE_SNAPSHOT_KEY in (context_snapshot or {})
+            settings,
+            state_extract=STATE_SNAPSHOT_KEY in (context_snapshot or {}),
+            # Only a conversation's task leaves messages to summarize.
+            summary=settings.conversation_summary_mode != "off"
+            and context_snapshot is not None,
         ),
     )
     db.add(record)

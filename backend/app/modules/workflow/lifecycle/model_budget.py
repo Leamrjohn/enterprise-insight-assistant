@@ -7,13 +7,14 @@ from app.modules.runtime.context.policies.state_extract import (
     STATE_EXTRACT,
     STATE_EXTRACT_MAX_CALLS,
 )
+from app.modules.runtime.context.policies.summary import SUMMARY, SUMMARY_MAX_CALLS
 
 if TYPE_CHECKING:
     from app.core.settings import Settings
 
 
 def configured_model_budget(
-    settings: "Settings", *, state_extract: bool = False
+    settings: "Settings", *, state_extract: bool = False, summary: bool = False
 ) -> dict[str, int | str]:
     """Build the JSON-safe budget copied into every newly created task.
 
@@ -35,8 +36,16 @@ def configured_model_budget(
         # are added on top; the cost limit stays the one safety ceiling.
         budget["state_extract_max_calls"] = STATE_EXTRACT_MAX_CALLS
         budget["max_total_tokens"] = (
-            settings.analysis_task_model_max_total_tokens
+            int(budget["max_total_tokens"])
             + STATE_EXTRACT.budget_tokens
+            + settings.llm_max_output_tokens
+        )
+    if summary:
+        # C9: the same for the summary made after the task is published.
+        budget["summary_max_calls"] = SUMMARY_MAX_CALLS
+        budget["max_total_tokens"] = (
+            int(budget["max_total_tokens"])
+            + SUMMARY.budget_tokens
             + settings.llm_max_output_tokens
         )
     return budget

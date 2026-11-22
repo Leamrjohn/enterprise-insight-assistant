@@ -11,6 +11,7 @@ from app.db.session import SessionLocal
 from app.modules.conversations.state import STATE_SNAPSHOT_KEY
 from app.modules.identity.models import User
 from app.modules.runtime.context.policies.state_extract import STATE_EXTRACT
+from app.modules.runtime.context.policies.summary import SUMMARY
 from app.modules.runtime.model_governance import (
     ModelBudgetExceeded,
     model_node_scope,
@@ -61,6 +62,22 @@ def test_only_a_task_with_a_frozen_state_gets_the_allowance(
         + settings.llm_max_output_tokens,
     }
 
+    # C9: with summaries on, only a conversation's task gets that allowance.
+    settings.conversation_summary_mode = "shadow"
+    plain = create_task(db_session, user_id=test_user.id, question="无会话")
+    conversation = create_task(
+        db_session, user_id=test_user.id, question="有会话", context_snapshot={}
+    )
+
+    assert plain.model_budget_snapshot == BASE
+    assert conversation.model_budget_snapshot == {
+        **BASE,
+        "summary_max_calls": 1,
+        "max_total_tokens": 10000
+        + SUMMARY.budget_tokens
+        + settings.llm_max_output_tokens,
+    }
+
 
 def _reserve(node: str, outcomes: list) -> None:
     with model_node_scope(node):
@@ -85,14 +102,22 @@ def _reserve(node: str, outcomes: list) -> None:
         ),
         # A task created without the allowance never extracts.
         (BASE, ["state extraction budget exhausted"] * 2 + ["ok", "ok"]),
+        (
+            {**BASE, "state_extract_max_calls": 1, "summary_max_calls": 1},
+            ["ok", "state extraction budget exhausted", "ok", "ok"],
+        ),
     ],
 )
 def test_extraction_spends_its_own_allowance_not_the_answer_calls(
     monkeypatch, budget, expected
 ) -> None:
     outcomes: list = []
+    summary_calls = 1 if "summary_max_calls" in budget else 0
 
     def run_analysis(*args, **kwargs):
+        # A summary call, spent from its own allowance, takes no answer call.
+        for _ in range(summary_calls):
+            _reserve(SUMMARY.node, outcomes)
         _reserve(STATE_EXTRACT.node, outcomes)
         _reserve(STATE_EXTRACT.node, outcomes)
         _reserve("planner", outcomes)
@@ -126,6 +151,7 @@ def test_extraction_spends_its_own_allowance_not_the_answer_calls(
 
         # max_calls is 2: the answer path gets both even after an extraction.
         assert [result for _, result in outcomes] == [
+            *["ok"] * summary_calls,
             *expected,
             "model call budget exhausted",
         ]
