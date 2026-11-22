@@ -959,3 +959,8 @@
 - 做了什么：新增 conversations/state_update.py：维度白名单（区域、客户类型、订单状态、期间、产品类别、客诉严重度，无公司维度）、apply_update（6 条规则按序校验，引用须逐字出现在用户消息、值须在引用内；include/exclude 覆盖同维度、clear 删除；返回新状态和带序号的拒绝原因）、set_subject。用户写了深拷贝、按 id 建表和规则框架，其余按用户要求由我改好（is not in、future 导入顺序、list.add、第 6 条条件反了）。
 - 验证：新增 18 个单元测试（覆盖、批内后者胜、清除、8 种拒绝、首条规则为准、原状态不变）通过；单元 1571 passed / 4 skipped；ruff、pyright、import-linter 通过。
 - 遗留：尚无调用方，C6c 接 Planner 提议。
+
+## 2026-11-21 C6c Planner 提议 state_update（共建；分支 feat/c6c-planner-state-update）
+- 做了什么：PlannerDecision 加可选 state_update（非列表视为空、非对象项丢弃、最多 8 项；为空时不进 model_dump，持久化内容不变）；planning.py 加 _conversation_state_note，仅当会话上下文含 conversation_state 时追加说明（当前消息 id、6 个维度、只认用户原话、公司和权限不能改），普通和修复提示词都接；上下文策略升 planner/3，history 放行 conversation_state、question_message_id。
+- 验证：新增 12 个测试（无状态时 3 种提示词哈希与改前一致、维度与 C6b 白名单一致、enforce 保留状态）；test_planner_context 3 处版本号 planner/2→planner/3（用户同意）；单元 1583 passed / 4 skipped；ruff、pyright、import-linter 通过。
+- 遗留：真实模型是否按说明提议未验证，待 C6d 付费评测。

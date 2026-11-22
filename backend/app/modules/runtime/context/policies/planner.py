@@ -9,7 +9,8 @@ from app.modules.runtime.context.engine import ContextPolicy, SectionRule
 PLANNER = ContextPolicy(
     node="planner",
     # 2: history is compressed by shortening assistant replies, not dropping turns.
-    version="planner/2",
+    # 3: history may carry the conversation state and the question's message id.
+    version="planner/3",
     budget_tokens=3000,
     output_reserve_tokens=512,
     sections={
@@ -18,7 +19,13 @@ PLANNER = ContextPolicy(
         "memory": SectionRule(droppable=True),
         # The conversation service's own selection record is not for the model.
         "history": SectionRule(
-            fields=("messages", "history_truncated", "standing_constraints"),
+            fields=(
+                "messages",
+                "history_truncated",
+                "standing_constraints",
+                "conversation_state",
+                "question_message_id",
+            ),
             compress=compress_history,
         ),
         "feedback": SectionRule(),
