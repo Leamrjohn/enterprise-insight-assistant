@@ -19,6 +19,7 @@ from app.modules.evaluation.business_schemas import (
 from app.modules.observability.rejection_audit import AnalysisRequestRejection
 from app.modules.reporting.schemas import FinalAnalysisReport
 from app.modules.reviews.models import ReviewRequest
+from app.modules.runtime.context.policies.state_extract import STATE_EXTRACT
 from app.modules.workflow.audit.events_models import WorkflowEvent
 from app.modules.workflow.audit.model_call import ModelCallRecord
 from app.modules.workflow.audit.tool_call import ToolCallRecord
@@ -221,6 +222,15 @@ def _citation_security_status(
     return "passed" if cited_chunk_ids.issubset(allowed_chunk_ids) else "failed"
 
 
+def _answer_path(calls: list[ModelCallRecord]) -> list[ModelCallRecord]:
+    """The calls a case's call and token limits apply to (M7c).
+
+    State extraction has its own allowance per task, so it is left out here;
+    its cost still counts, and provider_model_calls_by_node still lists it.
+    """
+    return [call for call in calls if call.node_name != STATE_EXTRACT.node]
+
+
 def _model_cost_observation(
     calls: list[ModelCallRecord],
 ) -> tuple[str | None, CheckStatus]:
@@ -392,12 +402,16 @@ def observation_from_persisted_task(
         actual_limitations=[limitation.message for limitation in report.limitations]
         if report
         else [],
-        model_calls=sum(call.charge_kind == "provider_model" for call in calls),
+        model_calls=sum(
+            call.charge_kind == "provider_model" for call in _answer_path(calls)
+        ),
         provider_model_calls_by_node=provider_model_calls_by_node,
         local_resource_calls=sum(
             call.charge_kind == "local_resource" for call in calls
         ),
-        tokens=sum(call.prompt_tokens + call.completion_tokens for call in calls),
+        tokens=sum(
+            call.prompt_tokens + call.completion_tokens for call in _answer_path(calls)
+        ),
         report_persisted=report is not None,
         numeric_checks_passed=numeric_check_status == "passed",
         numeric_check_status=numeric_check_status,
@@ -498,7 +512,9 @@ def observation_from_runtime_tool_rejection(
         case_id=case_id,
         source="runtime_tool_rejection",
         actual_outcome="failed",
-        model_calls=sum(call.charge_kind == "provider_model" for call in calls),
+        model_calls=sum(
+            call.charge_kind == "provider_model" for call in _answer_path(calls)
+        ),
         provider_model_calls_by_node=dict(
             sorted(
                 Counter(
@@ -511,7 +527,9 @@ def observation_from_runtime_tool_rejection(
         local_resource_calls=sum(
             call.charge_kind == "local_resource" for call in calls
         ),
-        tokens=sum(call.prompt_tokens + call.completion_tokens for call in calls),
+        tokens=sum(
+            call.prompt_tokens + call.completion_tokens for call in _answer_path(calls)
+        ),
         report_persisted=bool(task.report),
         numeric_checks_passed=False,
         deterministic_validation_passed=False,
@@ -579,7 +597,9 @@ def observation_from_sql_validation_rejection(
         case_id=case_id,
         source="sql_validation_rejection",
         actual_outcome="failed",
-        model_calls=sum(call.charge_kind == "provider_model" for call in calls),
+        model_calls=sum(
+            call.charge_kind == "provider_model" for call in _answer_path(calls)
+        ),
         provider_model_calls_by_node=dict(
             sorted(
                 Counter(
@@ -592,7 +612,9 @@ def observation_from_sql_validation_rejection(
         local_resource_calls=sum(
             call.charge_kind == "local_resource" for call in calls
         ),
-        tokens=sum(call.prompt_tokens + call.completion_tokens for call in calls),
+        tokens=sum(
+            call.prompt_tokens + call.completion_tokens for call in _answer_path(calls)
+        ),
         report_persisted=bool(task.report),
         numeric_checks_passed=False,
         deterministic_validation_passed=False,
@@ -664,7 +686,9 @@ def observation_from_sql_result_limit(
         case_id=case_id,
         source="sql_result_limit",
         actual_outcome="completed" if completed else "failed",
-        model_calls=sum(call.charge_kind == "provider_model" for call in calls),
+        model_calls=sum(
+            call.charge_kind == "provider_model" for call in _answer_path(calls)
+        ),
         provider_model_calls_by_node=dict(
             sorted(
                 Counter(
@@ -677,7 +701,9 @@ def observation_from_sql_result_limit(
         local_resource_calls=sum(
             call.charge_kind == "local_resource" for call in calls
         ),
-        tokens=sum(call.prompt_tokens + call.completion_tokens for call in calls),
+        tokens=sum(
+            call.prompt_tokens + call.completion_tokens for call in _answer_path(calls)
+        ),
         report_persisted=bool(task.report),
         numeric_checks_passed=False,
         deterministic_validation_passed=False,
@@ -740,7 +766,9 @@ def observation_from_sql_timeout(
         case_id=case_id,
         source="sql_timeout",
         actual_outcome="failed",
-        model_calls=sum(call.charge_kind == "provider_model" for call in calls),
+        model_calls=sum(
+            call.charge_kind == "provider_model" for call in _answer_path(calls)
+        ),
         provider_model_calls_by_node=dict(
             sorted(
                 Counter(
@@ -753,7 +781,9 @@ def observation_from_sql_timeout(
         local_resource_calls=sum(
             call.charge_kind == "local_resource" for call in calls
         ),
-        tokens=sum(call.prompt_tokens + call.completion_tokens for call in calls),
+        tokens=sum(
+            call.prompt_tokens + call.completion_tokens for call in _answer_path(calls)
+        ),
         report_persisted=bool(task.report),
         numeric_checks_passed=False,
         deterministic_validation_passed=False,
@@ -823,7 +853,9 @@ def observation_from_duplicate_delivery(
         case_id=case_id,
         source="duplicate_delivery",
         actual_outcome="completed" if execution_prevented else "failed",
-        model_calls=sum(call.charge_kind == "provider_model" for call in calls),
+        model_calls=sum(
+            call.charge_kind == "provider_model" for call in _answer_path(calls)
+        ),
         provider_model_calls_by_node=dict(
             sorted(
                 Counter(
@@ -836,7 +868,9 @@ def observation_from_duplicate_delivery(
         local_resource_calls=sum(
             call.charge_kind == "local_resource" for call in calls
         ),
-        tokens=sum(call.prompt_tokens + call.completion_tokens for call in calls),
+        tokens=sum(
+            call.prompt_tokens + call.completion_tokens for call in _answer_path(calls)
+        ),
         report_persisted=bool(task.report),
         numeric_checks_passed=False,
         deterministic_validation_passed=False,
@@ -923,7 +957,9 @@ def observation_from_execution_fence(
         else "completed"
         if fence_state == "replacement_result_preserved"
         else "failed",
-        model_calls=sum(call.charge_kind == "provider_model" for call in calls),
+        model_calls=sum(
+            call.charge_kind == "provider_model" for call in _answer_path(calls)
+        ),
         provider_model_calls_by_node=dict(
             sorted(
                 Counter(
@@ -936,7 +972,9 @@ def observation_from_execution_fence(
         local_resource_calls=sum(
             call.charge_kind == "local_resource" for call in calls
         ),
-        tokens=sum(call.prompt_tokens + call.completion_tokens for call in calls),
+        tokens=sum(
+            call.prompt_tokens + call.completion_tokens for call in _answer_path(calls)
+        ),
         report_persisted=False,
         numeric_checks_passed=False,
         deterministic_validation_passed=False,

@@ -5,6 +5,7 @@ from app.db.session import set_tenant_scope
 from app.modules.documents.chunks import DocumentChunk
 from app.modules.documents.models import Documents
 from app.modules.evaluation.observation import (
+    _answer_path,
     _persisted_data_status,
     observation_from_duplicate_delivery,
     observation_from_execution_fence,
@@ -902,3 +903,11 @@ def test_observation_preserves_validation_statuses(
     assert observation.citation_validation_status == expected_citation_status
     assert observation.numeric_check_status == expected_numeric_status
     assert observation.deterministic_validation_status == expected_validation_status
+
+
+def test_case_limits_leave_out_state_extraction_calls() -> None:
+    calls = [
+        ModelCallRecord(node_name="state_extract", charge_kind="provider_model"),
+        ModelCallRecord(node_name="planner", charge_kind="provider_model"),
+    ]
+    assert [call.node_name for call in _answer_path(calls)] == ["planner"]

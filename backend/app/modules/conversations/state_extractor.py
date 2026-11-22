@@ -16,7 +16,10 @@ from app.core.gateway.base import ModelGateway
 from app.modules.conversations.state_update import Message
 from app.modules.runtime.context.engine import build_context
 from app.modules.runtime.context.policies.state_extract import STATE_EXTRACT
-from app.modules.runtime.model_governance import model_context_scope
+from app.modules.runtime.model_governance import (
+    ModelBudgetExceeded,
+    model_context_scope,
+)
 from app.modules.runtime.prompts import get_prompt_registry
 
 # The messages shown before the current one.
@@ -26,6 +29,8 @@ MAX_STATE_UPDATES = 8
 # Why nothing was proposed.
 OVER_BUDGET = "context_over_budget"
 MODEL_ERROR = "model_error"
+# The task's extraction allowance is spent (M7c); the answer path is not.
+BUDGET_EXHAUSTED = "model_budget_exhausted"
 INVALID_OUTPUT = "invalid_output"
 
 
@@ -96,4 +101,6 @@ def extract_state_update(
             )
         except (RetryableModelError, PermanentModelError):
             return Extraction(error=MODEL_ERROR)
+        except ModelBudgetExceeded:
+            return Extraction(error=BUDGET_EXHAUSTED)
     return parse_output(raw)

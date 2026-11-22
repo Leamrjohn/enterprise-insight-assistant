@@ -30,3 +30,5 @@ STATE_EXTRACT = ContextPolicy(
     },
     on_over_budget="reject",
 )
+# Calls a task may spend on extraction, outside its max_calls (M7c).
+STATE_EXTRACT_MAX_CALLS = 1

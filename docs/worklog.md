@@ -1005,3 +1005,7 @@
 ## 2026-11-22 M7a 会话状态接入 Worker（共建；方案 A 新节点；用户批准超 400 行；分支 feat/m7a-state-node）
 - 做了什么：开关 CONVERSATION_STATE_MODE（默认 off）；API 建任务时设租户范围并把状态、版本号、消息 id 冻结进快照；新节点 state_extract_node（Planner 前，抽取 → apply_update，结果进检查点）；enforce 时 Planner 用状态替换正则约束，off/shadow 不变；发布事务内按冻结版本保存，版本过期则保留较新状态；result_data 记 state_extraction。
 - 验证：单元 1609 passed / 4 skipped（新增 11 个）；集成新增 3 个通过，全量 123 passed / 28 failed（均为已知的本地 test_sql_execution_layer）；ruff、pyright、import-linter 通过。未部署、未真模型端到端，迁移 f8a9b0c1d2e3 待 M7b（先备份）。
+
+## 2026-11-22 M7c 状态抽取单独额度（共建；方案 A；分支 feat/m7c-state-extract-budget）
+- 做了什么：冻结了状态的任务在预算快照里多 state_extract_max_calls=1 和 token +4024（策略 3000 + 输出上限 1024），费用上限不变；reserve_model_call 对抽取节点只查自己的额度（旧任务为 0 不能抽取），其他节点计数扣除抽取次数；抽取器遇到额度用完返回 model_budget_exhausted 不提议；评测 _answer_path 让用例调用/token 上限不计抽取，费用仍计入。
+- 验证：单元 1611 passed / 4 skipped（新增 2 个）；集成新增 3 个通过，全量 126 passed / 28 failed（已知本地 test_sql_execution_layer）；ruff、pyright、import-linter 通过。未部署，用例期望未改。
