@@ -30,6 +30,10 @@ class ContextConfig(ConfigDomain):
     # knowledge/rag/support.py and knowledge/agent.py (C5): the support check
     # and the Knowledge answer; enforce refuses a call that cannot fit.
     context_knowledge_mode: Literal["off", "shadow", "enforce"] = "shadow"
+    # conversations/state.py (M7): off freezes no state; shadow extracts and
+    # saves the state but the Planner still sees the regex constraints;
+    # enforce gives the Planner the state instead of them.
+    conversation_state_mode: Literal["off", "shadow", "enforce"] = "off"
 
     @field_validator(
         "context_history_max_tokens",

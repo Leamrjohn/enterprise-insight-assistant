@@ -1001,3 +1001,7 @@
 - 根因：planner/system.md 第 33～34 行规定历史被截断时缺的时间不可推断、必须追问，Planner 把 conversation_state 也当成了被截断的历史。
 - 做了什么：状态说明写明 state 不是被截断的历史；period 为 include 2025年 而问题没给月份时按全年分析；指代词对应同一维度约束的值；“每一项都必须写进”。无状态时提示词哈希不变；单元 1598 passed / 4 skipped。
 - 结果：43/43、43/43、42/43（每轮 156 次，合计 $0.2737），各类别和 Planner 0 不合契约都达标。唯一失败是 r3 的 far-severity-high-35：状态记对了，Planner 漏写“高严重度”。C6 通过，下一步 M7。
+
+## 2026-11-22 M7a 会话状态接入 Worker（共建；方案 A 新节点；用户批准超 400 行；分支 feat/m7a-state-node）
+- 做了什么：开关 CONVERSATION_STATE_MODE（默认 off）；API 建任务时设租户范围并把状态、版本号、消息 id 冻结进快照；新节点 state_extract_node（Planner 前，抽取 → apply_update，结果进检查点）；enforce 时 Planner 用状态替换正则约束，off/shadow 不变；发布事务内按冻结版本保存，版本过期则保留较新状态；result_data 记 state_extraction。
+- 验证：单元 1609 passed / 4 skipped（新增 11 个）；集成新增 3 个通过，全量 123 passed / 28 failed（均为已知的本地 test_sql_execution_layer）；ruff、pyright、import-linter 通过。未部署、未真模型端到端，迁移 f8a9b0c1d2e3 待 M7b（先备份）。

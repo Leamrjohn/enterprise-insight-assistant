@@ -2,6 +2,7 @@
 
 import logging
 import re
+from dataclasses import dataclass
 from typing import Any
 
 from app.core.config.snapshot import runtime_settings
@@ -10,6 +11,7 @@ from app.core.exceptions import (
     RetryableModelError,
     StructuredOutputError,
 )
+from app.core.gateway.factory import get_model_gateway
 from app.db.session import SessionLocal, set_tenant_scope
 from app.modules.analysis.agent_protocol import AgentInput
 from app.modules.analysis.catalog.snapshot_catalog import SnapshotCatalog
@@ -25,6 +27,9 @@ from app.modules.analysis.planner.planner_decision import (
     enforce_explicit_document_evidence_contract,
 )
 from app.modules.analysis.tool_protocol import Tool
+from app.modules.conversations.state import STATE_SNAPSHOT_KEY
+from app.modules.conversations.state_extractor import extract_state_update
+from app.modules.conversations.state_update import apply_update
 from app.modules.knowledge.agent import KnowledgeAgent
 from app.modules.knowledge.tool import RAGTool
 from app.modules.knowledge.tool_agent import ToolCallingKnowledgeAgent
@@ -105,6 +110,8 @@ def _checkpoint(
         # completed).  Persist a small allow-listed cumulative snapshot rather
         # than the entire runtime state, which contains sessions and callbacks.
         snapshot_keys = (
+            "conversation_state",
+            "state_extraction",
             "plan",
             "planner_result",
             "planner_failure",
@@ -156,6 +163,74 @@ def _effective_question(state: WorkflowState) -> str:
     return (state.get("plan") or {}).get("resolved_question") or state["question"]
 
 
+@dataclass
+class _Message:
+    """A snapshot message as conversations.state_update.Message."""
+
+    id: int
+    role: str
+    content: str | None
+
+
+def state_extract_node(state: WorkflowState) -> dict:
+    """M7: check this message's state proposals before planning.
+
+    Runs only when the API froze a state into the snapshot (mode shadow or
+    enforce).  The model only proposes; apply_update keeps what the user's own
+    words support.  A failed extraction keeps the frozen state, so planning
+    never depends on it.
+    """
+    frozen = (state.get("conversation_context") or {}).get(STATE_SNAPSHOT_KEY)
+    if not frozen:
+        return {}
+    _set_stage(state, "planning", "state_extract_node")
+    history = [
+        _Message(id=m["id"], role=m["role"], content=m["content"])
+        for m in (state.get("conversation_context") or {}).get("messages", [])
+    ]
+    current = _Message(id=frozen["message_id"], role="user", content=state["question"])
+    with model_node_scope("state_extract"):
+        extraction = extract_state_update(
+            get_model_gateway(), state=frozen["state"], history=history, current=current
+        )
+    new_state, rejected = apply_update(
+        frozen["state"], extraction.updates, [*history, current]
+    )
+    return _checkpoint(
+        state,
+        completed_node="state_extract_node",
+        next_node="planner_node",
+        update={
+            "conversation_state": new_state,
+            "state_extraction": {
+                "error": extraction.error,
+                "proposed": len(extraction.updates),
+                "rejected": rejected,
+            },
+        },
+    )
+
+
+def _planner_conversation_context(state: WorkflowState) -> dict | None:
+    """The history the Planner reads; the frozen state is never part of it.
+
+    enforce swaps the regex constraints for the extracted state, as the
+    long-conversation evaluation does; shadow and off leave them as they were.
+    """
+    context = state.get("conversation_context")
+    if not context or STATE_SNAPSHOT_KEY not in context:
+        return context
+    context = {k: v for k, v in context.items() if k != STATE_SNAPSHOT_KEY}
+    extracted = state.get("conversation_state")
+    if (
+        runtime_settings().conversation_state_mode == "enforce"
+        and extracted is not None
+    ):
+        context.pop("standing_constraints", None)
+        context["conversation_state"] = extracted
+    return context
+
+
 def planner_node(state: WorkflowState) -> dict:
     """
     Planner 节点：分析问题，输出计划。
@@ -171,7 +246,7 @@ def planner_node(state: WorkflowState) -> dict:
                 question=state["question"],
                 user_id=state["user_id"],
                 context={
-                    "conversation_context": state.get("conversation_context"),
+                    "conversation_context": _planner_conversation_context(state),
                     **(
                         {"planner_memory": state["planner_memory"]}
                         if state.get("planner_memory")

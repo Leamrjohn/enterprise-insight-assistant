@@ -18,6 +18,9 @@ from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 STATE_SCHEMA = "conversation-state/v1"
+# The key under which a task's context snapshot freezes the state (M7).  The
+# Planner never sees it: the workflow hands it the state the extractor made.
+STATE_SNAPSHOT_KEY = "conversation_state_snapshot"
 
 
 def empty_state() -> dict:
@@ -45,6 +48,13 @@ def load_state(db: Session, conversation_id: int) -> LoadedState:
     if row is None:
         return LoadedState(empty_state(), 0)
     return LoadedState(copy.deepcopy(row.state), row.version)
+
+
+def freeze_state(db: Session, *, conversation_id: int, message_id: int) -> dict:
+    """What a new task's snapshot keeps (M7): the state as of now, its version
+    for the save at publish, and the id of the message the task answers."""
+    loaded = load_state(db, conversation_id)
+    return {"state": loaded.state, "version": loaded.version, "message_id": message_id}
 
 
 def save_state(
