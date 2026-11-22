@@ -163,3 +163,4 @@
 - 2026-11-21：C6a 会话状态表 conversation_states（迁移 f8a9b0c1d2e3，RLS + 乐观锁）与读写模块完成，未接入主链；下一步 C6b 状态更新规则（训练）。
 - 2026-11-21：C6b apply_update 状态更新规则完成（18 个测试），未接入；下一步 C6c Planner 提议 state_update。
 - 2026-11-21：C6c Planner 可提议 state_update（仅有会话状态时出现说明，策略 planner/3），线上行为不变；下一步 C6d 评测逐轮模拟 + 付费 3 轮。
+- 2026-11-21：C6d 付费 3 轮未达标（r1 39/43、r3 36/43、r2 Planner 契约错误崩溃），原因定位为状态说明导致 JSON 不合契约等 3 类；待修提示词后重跑。

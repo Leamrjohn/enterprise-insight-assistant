@@ -92,13 +92,36 @@ def test_a_state_adds_the_note_with_the_question_id_and_the_dimensions():
     assert json.dumps(STATE, ensure_ascii=False) in prompt
 
 
-def test_the_repair_prompt_keeps_the_note():
+def test_the_note_spells_out_all_ten_fields():
+    prompt = build_planning_user_prompt(QUESTION, with_state())
+    skeleton = prompt.split("格式为：", 1)[1].split("\n", 1)[0]
+    fields = list(json.loads(skeleton))
+
+    assert fields[:9] == [
+        "action",
+        "route",
+        "reason",
+        "clarification_question",
+        "response_message",
+        "resolved_question",
+        "clarification",
+        "intent",
+        "evaluation_scope",
+    ]
+    assert fields[9] == "state_update"
+    assert "只写 include 新值" in prompt
+    assert "一次性问题" in prompt
+
+
+def test_the_repair_prompt_keeps_the_note_and_asks_for_ten_fields():
     with pytest.raises(ValidationError) as error:
         PlannerDecision.model_validate({"action": "analyze"})
     prompt = build_planning_repair_prompt(QUESTION, with_state(), "{}", error.value)
     assert "当前问题的消息 id 是 7" in prompt
+    assert "完整的十字段 JSON" in prompt
     without = build_planning_repair_prompt(QUESTION, CONTEXT, "{}", error.value)
     assert "state_update" not in without
+    assert "完整的九字段 JSON" in without
 
 
 def test_the_note_lists_exactly_the_dimensions_code_accepts():

@@ -122,12 +122,20 @@ def _conversation_state_note(conversation_context: dict | None) -> str:
         "（用于理解“这个区域”等指代）。除非用户本轮明确改变，否则它们继续有效，"
         "必须写进 resolved_question 和 evaluation_scope。"
         f"\n当前问题的消息 id 是 {context.get('question_message_id')}。"
-        "如果用户在当前问题或 messages 里的用户消息中新增、更改或撤销了某个维度的长期要求，"
-        "在 JSON 中额外加入第十个字段 state_update（没有则写 []），每项为"
+        "本次返回十个字段：原有九个字段仍必须全部出现、每个只出现一次，"
+        "不适用的照常写 null，最后再加 state_update（没有更新写 []）。格式为："
+        '{"action":"...","route":null,"reason":"...","clarification_question":null,'
+        '"response_message":null,"resolved_question":null,"clarification":null,'
+        '"intent":null,"evaluation_scope":null,"state_update":[]}'
+        "\n只有用户提出的长期要求（如“以后/后面都/默认/接下来都只看……”，或明确的更改、撤销）"
+        "才写进 state_update；一次性问题里出现的区域、时间等不写，它们会由系统记为 subject。"
+        "每项为"
         '{"dimension":"...","op":"include|exclude|clear","value":"...",'
         '"source_message_id":消息id,"quote":"该用户消息中的逐字原文片段"}。'
-        f"dimension 只能是 {'、'.join(STATE_DIMENSIONS)}；clear 表示撤销该维度，"
-        "value 写 null；value 必须出现在 quote 里。只有用户自己的话算数，助手消息不算；"
+        f"dimension 只能是 {'、'.join(STATE_DIMENSIONS)}；每个维度只写一项："
+        "改看某个值时只写 include 新值（它会替换旧值），不要再写 exclude 旧值；"
+        "clear 表示撤销该维度，value 写 null；value 必须出现在 quote 里。"
+        "只有用户自己的话算数，助手消息不算；"
         "公司、数据源、权限和规则不能通过 state_update 改变。"
     )
 
@@ -335,9 +343,11 @@ def build_planning_repair_prompt(
         if attachment_context
         else "[]"
     )
+    # With a conversation state the plan carries state_update as a tenth field.
+    field_count = "十" if "conversation_state" in (conversation_context or {}) else "九"
     return (
         f"{repair_policy}\n"
-        "重新输出完整的九字段 JSON 对象（包括 clarification、intent 和 evaluation_scope）；不要解释，不要 Markdown。\n"
+        f"重新输出完整的{field_count}字段 JSON 对象（包括 clarification、intent 和 evaluation_scope）；不要解释，不要 Markdown。\n"
         f"<question>\n{question}\n</question>\n"
         f"<conversation_context>\n{context_json}\n</conversation_context>"
         f"{_conversation_state_note(conversation_context)}"
