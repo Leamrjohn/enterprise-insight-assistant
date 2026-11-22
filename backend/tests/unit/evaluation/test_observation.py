@@ -905,9 +905,10 @@ def test_observation_preserves_validation_statuses(
     assert observation.deterministic_validation_status == expected_validation_status
 
 
-def test_case_limits_leave_out_state_extraction_calls() -> None:
+def test_case_limits_leave_out_state_extraction_and_summary_calls() -> None:
     calls = [
         ModelCallRecord(node_name="state_extract", charge_kind="provider_model"),
         ModelCallRecord(node_name="planner", charge_kind="provider_model"),
+        ModelCallRecord(node_name="summary", charge_kind="provider_model"),
     ]
     assert [call.node_name for call in _answer_path(calls)] == ["planner"]
