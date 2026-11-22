@@ -17,6 +17,7 @@ from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
+from app.core.exceptions import StructuredOutputError
 from app.core.gateway.base import ModelGateway
 from app.core.gateway.replay import RecordReplayGateway, request_key
 from app.modules.conversations.service import (
@@ -145,6 +146,8 @@ def score_case(case: dict, decision) -> dict:
 # (question, conversation_context) -> PlannerDecision; a function so tests can
 # script the Planner without a gateway.
 Planner = Callable[[str, dict], Any]
+# The Planner gave no valid plan after its retries: the task would fail.
+PLANNER_ERROR = "planner_error"
 
 
 def state_context(
@@ -176,9 +179,16 @@ def simulate_state(
     for position, message in enumerate(messages):
         if message.role != "user" or message.content == FILLER_QUESTION:
             continue
-        decision = planner(
-            message.content, state_context(messages[:position], state, message.id)
-        )
+        try:
+            decision = planner(
+                message.content, state_context(messages[:position], state, message.id)
+            )
+        except StructuredOutputError:
+            # As in the service: a turn whose plan failed changes no state.
+            rejected.append(
+                {"message_id": message.id, "index": None, "reason": PLANNER_ERROR}
+            )
+            continue
         state, dropped = apply_update(
             state, decision.state_update, messages[: position + 1]
         )
@@ -192,12 +202,17 @@ def simulate_state(
 def decide_with_state(
     planner: Planner, case: dict, filler_turns: int, filler_answer: str = FILLER_ANSWER
 ) -> tuple[Any, dict, list[dict]]:
-    """The final question after the simulated turns; its id follows the last one."""
+    """The final question after the simulated turns; its id follows the last one.
+
+    The decision is None when the Planner could not produce a valid plan."""
     messages = build_messages(case, filler_turns, filler_answer)
     state, rejected = simulate_state(planner, messages)
-    decision = planner(
-        case["question"], state_context(messages, state, len(messages) + 1)
-    )
+    try:
+        decision = planner(
+            case["question"], state_context(messages, state, len(messages) + 1)
+        )
+    except StructuredOutputError:
+        decision = None
     return decision, state, rejected
 
 
@@ -216,9 +231,20 @@ def evaluate_with_state(gateway: ModelGateway, fixture: dict) -> dict:
             fixture["filler_turns"],
             fixture.get("filler_answer", FILLER_ANSWER),
         )
+        scored = (
+            score_case(case, decision)
+            if decision is not None
+            else {
+                "case_id": case["case_id"],
+                "split": case["split"],
+                "action": PLANNER_ERROR,
+                "resolved_question": None,
+                "passed": False,
+            }
+        )
         rows.append(
             {
-                **score_case(case, decision),
+                **scored,
                 "constraints": state["constraints"],
                 "rejected": rejected,
             }

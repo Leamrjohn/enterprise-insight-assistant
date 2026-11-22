@@ -1,9 +1,11 @@
 """C6d: the long-conversation evaluation replays turns through the state."""
 
+from app.core.exceptions import StructuredOutputError
 from app.modules.analysis.planner.planner_decision import PlannerDecision
 from app.modules.conversations.state import empty_state
 from scripts.evaluation.run_long_conversation_evaluation import (
     FILLER_QUESTION,
+    PLANNER_ERROR,
     build_messages,
     decide_with_state,
     simulate_state,
@@ -165,3 +167,42 @@ def test_the_final_question_follows_the_last_message_and_sees_the_state():
     assert question == CASE["question"]
     assert context["question_message_id"] == len(messages()) + 1
     assert context["conversation_state"]["constraints"]["region"]["value"] == "华东"
+
+
+class FailingPlanner(ScriptedPlanner):
+    """Fails on the questions listed, as the service does after its retries."""
+
+    def __init__(self, script: dict, failing: set[str]) -> None:
+        super().__init__(script)
+        self.failing = failing
+
+    def __call__(self, question: str, context: dict) -> PlannerDecision:
+        if question in self.failing:
+            self.calls.append((question, context))
+            raise StructuredOutputError("模型连续返回不符合 Planner JSON 契约的结果")
+        return super().__call__(question, context)
+
+
+def test_a_failed_turn_changes_no_state_and_is_logged():
+    south_id = ids_of("从现在开始改看华南区。")[0]
+    planner = FailingPlanner(
+        {CASE["constraint"]: decision(state_update=[east()])},
+        failing={"从现在开始改看华南区。"},
+    )
+    state, rejected = simulate_state(planner, messages())
+
+    assert state["constraints"]["region"]["value"] == "华东"
+    assert rejected == [
+        {"message_id": south_id, "index": None, "reason": PLANNER_ERROR}
+    ]
+
+
+def test_a_failed_final_question_gives_no_decision_but_keeps_the_state():
+    planner = FailingPlanner(
+        {CASE["constraint"]: decision(state_update=[east()])},
+        failing={CASE["question"]},
+    )
+    result, state, _ = decide_with_state(planner, CASE, 10)
+
+    assert result is None
+    assert state["constraints"]["region"]["value"] == "华东"
