@@ -30,6 +30,9 @@ class WorkflowState(TypedDict):
     final_answer: str | None  # 最终回答
     error: str | None  # 错误信息
     conversation_context: dict | None
+    # M7: the state after this message's checked proposals, and what happened.
+    conversation_state: NotRequired[dict | None]
+    state_extraction: NotRequired[dict | None]
     planner_memory: list[dict]
     attachment_context: list[dict]
     document_ids: list[int] | None

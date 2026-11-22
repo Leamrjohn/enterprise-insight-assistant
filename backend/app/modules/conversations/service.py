@@ -5,6 +5,7 @@ from dataclasses import dataclass
 
 from app.core.config.snapshot import runtime_settings
 from app.core.tokenizer import count_tokens
+from app.db.session import set_tenant_scope
 from app.modules.conversations.models import Conversation, ConversationMessage
 from app.modules.conversations.repository import (
     create_conversation,
@@ -17,6 +18,7 @@ from app.modules.conversations.repository import (
     get_recent_context_messages,
     touch_conversation,
 )
+from app.modules.conversations.state import STATE_SNAPSHOT_KEY, freeze_state
 from app.modules.documents.models import Documents
 from app.modules.documents.repository import allowed_min_view_roles
 from app.modules.input_artifacts.repository import (
@@ -230,6 +232,12 @@ def create_conversation_task_service(
         )
         if standing_constraints:
             conversation_context_snapshot["standing_constraints"] = standing_constraints
+        if runtime_settings().conversation_state_mode != "off":
+            # conversation_states has forced RLS; scope to the caller's company.
+            set_tenant_scope(db, context.company.id)
+            conversation_context_snapshot[STATE_SNAPSHOT_KEY] = freeze_state(
+                db, conversation_id=conversation.id, message_id=user_message.id
+            )
         if conversation.data_source_id is None:
             raise DataSourceNotReadyError("会话没有关联经营数据源")
         source = get_data_source(

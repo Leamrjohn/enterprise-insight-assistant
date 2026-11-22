@@ -32,6 +32,7 @@ from app.modules.conversations.repository import (
     get_assistant_message_by_task_id,
     touch_conversation,
 )
+from app.modules.conversations.state import STATE_SNAPSHOT_KEY, save_state
 
 # 导入所有模型确保 SQLAlchemy 能解析外键
 from app.modules.documents.chunks import DocumentChunk
@@ -335,6 +336,7 @@ def _update_stage(
 
 
 _NODE_STAGE = {
+    "state_extract_node": "planning",
     "planner_node": "planning",
     "planner_semantic_review_node": "planning",
     "planner_terminal_node": "planning",
@@ -429,6 +431,32 @@ def _maintain_execution_lease(execution: ClaimedExecution):
             logger.warning("Task %s execution heartbeat did not stop promptly", task_id)
 
 
+def _save_conversation_state(
+    db, record: AnalysisTask, conversation_state: dict | None
+) -> None:
+    """M7: the state this task planned with, committed with its publication.
+
+    The version frozen at task creation guards the write: if another task of
+    the conversation saved first, its newer state is kept.
+    """
+    if conversation_state is None:
+        return
+    frozen = (record.context_snapshot or {}).get(STATE_SNAPSHOT_KEY)
+    if not frozen or record.conversation_id is None or record.company_id is None:
+        return
+    if not save_state(
+        db,
+        conversation_id=record.conversation_id,
+        company_id=record.company_id,
+        state=conversation_state,
+        expected_version=frozen["version"],
+        task_id=record.id,
+    ):
+        logger.info(
+            "Task %s kept the newer conversation state of another task", record.id
+        )
+
+
 def _save_workflow_result(
     db,
     record: AnalysisTask,
@@ -488,6 +516,8 @@ def _save_workflow_result(
     )
     if deterministic_validation is not None:
         result_data["deterministic_validation"] = deterministic_validation
+    if workflow_result.get("state_extraction") is not None:
+        result_data["state_extraction"] = workflow_result["state_extraction"]
 
     decision = decide_completion(
         final_answer=final_answer,
@@ -528,6 +558,8 @@ def _save_workflow_result(
     db.refresh(record)
     if report is not None and task_status in {"completed", "partial"}:
         persist_report_memory(db, task=record, report=report)
+    if task_status != "failed":
+        _save_conversation_state(db, record, workflow_result.get("conversation_state"))
     if task_status == "needs_clarification":
         record.clarification_status = "waiting"
         record.clarification_missing_fields = (terminal_result or {}).get(

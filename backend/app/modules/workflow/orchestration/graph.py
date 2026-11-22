@@ -16,12 +16,14 @@ from app.modules.workflow.orchestration.nodes import (
     planning_failure_node,
     reviewer_node,
     smart_router_node,
+    state_extract_node,
 )
 from app.modules.workflow.orchestration.state import WorkflowState
 from langgraph.graph import END, START, StateGraph
 
 _RESUMABLE_NODES = frozenset(
     {
+        "state_extract_node",
         "planner_node",
         "planner_semantic_review_node",
         "planner_terminal_node",
@@ -49,7 +51,7 @@ def _traced(name: str, node: Callable) -> Callable:
 def _route_from_start(state: WorkflowState) -> str:
     """Resume only an allow-listed graph node from a database checkpoint."""
     next_node = state.get("resume_next_node")
-    return next_node if next_node in _RESUMABLE_NODES else "planner_node"
+    return next_node if next_node in _RESUMABLE_NODES else "state_extract_node"
 
 
 def _route_after_planner(
@@ -108,7 +110,7 @@ def build_workflow() -> StateGraph:
     构建工作流图：
 
     START
-      → planner_node → planner_semantic_review_node ──action/route──→ data_node ──route──→ knowledge_node
+      → state_extract_node → planner_node → planner_semantic_review_node ──action/route──→ data_node ──route──→ knowledge_node
                              │                                  │
                              ├──→ knowledge_node ───────────────┤
                              ├──→ planner_terminal_node ────────┤
@@ -117,6 +119,9 @@ def build_workflow() -> StateGraph:
     graph = StateGraph(WorkflowState)
 
     # 注册所有节点
+    graph.add_node(
+        "state_extract_node", _traced("state_extract_node", state_extract_node)
+    )
     graph.add_node("planner_node", _traced("planner_node", planner_node))
     graph.add_node(
         "planner_semantic_review_node",
@@ -139,6 +144,7 @@ def build_workflow() -> StateGraph:
         {node: node for node in _RESUMABLE_NODES},
     )
 
+    graph.add_edge("state_extract_node", "planner_node")
     graph.add_edge("planner_node", "planner_semantic_review_node")
 
     # 条件边：经语义复核后的 Planner 决定分析路线，或安全地结束非分析请求。
@@ -229,6 +235,8 @@ def run_analysis(
         "final_answer": None,
         "error": None,
         "conversation_context": conversation_context,
+        "conversation_state": None,
+        "state_extraction": None,
         "planner_memory": planner_memory or [],
         "attachment_context": attachment_context or [],
         "document_ids": document_ids,
@@ -253,6 +261,8 @@ def run_analysis(
     # The persisted patch is selected by the Worker, not supplied by a client.
     # Keep this allow-list tight so a stale/old checkpoint cannot replace scope.
     for key in (
+        "conversation_state",
+        "state_extraction",
         "plan",
         "planner_result",
         "planner_failure",
