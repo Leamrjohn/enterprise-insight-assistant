@@ -26,10 +26,11 @@ from app.modules.conversations.service import (
     find_standing_constraints,
 )
 from app.modules.conversations.state import empty_state
-from app.modules.conversations.state_update import (
-    apply_update,
-    set_subject,
+from app.modules.conversations.state_extractor import (
+    Extraction,
+    extract_state_update,
 )
+from app.modules.conversations.state_update import apply_update
 from scripts.evaluation.run_planner_route_evaluation import BudgetGuardGateway
 
 FIXTURE_DIR = (
@@ -146,71 +147,67 @@ def score_case(case: dict, decision) -> dict:
 # (question, conversation_context) -> PlannerDecision; a function so tests can
 # script the Planner without a gateway.
 Planner = Callable[[str, dict], Any]
+# (state, messages before it, current message) -> Extraction; likewise.
+Extractor = Callable[[dict, list[SimpleNamespace], SimpleNamespace], Extraction]
 # The Planner gave no valid plan after its retries: the task would fail.
 PLANNER_ERROR = "planner_error"
 
 
-def state_context(
-    history: list[SimpleNamespace], state: dict, question_message_id: int
-) -> dict:
+def state_context(history: list[SimpleNamespace], state: dict) -> dict:
     """What the Planner sees with a conversation state (C6): recent history as
-    the conversation service selects it, the state, and the question's id."""
+    the conversation service selects it, and the state, read-only."""
     context = build_conversation_context(history)
     context["conversation_state"] = state
-    context["question_message_id"] = question_message_id
     return context
 
 
 def simulate_state(
-    planner: Planner, messages: list[SimpleNamespace]
+    extractor: Extractor, messages: list[SimpleNamespace]
 ) -> tuple[dict, list[dict]]:
     """Replay the conversation turn by turn and return (state, rejected items).
 
     Starting from ``empty_state()``, every user message that is not the
-    filler question is asked as the current question, with the messages
-    before it as history and the state so far (``state_context``).  Its
-    ``state_update`` goes through ``apply_update`` with the messages up to and
-    including that one; each rejected item is logged with ``message_id``.  If
-    the Planner chose ``analyze`` with an ``evaluation_scope``, that scope
-    becomes the subject (``set_subject``).
+    filler question goes to the extractor with the state so far and the
+    messages before it; its proposals go through ``apply_update`` with the
+    messages up to and including that one.  An extraction that failed, and
+    each rejected item, is logged with ``message_id``; a failed one changes
+    no state.  The Planner is not asked here, so the subject stays empty.
     """
     state = empty_state()
     rejected: list[dict] = []
     for position, message in enumerate(messages):
         if message.role != "user" or message.content == FILLER_QUESTION:
             continue
-        try:
-            decision = planner(
-                message.content, state_context(messages[:position], state, message.id)
-            )
-        except StructuredOutputError:
-            # As in the service: a turn whose plan failed changes no state.
+        extraction = extractor(state, messages[:position], message)
+        if extraction.error is not None:
             rejected.append(
-                {"message_id": message.id, "index": None, "reason": PLANNER_ERROR}
+                {"message_id": message.id, "index": None, "reason": extraction.error}
             )
-            continue
         state, dropped = apply_update(
-            state, decision.state_update, messages[: position + 1]
+            state, extraction.updates, messages[: position + 1]
         )
         rejected += [{"message_id": message.id, **item} for item in dropped]
-        scope = decision.evaluation_scope
-        if decision.action == "analyze" and scope is not None:
-            state = set_subject(state, scope.entities, scope.period)
     return state, rejected
 
 
 def decide_with_state(
-    planner: Planner, case: dict, filler_turns: int, filler_answer: str = FILLER_ANSWER
+    planner: Planner,
+    extractor: Extractor,
+    case: dict,
+    filler_turns: int,
+    filler_answer: str = FILLER_ANSWER,
 ) -> tuple[Any, dict, list[dict]]:
-    """The final question after the simulated turns; its id follows the last one.
+    """The final question after the simulated turns, as the worker would run it:
+    the extractor first (its id follows the last message), then the Planner.
 
     The decision is None when the Planner could not produce a valid plan."""
     messages = build_messages(case, filler_turns, filler_answer)
-    state, rejected = simulate_state(planner, messages)
+    question = SimpleNamespace(
+        id=len(messages) + 1, role="user", content=case["question"]
+    )
+    state, rejected = simulate_state(extractor, [*messages, question])
     try:
-        decision = planner(
-            case["question"], state_context(messages, state, len(messages) + 1)
-        )
+        decision = planner(case["question"], state_context(messages, state))
     except StructuredOutputError:
         decision = None
     return decision, state, rejected
@@ -223,10 +220,16 @@ def evaluate_with_state(gateway: ModelGateway, fixture: dict) -> dict:
         service = PlanningService(gateway=gateway, sleeper=lambda _seconds: None)
         return service.decide(question, conversation_context=context)
 
+    def extractor(state: dict, history: list, current) -> Extraction:
+        return extract_state_update(
+            gateway, state=state, history=history, current=current
+        )
+
     rows = []
     for case in fixture["cases"]:
         decision, state, rejected = decide_with_state(
             planner,
+            extractor,
             case,
             fixture["filler_turns"],
             fixture.get("filler_answer", FILLER_ANSWER),

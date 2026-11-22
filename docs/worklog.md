@@ -987,3 +987,7 @@
 ## 2026-11-22 C6f 单独的会话状态抽取器（共建；方案 B；分支 feat/c6f-state-extractor）
 - 做了什么：新提示词 conversation.state_extract（只输出 {"state_update":[]}，无触发词的长期要求也算、一次性范围不算、公司/规则/查询条件不是维度）；策略 state_extract/1（历史可截短或整段去掉，当前消息放不下就不调用）；extract_state_update 失败一律返回空提议并记原因（context_over_budget / model_error / invalid_output）。
 - 验证：新增 11 个测试（含抽取结果交给 apply_update 后公司维度和助手引用被拒）；单元 1607 passed / 4 skipped；ruff、pyright、import-linter 通过。未调用真模型，未接入评测和 Worker（C6g、M7）。
+
+## 2026-11-22 C6g Planner 只读会话状态、评测改用抽取器（共建；分支 feat/c6g-planner-read-state）
+- 做了什么：PlannerDecision 去掉 state_update（与 C6c 前逐字节一致）；状态说明改为只读并加“include 华东 → 问题写明华东区”示例，修复提示词恢复九字段；策略 planner/4 不再传 question_message_id；评测逐轮模拟改为每条用户消息（含最后一问）先抽取 → apply_update，最后只问一次 Planner。
+- 验证：Planner 状态测试 5 个、评测模拟测试 7 个、planner_context 版本号 3 处；单元 1598 passed / 4 skipped；ruff、pyright、import-linter 通过。未调用真模型，效果待 C6h 付费 3 轮。
