@@ -954,3 +954,8 @@
 - 做了什么：用户批准方案 A 与拆分（C6a→C6b→C6c→C6d→M7）及新表；新增 conversation_states（每会话一行，version 乐观锁，RLS 按 app.company_id）、ORM 模型、conversations/state.py（empty_state / load_state / save_state，版本对不上返回 False 不写）；尚无调用方，行为不变。
 - 验证：集成 5 个新测试（插入、更新、过期写入、副本、跨公司 RLS）通过；测试库迁移降级再升级通过；单元 1553 passed / 4 skipped；ruff、pyright、import-linter 通过。全量集成本地 120 passed / 28 failed，失败全在 test_sql_execution_layer（本地无 5435 演示库、平台服务不能当数据源），以 CI 为准。
 - 遗留：ORM 批量 insert 的 rowcount 不可靠，改用表级语句 + RETURNING；线上迁移需先备份，部署放到 M7。
+
+## 2026-11-21 C6b 状态更新规则（训练；分支 feat/c6b-state-update-rules）
+- 做了什么：新增 conversations/state_update.py：维度白名单（区域、客户类型、订单状态、期间、产品类别、客诉严重度，无公司维度）、apply_update（6 条规则按序校验，引用须逐字出现在用户消息、值须在引用内；include/exclude 覆盖同维度、clear 删除；返回新状态和带序号的拒绝原因）、set_subject。用户写了深拷贝、按 id 建表和规则框架，其余按用户要求由我改好（is not in、future 导入顺序、list.add、第 6 条条件反了）。
+- 验证：新增 18 个单元测试（覆盖、批内后者胜、清除、8 种拒绝、首条规则为准、原状态不变）通过；单元 1571 passed / 4 skipped；ruff、pyright、import-linter 通过。
+- 遗留：尚无调用方，C6c 接 Planner 提议。
