@@ -118,3 +118,33 @@ class ConversationState(Base):
         server_default=func.now(),
         onupdate=func.now(),
     )
+
+
+class ConversationSummary(Base):
+    """What the messages that left the context window said (C9).
+
+    Kept apart from ``ConversationState``: the summary is written by its own
+    job, so each has its own ``version`` lock and neither write loses to the
+    other.  Every item cites the messages it came from.
+    """
+
+    __tablename__ = "conversation_summaries"
+    __table_args__ = (CheckConstraint("version >= 1", name="version_positive"),)
+
+    conversation_id: Mapped[int] = mapped_column(
+        ForeignKey("conversations.id", ondelete="CASCADE"), primary_key=True
+    )
+    company_id: Mapped[int] = mapped_column(
+        ForeignKey("companies.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    version: Mapped[int] = mapped_column(nullable=False, server_default="1")
+    summary: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    last_task_id: Mapped[int | None] = mapped_column(
+        ForeignKey("analysis_tasks.id", ondelete="SET NULL"), nullable=True
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+        server_default=func.now(),
+        onupdate=func.now(),
+    )
