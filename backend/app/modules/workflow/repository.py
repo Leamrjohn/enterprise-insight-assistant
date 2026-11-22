@@ -5,6 +5,7 @@ from app.core.exceptions import TaskAdmissionLimitError
 from app.core.settings import get_settings
 from app.core.tracing import current_traceparent
 from app.db.clock import database_now
+from app.modules.conversations.state import STATE_SNAPSHOT_KEY
 from app.modules.workflow.delivery.outbox import cancel_unclaimed_analysis_task_event
 from app.modules.workflow.lifecycle.capacity import require_task_capacity
 from app.modules.workflow.lifecycle.execution_attempt import TaskExecutionAttempt
@@ -113,7 +114,9 @@ def create_task(
                 "entries": deepcopy(settings.model_price_table),
             },
         },
-        model_budget_snapshot=configured_model_budget(settings),
+        model_budget_snapshot=configured_model_budget(
+            settings, state_extract=STATE_SNAPSHOT_KEY in (context_snapshot or {})
+        ),
     )
     db.add(record)
     db.flush()

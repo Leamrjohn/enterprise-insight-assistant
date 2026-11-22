@@ -37,6 +37,7 @@ from app.modules.reporting.citation_validation import validate_citations
 from app.modules.reporting.reviewer_agent import ReviewerAgent
 from app.modules.reporting.semantic_review_service import SemanticReviewService
 from app.modules.runtime.context.engine import ContextBudgetExceeded
+from app.modules.runtime.context.policies.state_extract import STATE_EXTRACT
 from app.modules.runtime.model_governance import model_node_scope
 from app.modules.runtime.tool_guard import (
     CircuitBreaker,
@@ -189,7 +190,7 @@ def state_extract_node(state: WorkflowState) -> dict:
         for m in (state.get("conversation_context") or {}).get("messages", [])
     ]
     current = _Message(id=frozen["message_id"], role="user", content=state["question"])
-    with model_node_scope("state_extract"):
+    with model_node_scope(STATE_EXTRACT.node):
         extraction = extract_state_update(
             get_model_gateway(), state=frozen["state"], history=history, current=current
         )

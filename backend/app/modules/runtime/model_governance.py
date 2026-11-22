@@ -12,6 +12,7 @@ from uuid import uuid4
 from app.core.settings import MAX_LLM_TIMEOUT_SECONDS
 from app.db.clock import database_now
 from app.modules.runtime.context.manifest import ContextManifest
+from app.modules.runtime.context.policies.state_extract import STATE_EXTRACT
 from app.modules.runtime.context_measurement import (
     context_usage,
     gateway_sections,
@@ -301,9 +302,13 @@ def reserve_model_call(
     repairs = int(usage.get("repairs", 0))
     current_cost = Decimal(str(usage.get("cost", "0")))
     current_reserved_cost = Decimal(str(usage.get("reserved_cost", "0")))
-    if calls >= int(budget.get("max_calls", 0)) or node_calls >= int(
-        budget.get("max_calls_per_node", 0)
-    ):
+    if scope.node_name == STATE_EXTRACT.node:
+        # M7c: extraction has its own allowance (0 on tasks without one).
+        if node_calls >= int(budget.get("state_extract_max_calls", 0)):
+            raise ModelBudgetExceeded("state extraction budget exhausted")
+    elif calls - int(calls_by_node.get(STATE_EXTRACT.node, 0)) >= int(
+        budget.get("max_calls", 0)
+    ) or node_calls >= int(budget.get("max_calls_per_node", 0)):
         raise ModelBudgetExceeded("model call budget exhausted")
     reserved_tokens = estimated_prompt_tokens + reserved_completion_tokens
     reserved_cost = _priced_cost(

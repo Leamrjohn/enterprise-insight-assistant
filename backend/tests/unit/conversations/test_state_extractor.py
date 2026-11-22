@@ -7,6 +7,7 @@ import pytest
 from app.core.exceptions import PermanentModelError, RetryableModelError
 from app.modules.conversations.state import empty_state
 from app.modules.conversations.state_extractor import (
+    BUDGET_EXHAUSTED,
     INVALID_OUTPUT,
     MAX_STATE_UPDATES,
     MODEL_ERROR,
@@ -22,6 +23,7 @@ from app.modules.conversations.state_update import (
     apply_update,
 )
 from app.modules.runtime import model_governance
+from app.modules.runtime.model_governance import ModelBudgetExceeded
 from app.modules.runtime.prompts import get_prompt_registry
 
 
@@ -201,3 +203,8 @@ def test_apply_update_still_rejects_what_the_extractor_should_not_propose():
         {"index": 1, "reason": UNKNOWN_DIMENSION},
         {"index": 2, "reason": NOT_USER_MESSAGE},
     ]
+
+
+def test_a_spent_extraction_allowance_proposes_nothing_instead_of_failing():
+    gateway = RecordingGateway(error=ModelBudgetExceeded("state extraction budget"))
+    assert extract(gateway) == Extraction(error=BUDGET_EXHAUSTED)
