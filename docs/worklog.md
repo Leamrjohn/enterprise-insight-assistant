@@ -1021,3 +1021,9 @@
 - 冒烟 m7c-shadow-r1（任务 1049–1058，$0.027465，73,480 token）：9 成功 + hybrid 失败，与 C5f 基线一致；知识题不再预算用完。比 off 多约 7,600 token、$0.0025（每任务 1 次抽取）。
 - 状态：10 个任务都有 state_extraction（error null、提议 0 条，单轮题符合预期），每任务恰 1 次 state_extract/1 调用，预算快照带 state_extract_max_calls=1；conversation_states 已写入 19 行（均为 version 1）。
 - 遗留：shadow 下 Planner 仍用正则约束；切 enforce 前需要线上多轮对话的数据或再跑长对话评测，由用户决定。
+
+## 2026-11-22 会话状态切 enforce（代做；用户改配置；main 404da8b）
+- 上线：用户把 CONVERSATION_STATE_MODE 改为 enforce，重建 api/worker/report-worker/beat，四个服务读到 enforce，readiness 4 项 ok。
+- 冒烟 m7c-enforce-r1（任务 1059–1068，$0.027598，74,401 token）：9 成功 + hybrid 失败，与基线一致；每任务 1 次抽取、无错误。
+- Planner 输入：history 区段 off（1039）与 shadow（1049）都是 97→11 token，逐项相同；enforce（1059）133→47，多出的 36 token 是会话状态，正则约束不再进入。
+- 遗留：冒烟只有单轮题，状态为空；多轮效果靠长对话评测（C6i 43/43/42）。线上保持 enforce，有问题改回 shadow。
