@@ -1076,3 +1076,9 @@
 - 验证：单元 1669 passed 4 skipped。重跑（复用 C9d 录音，只重录带摘要的 Planner）每轮 46 次 / $0.072；state 44/44/43 → state_summary 51/50/49，lost 0/0/0，对照题 control-one-off-question-30 三轮都过；early_fact 6/5/4（C9d 3/2/2）。结果在 artifacts/evaluation-20261124-c9e-note-r1～r3。
 - 遗留：early-product-25 两轮、early-metric-30 一轮仍追问澄清。
 - 下一步：满足“开、关按题对比有收益且 lost 为 0”，可提议线上先 shadow 再 enforce；线上需先迁移 a9b0c1d2e3f4（先备份并询问）。
+
+## 2026-11-24 C9 上线 shadow（代做；用户批准备份、迁移和开 shadow；main b2dfbc2）
+- 上线：容器内 pg_dump 备份到 ../_backups/agent_platform_c9_20261124_024148.dump（8,738,825 字节，sha256 0b2361fa…；pg_restore 可列出 40 张表数据）；迁移 f8a9b0c1d2e3→a9b0c1d2e3f4（conversation_summaries 开启并强制 RLS，agent_app 有增删改查）；重建并重启 api/worker/report-worker/beat，readiness 4 项 ok；用户在后端配置文件里设 CONVERSATION_SUMMARY_MODE=shadow，四个服务都读到 shadow。
+- 冒烟 c9-shadow-r1（任务 1069–1078，$0.027731，74,523 token）：9 成功 + hybrid 失败，与 m7c-enforce 基线（$0.027598，74,401 token）一致。10 个任务都带 summary_max_calls，发布后各投递 1 次摘要任务，均返回 in_window；摘要表 0 行，账本无 summary 调用（单轮题符合预期）。
+- 待办：agent-demo_business_acme-1 在 11-22 以退出码 255 停止且未自动重启，导致首次冒烟身份检查失败；本次手动启动，是否给它加重启策略待定。
+- 下一步：真实长对话验证摘要写入与计费后，再决定开 enforce；之后进入 C7。
