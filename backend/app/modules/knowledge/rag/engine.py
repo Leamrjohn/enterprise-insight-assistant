@@ -3,8 +3,9 @@
 核心流程：检索证据 → 组装Prompt → 调用模型 → 校验引用 → 判断是否充分
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
+from app.modules.runtime.context.compressors import excerpt
 from app.modules.runtime.prompts import get_prompt_registry
 
 
@@ -50,10 +51,23 @@ def _validity_attributes(evidence: EvidenceRef) -> str:
     return attributes
 
 
-def build_prompt(
-    question: str, evidences: list[EvidenceRef], max_chars: int = 3000
-) -> tuple[str, str, set[int]]:
-    """返回 (system_prompt, user_prompt, allowed_chunk_ids)。"""
+EVIDENCE_MAX_CHARS = 3000
+# Less room than this is not worth an excerpt.
+MIN_EXCERPT_CHARS = 40
+
+
+def fit_evidences(
+    question: str, evidences: list[EvidenceRef], max_chars: int = EVIDENCE_MAX_CHARS
+) -> list[EvidenceRef]:
+    """The evidences the answer reads, best first, within ``max_chars``.
+
+    The best one is always whole.  C7: one that no longer fits is cut to the
+    sentences about the question (compressors.excerpt) instead of being
+    dropped with everything after it.  Fitting the result again changes
+    nothing, so build_prompt can be given it.
+    """
+    if max_chars <= 0:
+        raise ValueError("max_chars must be positive")
     sorted_evidences = sorted(
         evidences,
         key=lambda evidence: (
@@ -63,23 +77,28 @@ def build_prompt(
         ),
         reverse=True,
     )
-    # 按字数上限截断
-    if max_chars <= 0:
-        raise ValueError("max_chars must be positive")
-
     selected: list[EvidenceRef] = []
     total_chars = 0
-
     for evidence in sorted_evidences:
-        next_total = total_chars + len(evidence.content)
-
-        # 第一条永远保留；后续证据不能超过上限。
-        if selected and next_total > max_chars:
+        if not selected or total_chars + len(evidence.content) <= max_chars:
+            selected.append(evidence)
+            total_chars += len(evidence.content)
+            continue
+        room = max_chars - total_chars
+        if room < MIN_EXCERPT_CHARS:
             break
+        text = excerpt(evidence.content, question, room)
+        if text is not None:
+            selected.append(replace(evidence, content=text))
+            total_chars += len(text)
+    return selected
 
-        selected.append(evidence)
-        total_chars = next_total
 
+def build_prompt(
+    question: str, evidences: list[EvidenceRef], max_chars: int = EVIDENCE_MAX_CHARS
+) -> tuple[str, str, set[int]]:
+    """返回 (system_prompt, user_prompt, allowed_chunk_ids)。"""
+    selected = fit_evidences(question, evidences, max_chars)
     context = "\n\n".join(
         (
             f'<evidence chunk_id="{evidence.chunk_id}" '

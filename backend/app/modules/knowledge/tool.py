@@ -12,6 +12,7 @@ from app.modules.knowledge.rag.embeddings_local import (
 from app.modules.knowledge.rag.engine import (
     build_prompt,
     check_sufficiency,
+    fit_evidences,
     keep_relevant,
 )
 from app.modules.knowledge.rag.policy import (
@@ -213,6 +214,10 @@ class RAGTool(Tool):
                         "evidences": [],
                     },
                 )
+            # C7: an excerpted chunk carries the words the answer read, so the
+            # support check, the citations and the number check see them too.
+            fitted = {e.chunk_id: e for e in fit_evidences(question, evidences)}
+            evidences = [fitted.get(e.chunk_id, e) for e in evidences]
             system_prompt, user_prompt, allowed_chunk_ids = build_prompt(
                 question, evidences
             )

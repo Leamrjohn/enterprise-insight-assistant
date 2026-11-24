@@ -1089,3 +1089,9 @@
 - 计费：3 次 summary/1 调用都 settled，分别记在触发它的任务 1083/1084/1085 上，共 $0.000957；答题调用仍为每题 6 次，不受影响。7 个任务合计约 $0.021。
 - 遗留：验证脚本最后一段查询写错列名退出 1（结果改用 psql 核对），与系统无关。
 - 下一步：用户决定是否开 enforce；开之前再跑一轮冒烟和本长对话，确认第 7 轮能用摘要解析指代。
+
+## 2026-11-24 C7 证据按相关性压缩（训练；用户选 A 规则抽句；分支 feat/c7-evidence-excerpt）
+- 做了什么：compressors 新增切句、问题词/编号提取、sentence_score（编号 +3、问题词 +1、已得分且含数字 +1）和 excerpt（按分取句、原文顺序拼接、省略处标“……”）；engine.fit_evidences 让放不下的段改为摘句而非连同后续整段丢弃，剩余不足 40 字才停；tool 让支持度检查、引用和数字校验都用摘句后的文字；策略升 knowledge_answer/2（测试 2 处版本号随之改）。
+- 验证：单元 1683 passed 4 skipped（新增 14 例：第 900 字、末尾限定、300 组随机文本的原文子串与长度属性）；ruff、pyright 0 错误；import-linter 2 kept。付费 Knowledge 评测（用户批准，各上限 150 次/$0.12）：C7 前 50/57（第二评分 52）、C7 48/57（50），134/132 次共 $0.114；免费探针显示 55 个回答提示词中 18 个触发摘句，答错变化的两题 event-quality-high 未触发、crm-066-delay 未到回答环节，摘句的 18 题对错均未变；同一旧代码 C5f 为 48、本次 50，差 2 分在波动内。
+- 待办：C5f 录音无法重放（每次评测重新入库，chunk_id 变化），Knowledge 评测只能重录；本地后端配置把摘要开为 enforce 时 test_worker_terminal_result 6 例失败（FakeTaskRecord 无 conversation_id），与 test_off_freezes_nothing 同类，测试应固定开关。
+- 下一步：C8 把上下文评测接入门禁。
