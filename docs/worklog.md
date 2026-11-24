@@ -1089,3 +1089,9 @@
 - 计费：3 次 summary/1 调用都 settled，分别记在触发它的任务 1083/1084/1085 上，共 $0.000957；答题调用仍为每题 6 次，不受影响。7 个任务合计约 $0.021。
 - 遗留：验证脚本最后一段查询写错列名退出 1（结果改用 psql 核对），与系统无关。
 - 下一步：用户决定是否开 enforce；开之前再跑一轮冒烟和本长对话，确认第 7 轮能用摘要解析指代。
+
+## 2026-11-24 C9 开 enforce（代做；用户把 CONVERSATION_SUMMARY_MODE 改为 enforce）
+- 上线：重建并重启 api/worker/report-worker/beat，四个服务读到 enforce，readiness 4 项 ok。
+- 冒烟 c9-enforce-r1（任务 1086–1095，$0.02799，75,017 token）：9 成功；hybrid 由以往的 awaiting_review（失败）变为 partial（结果错误，outcome_correct）。该题是会话首问，快照无摘要、提示词与 shadow 相同，判断为模型波动，不是摘要引起。
+- 长对话（租户 297、会话 1066、任务 1096–1102，$0.021342）：7 轮全部 completed；第 7 轮“最开始问的那个区域”在 shadow 下追问澄清，enforce 下借冻结摘要答出华东区 9 月销售额。摘要写入 3 次、3 次 summary/1 调用 settled 并记在触发任务上。
+- 下一步：C9 收尾，进入 C7；hybrid 题仍按冒烟最上游失败另行跟踪。
