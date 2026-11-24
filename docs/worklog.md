@@ -1053,3 +1053,9 @@
 - 做了什么：发布事务提交后 _queue_summary 投递 summarize_conversation（off/非会话/无额度不投递，投递失败只记日志）；run_summary 只总结移出 8 条窗口的消息，每次至多 12 条，满 5 次增量改为整体重写（放不下则退回增量），费用记在触发任务上，covered_through 只在保存成功时前进。
 - 验证：单元 1650 passed 4 skipped（含窗口 10 例）；workflow+conversations 集成在 CONVERSATION_STATE_MODE=off 下 90 passed 4 skipped（摘要任务 9 例）；ruff、pyright 0 错误；import-linter 2 kept。未调用真实模型，默认 off，线上未迁移。
 - 下一步：C9c-2 Planner 读取 history_summary（enforce 才放入，planner/5）和长对话评测的摘要组。
+
+## 2026-11-24 C9c-2 Planner 读取摘要（共建；用户选 A 建任务时冻结；分支 feat/c9c-planner-summary，从 C9c-1b 切出）
+- 做了什么：开关非 off 时建任务冻结摘要进快照（只留出处全在本轮历史之前的要点）；enforce 才把它作为不可信、可丢弃的 <history_summary> 区段交给 Planner，提示词与修复提示词都带说明；无摘要时提示词逐字节不变；策略升为 planner/5，摘要排在 memory 后让位；4 处测试期望随版本号改为 planner/5。
+- 验证：单元 1661 passed 4 skipped；workflow+conversations 集成（CONVERSATION_STATE_MODE=off）92 passed 4 skipped；ruff、pyright 0 错误；import-linter 2 kept。未调用真实模型，默认 off。
+- 待办：摘要任务按“有内容”数窗口，建任务的历史还要求 status 为 completed/partial，两者窗口起点可能不同；冻结时按出处过滤，不会重复，最多漏一段。
+- 下一步：C9c-3 长对话评测加摘要组。

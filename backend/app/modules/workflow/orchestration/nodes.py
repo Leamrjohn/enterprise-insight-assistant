@@ -30,6 +30,7 @@ from app.modules.analysis.tool_protocol import Tool
 from app.modules.conversations.state import STATE_SNAPSHOT_KEY
 from app.modules.conversations.state_extractor import extract_state_update
 from app.modules.conversations.state_update import apply_update
+from app.modules.conversations.summary import SUMMARY_SNAPSHOT_KEY
 from app.modules.knowledge.agent import KnowledgeAgent
 from app.modules.knowledge.tool import RAGTool
 from app.modules.knowledge.tool_agent import ToolCallingKnowledgeAgent
@@ -212,16 +213,19 @@ def state_extract_node(state: WorkflowState) -> dict:
     )
 
 
+_FROZEN_KEYS = frozenset({STATE_SNAPSHOT_KEY, SUMMARY_SNAPSHOT_KEY})
+
+
 def _planner_conversation_context(state: WorkflowState) -> dict | None:
-    """The history the Planner reads; the frozen state is never part of it.
+    """The history the Planner reads; the frozen state and summary are never part of it.
 
     enforce swaps the regex constraints for the extracted state, as the
     long-conversation evaluation does; shadow and off leave them as they were.
     """
     context = state.get("conversation_context")
-    if not context or STATE_SNAPSHOT_KEY not in context:
+    if not context or not _FROZEN_KEYS.intersection(context):
         return context
-    context = {k: v for k, v in context.items() if k != STATE_SNAPSHOT_KEY}
+    context = {k: v for k, v in context.items() if k not in _FROZEN_KEYS}
     extracted = state.get("conversation_state")
     if (
         runtime_settings().conversation_state_mode == "enforce"
@@ -230,6 +234,14 @@ def _planner_conversation_context(state: WorkflowState) -> dict | None:
         context.pop("standing_constraints", None)
         context["conversation_state"] = extracted
     return context
+
+
+def _planner_history_summary(state: WorkflowState) -> list[str] | None:
+    """C9c: the summary frozen at task creation, sent only in enforce."""
+    if runtime_settings().conversation_summary_mode != "enforce":
+        return None
+    frozen = (state.get("conversation_context") or {}).get(SUMMARY_SNAPSHOT_KEY)
+    return (frozen or {}).get("items") or None
 
 
 def planner_node(state: WorkflowState) -> dict:
@@ -241,6 +253,7 @@ def planner_node(state: WorkflowState) -> dict:
     """
     _set_stage(state, "planning", "planner_node")
     agent = PlannerAgent()
+    history_summary = _planner_history_summary(state)
     with model_node_scope("planner"):
         result = agent.run(
             AgentInput(
@@ -248,6 +261,7 @@ def planner_node(state: WorkflowState) -> dict:
                 user_id=state["user_id"],
                 context={
                     "conversation_context": _planner_conversation_context(state),
+                    **({"history_summary": history_summary} if history_summary else {}),
                     **(
                         {"planner_memory": state["planner_memory"]}
                         if state.get("planner_memory")

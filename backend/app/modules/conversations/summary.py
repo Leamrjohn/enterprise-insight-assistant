@@ -19,6 +19,8 @@ from sqlalchemy.orm import Session
 
 SUMMARY_SCHEMA = "conversation-summary/v1"
 MAX_SUMMARY_ITEMS = 8
+# Where a task's context snapshot keeps the summary frozen at its creation (C9c).
+SUMMARY_SNAPSHOT_KEY = "conversation_summary_snapshot"
 
 
 def empty_summary() -> dict:

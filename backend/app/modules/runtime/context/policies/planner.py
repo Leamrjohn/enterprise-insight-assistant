@@ -11,13 +11,15 @@ PLANNER = ContextPolicy(
     # 2: history is compressed by shortening assistant replies, not dropping turns.
     # 3: history may carry the conversation state and the question's message id.
     # 4: the state is read-only, so the question's message id is no longer sent.
-    version="planner/4",
+    # 5: the summary of messages that left the history window (C9c).
+    version="planner/5",
     budget_tokens=3000,
     output_reserve_tokens=512,
     sections={
         # First entries give way first.
         "attachments": SectionRule(droppable=True),
         "memory": SectionRule(droppable=True),
+        "history_summary": SectionRule(droppable=True),
         # The conversation service's own selection record is not for the model.
         "history": SectionRule(
             fields=(

@@ -123,6 +123,6 @@ def test_enforce_keeps_the_state_but_not_a_question_id(monkeypatch):
     )
 
     prompt = gateway.calls[0]["prompt"]
-    assert gateway.calls[0]["manifest"].policy == "planner/4"
+    assert gateway.calls[0]["manifest"].policy == "planner/5"
     assert '"conversation_state"' in prompt
     assert "question_message_id" not in prompt

@@ -124,7 +124,7 @@ def test_shadow_sends_exactly_the_prompt_off_sends(monkeypatch):
     shadow = _plan("shadow", monkeypatch, **dict(context))
     assert shadow["prompt"] == off["prompt"]
     assert off["manifest"] is None
-    assert shadow["manifest"].policy == "planner/4:shadow"
+    assert shadow["manifest"].policy == "planner/5:shadow"
 
 
 def test_shadow_records_the_whitelist_on_history(monkeypatch):
@@ -170,7 +170,7 @@ def test_enforce_sends_the_old_prompt_when_nothing_needs_cutting(monkeypatch):
     off = _plan("off", monkeypatch, **dict(context))
     enforce = _plan("enforce", monkeypatch, **dict(context))
     assert enforce["prompt"] == off["prompt"]
-    assert enforce["manifest"].policy == "planner/4"
+    assert enforce["manifest"].policy == "planner/5"
 
 
 def test_enforce_leaves_the_selection_record_out_of_the_prompt(monkeypatch):
@@ -225,4 +225,4 @@ def test_enforce_repair_prompt_uses_what_was_kept(monkeypatch):
     PlanningService(gateway=gateway).decide(QUESTION, conversation_context=conversation)
     assert len(gateway.calls) == 2
     assert "conversation-context/v2" not in gateway.calls[1]["prompt"]
-    assert gateway.calls[1]["manifest"].policy == "planner/4"
+    assert gateway.calls[1]["manifest"].policy == "planner/5"

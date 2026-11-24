@@ -19,6 +19,8 @@ from app.modules.conversations.repository import (
     touch_conversation,
 )
 from app.modules.conversations.state import STATE_SNAPSHOT_KEY, freeze_state
+from app.modules.conversations.summary import SUMMARY_SNAPSHOT_KEY, load_summary
+from app.modules.conversations.summary_update import planner_summary
 from app.modules.documents.models import Documents
 from app.modules.documents.repository import allowed_min_view_roles
 from app.modules.input_artifacts.repository import (
@@ -238,6 +240,17 @@ def create_conversation_task_service(
             conversation_context_snapshot[STATE_SNAPSHOT_KEY] = freeze_state(
                 db, conversation_id=conversation.id, message_id=user_message.id
             )
+        if runtime_settings().conversation_summary_mode != "off" and messages:
+            # conversation_summaries has forced RLS too.
+            set_tenant_scope(db, context.company.id)
+            loaded = load_summary(db, conversation.id)
+            conversation_context_snapshot[SUMMARY_SNAPSHOT_KEY] = {
+                "version": loaded.version,
+                "items": planner_summary(
+                    loaded.summary,
+                    window_start_id=messages[-MAX_CONTEXT_MESSAGES:][0].id,
+                ),
+            }
         if conversation.data_source_id is None:
             raise DataSourceNotReadyError("会话没有关联经营数据源")
         source = get_data_source(
