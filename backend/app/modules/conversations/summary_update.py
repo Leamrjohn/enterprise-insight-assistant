@@ -8,7 +8,7 @@ real messages that have left the context window, the same way
 from __future__ import annotations
 
 import copy
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 
 from app.modules.conversations.state_update import Message
 from app.modules.conversations.summary import MAX_SUMMARY_ITEMS
@@ -95,3 +95,38 @@ def _reject_reason(
     if not all(message_id < window_start_id for message_id in source_message_ids):
         return MESSAGE_IN_WINDOW
     return None
+
+
+def window_start(messages: Sequence[Message], *, window_size: int) -> int | None:
+    """The id of the oldest message the next task still sees, or None.
+
+    The next task sees the last ``window_size`` messages with content (blank
+    or None content is skipped, as the conversation context does).  None
+    means no message has left the window yet.  ``messages`` are in id order.
+    """
+    with_content = []
+    for m in messages:
+        if not (m.content or "").strip():
+            continue
+        with_content.append(m)
+    if len(with_content) <= window_size:
+        return None
+    else:
+        return with_content[-window_size].id
+
+
+def messages_to_summarize(
+    messages: Sequence[Message],
+    *,
+    covered_through: int,
+    window_start_id: int,
+    limit: int,
+) -> list[Message]:
+    """The oldest ``limit`` messages with content that are newer than
+    ``covered_through`` and older than ``window_start_id``, in id order."""
+    partil_messages = [
+        m
+        for m in messages
+        if covered_through < m.id < window_start_id and (m.content or "").strip()
+    ]
+    return partil_messages[:limit]

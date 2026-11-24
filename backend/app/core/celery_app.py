@@ -48,6 +48,7 @@ celery_app.conf.update(
         "app.modules.workflow.tasks",
         "app.modules.documents.tasks",
         "app.modules.workflow.outbox_tasks",
+        "app.modules.workflow.summary_tasks",
         "app.modules.input_artifacts.tasks",
         "app.modules.input_artifacts.outbox_tasks",
         "app.modules.memory.tasks",
