@@ -127,6 +127,7 @@ def _policy(policy_id="paragraph_jieba_rrf_rerank_v1"):
         "final": {"overall": {"cases": 4, "hit_at_1": 0.5, "hit_at_3": 0.75}},
         "candidates": {"overall": {"cases": 4, "hit_at_10": 1.0}},
         "answer_in_prompt": {"cases": 2, "rate": 0.5},
+        "context_over_budget": 0,
         "version_traps": {
             "overall": {"right_version_first": 3, "wrong_version_above_right": 0}
         },
@@ -142,6 +143,7 @@ def test_retrieval_counts_turn_rates_back_into_question_counts():
         "final.hit_at_3": 3,
         "candidates.hit_at_10": 4,
         "answer_in_prompt": 1,
+        "context_over_budget": 0,
         "traps.right_version_first": 3,
         "traps.wrong_version_above_right": 0,
     }

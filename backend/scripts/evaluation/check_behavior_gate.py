@@ -90,6 +90,7 @@ def retrieval_counts(report: dict) -> dict[str, float]:
         "final.hit_at_3": hits(policy["final"], "hit_at_3"),
         "candidates.hit_at_10": hits(policy["candidates"], "hit_at_10"),
         "answer_in_prompt": round(in_prompt["rate"] * in_prompt["cases"]),
+        "context_over_budget": policy["context_over_budget"],
         "traps.right_version_first": traps["right_version_first"],
         "traps.wrong_version_above_right": traps["wrong_version_above_right"],
     }
