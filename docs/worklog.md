@@ -1100,3 +1100,10 @@
 - 验证：单元 1683 passed 4 skipped（新增 14 例：第 900 字、末尾限定、300 组随机文本的原文子串与长度属性）；ruff、pyright 0 错误；import-linter 2 kept。付费 Knowledge 评测（用户批准，各上限 150 次/$0.12）：C7 前 50/57（第二评分 52）、C7 48/57（50），134/132 次共 $0.114；免费探针显示 55 个回答提示词中 18 个触发摘句，答错变化的两题 event-quality-high 未触发、crm-066-delay 未到回答环节，摘句的 18 题对错均未变；同一旧代码 C5f 为 48、本次 50，差 2 分在波动内。
 - 待办：C5f 录音无法重放（每次评测重新入库，chunk_id 变化），Knowledge 评测只能重录；本地后端配置把摘要开为 enforce 时 test_worker_terminal_result 6 例失败（FakeTaskRecord 无 conversation_id），与 test_off_freezes_nothing 同类，测试应固定开关。
 - 下一步：C8 把上下文评测接入门禁。
+
+## 2026-11-24 C7 部署与冒烟（代做；main 7cd7d4e）
+- 上线：重建并重启 api/worker/report-worker/beat，readiness 4 项 ok，worker 读到 knowledge_answer/2，摘要仍 enforce。
+- 冒烟 c7-deploy-r1（任务 1103–1110）：前 7 题与 c9-enforce-r1 一致，第 8 题 clarification-missing-time-range 因 Planner 两次输出未过 JSON 校验而 failed，轮次按规则停止（约 $0.021）。用户批准重跑 c7-deploy-r2（任务 1111–1120，$0.027645，74,519 token）：澄清题与两道长文档题成功，hybrid 失败（已知），knowledge-quality-batch-evidence 结果错误（document_qualifications_supported），该题前两轮均成功。
+- 判断：冒烟里的 Knowledge 题都没有触发摘句（结果中无“……”，token 与上一轮相差不到 1%），两次异常题目不同，属模型波动，不是 C7 引起；Planner 不合格输出内容未落日志，原因未查。
+- 待办：PR #81 有一项 Secret scan 一直 pending（另一份已通过）；我等待 CI 的命令因此空等约 54 分钟后被停掉，之后合并后不再用 --watch 等全部检查。
+- 下一步：C8 把上下文评测接入门禁。
