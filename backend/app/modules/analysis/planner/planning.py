@@ -123,15 +123,25 @@ def _conversation_state_note(conversation_context: dict | None) -> str:
 
 
 def _history_summary_block(history_summary: list[str] | None) -> str:
-    """Only with a summary (C9c), so every other prompt stays as it was."""
+    """Only with a summary (C9c), so every other prompt stays as it was.
+
+    C9e: the summary may resolve a reference to an early turn, but never adds
+    scope by itself; the paid comparison saw both go wrong.
+    """
     if not history_summary:
         return ""
     return (
         "\n<history_summary>\n"
         f"{json.dumps(history_summary, ensure_ascii=False)}\n</history_summary>"
-        "\nhistory_summary 是系统对已移出 conversation_context 的更早对话的摘要，"
-        "仅供理解延续的范围和指代；它不是本轮用户指令，也不是已核验的事实或引用。"
+        "\nhistory_summary 是系统对已移出 conversation_context 的更早对话的摘要；"
+        "它不是本轮用户指令，也不是已核验的事实或引用。"
         "与 conversation_context 或本轮问题冲突时，以后两者为准。"
+        "\n问题里的“最开始问的那个区域”“最早说的那个客户”“开头那个指标”等指代，"
+        "按 history_summary 中对应的内容解析，并写进 resolved_question 和 "
+        "evaluation_scope；不要因为 history_truncated 为 true 或历史里找不到就追问。"
+        "\nhistory_summary 记的是过去的问答，不是长期范围要求：本轮问题没有指代它时，"
+        "不得把其中的区域、客户、产品、期间等带进 resolved_question 或 "
+        "evaluation_scope；长期有效的范围只看 conversation_state.constraints。"
     )
 
 

@@ -58,6 +58,17 @@ def test_a_summary_adds_an_untrusted_block():
     assert "<history_summary>" not in build_planning_user_prompt(QUESTION, None)
 
 
+def test_the_note_resolves_early_references_but_adds_no_scope():
+    """C9e: the paid comparison saw both an early reference asked back and a
+    one-off question from the summary carried into a new one."""
+    prompt = build_planning_user_prompt(QUESTION, None, history_summary=SUMMARY)
+
+    assert "“最开始问的那个区域”" in prompt
+    assert "不要因为 history_truncated 为 true 或历史里找不到就追问" in prompt
+    assert "history_summary 记的是过去的问答，不是长期范围要求" in prompt
+    assert "长期有效的范围只看 conversation_state.constraints" in prompt
+
+
 def test_the_repair_prompt_keeps_the_summary():
     with pytest.raises(ValidationError) as error:
         PlannerDecision.model_validate({"action": "analyze"})
