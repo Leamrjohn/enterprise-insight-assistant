@@ -1048,3 +1048,8 @@
 - 做了什么：新配置 CONVERSATION_SUMMARY_MODE（off/shadow/enforce，默认 off）；非 off 时会话任务创建即得 summary_max_calls=1 与额外 token；model_governance 用 OWN_ALLOWANCES 统一抽取和摘要的单独额度，答题路径的 max_calls 不被占；评测的 _answer_path 也排除摘要调用。
 - 验证：单元 1640 passed 4 skipped；workflow 集成 54 passed 3 skipped（含额度 4 例）；ruff、pyright 0 错误；import-linter 2 kept。默认 off，线上无变化。
 - 下一步：C9c-1b 发布后投递摘要任务。
+
+## 2026-11-24 C9c-1b 发布后的摘要任务（共建；用户写 window_start 与 messages_to_summarize；分支 feat/c9c-summary-job，从 C9c-1a 切出）
+- 做了什么：发布事务提交后 _queue_summary 投递 summarize_conversation（off/非会话/无额度不投递，投递失败只记日志）；run_summary 只总结移出 8 条窗口的消息，每次至多 12 条，满 5 次增量改为整体重写（放不下则退回增量），费用记在触发任务上，covered_through 只在保存成功时前进。
+- 验证：单元 1650 passed 4 skipped（含窗口 10 例）；workflow+conversations 集成在 CONVERSATION_STATE_MODE=off 下 90 passed 4 skipped（摘要任务 9 例）；ruff、pyright 0 错误；import-linter 2 kept。未调用真实模型，默认 off，线上未迁移。
+- 下一步：C9c-2 Planner 读取 history_summary（enforce 才放入，planner/5）和长对话评测的摘要组。

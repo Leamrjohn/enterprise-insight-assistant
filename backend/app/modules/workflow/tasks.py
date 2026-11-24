@@ -7,7 +7,7 @@ import re
 from contextlib import ExitStack, contextmanager
 from datetime import datetime
 from threading import Event, Thread
-from typing import Any
+from typing import Any, cast
 
 from app.core import tracing
 from app.core.celery_app import celery_app
@@ -75,6 +75,7 @@ from app.modules.workflow.models import (
     AnalysisTaskInputArtifactVersion,
 )
 from app.modules.workflow.orchestration.graph import run_analysis
+from app.modules.workflow.summary_tasks import summarize_conversation
 from fastapi.encoders import jsonable_encoder
 
 logger = logging.getLogger(__name__)
@@ -457,6 +458,25 @@ def _save_conversation_state(
         )
 
 
+def _queue_summary(record: AnalysisTask) -> None:
+    """C9: summarize once the publish is committed.
+
+    Best effort: a summary not queued here is caught up by the next publish.
+    """
+    if get_settings().conversation_summary_mode == "off":
+        return
+    if record.conversation_id is None:
+        return
+    if "summary_max_calls" not in (record.model_budget_snapshot or {}):
+        return
+    try:
+        cast(Any, summarize_conversation).delay(task_id=record.id)
+    except Exception as exc:  # noqa: BLE001 - the next publish catches up
+        logger.warning(
+            "Task %s summary was not queued: %s", record.id, type(exc).__name__
+        )
+
+
 def _save_workflow_result(
     db,
     record: AnalysisTask,
@@ -574,6 +594,8 @@ def _save_workflow_result(
         content=final_answer or GENERIC_WORKER_FAILURE_MESSAGE,
     )
     db.commit()
+    if task_status != "failed":
+        _queue_summary(record)
 
 
 def _publish_approved_draft(
