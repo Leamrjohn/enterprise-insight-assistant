@@ -96,9 +96,9 @@ def test_the_answer_sends_the_same_text_in_every_mode(mode, monkeypatch):
 
 def test_shadow_and_enforce_name_their_manifests(monkeypatch):
     _, calls = _run(monkeypatch, "shadow")
-    assert calls[0]["manifest"].policy == "knowledge_answer/1:shadow"
+    assert calls[0]["manifest"].policy == "knowledge_answer/2:shadow"
     _, calls = _run(monkeypatch, "enforce")
-    assert calls[0]["manifest"].policy == "knowledge_answer/1"
+    assert calls[0]["manifest"].policy == "knowledge_answer/2"
     assert all(entry.action == "kept" for entry in calls[0]["manifest"].sections)
 
 

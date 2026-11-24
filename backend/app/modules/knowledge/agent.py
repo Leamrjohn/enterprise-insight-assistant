@@ -48,8 +48,8 @@ def answer_context_manifest(
     """The manifest recorded with one Knowledge answer; enforce refuses one that
     cannot fit.
 
-    knowledge_answer/1 shrinks nothing, so an answer that fits is sent exactly
-    as built.
+    The engine shrinks nothing here: build_prompt already fitted the chunks
+    (C7 excerpts included), so an answer that fits is sent exactly as built.
     """
     mode = runtime_settings().context_knowledge_mode
     if mode == "off":
