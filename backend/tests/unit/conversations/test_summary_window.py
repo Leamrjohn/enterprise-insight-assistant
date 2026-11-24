@@ -5,6 +5,7 @@ from dataclasses import dataclass
 import pytest
 from app.modules.conversations.summary_update import (
     messages_to_summarize,
+    planner_summary,
     window_start,
 )
 
@@ -75,3 +76,27 @@ def test_nothing_is_picked_once_covered_reaches_the_window():
         conversation(20), covered_through=12, window_start_id=13, limit=12
     )
     assert picked == []
+
+
+def _summary(*sources: list[int]) -> dict:
+    return {
+        "items": [
+            {"text": f"要点{i}", "source_message_ids": ids}
+            for i, ids in enumerate(sources)
+        ]
+    }
+
+
+def test_the_planner_reads_items_older_than_its_history():
+    summary = _summary([1], [2, 4], [3])
+    assert planner_summary(summary, window_start_id=5) == ["要点0", "要点1", "要点2"]
+
+
+def test_an_item_citing_a_message_still_in_the_history_is_left_out():
+    # 要点1 cites message 5, which the Planner already sees in its history.
+    summary = _summary([1], [4, 5], [3])
+    assert planner_summary(summary, window_start_id=5) == ["要点0", "要点2"]
+
+
+def test_an_empty_summary_gives_nothing():
+    assert planner_summary({"items": []}, window_start_id=5) == []

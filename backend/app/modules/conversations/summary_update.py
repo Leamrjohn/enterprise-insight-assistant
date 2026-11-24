@@ -130,3 +130,16 @@ def messages_to_summarize(
         if covered_through < m.id < window_start_id and (m.content or "").strip()
     ]
     return partil_messages[:limit]
+
+
+def planner_summary(summary: dict, *, window_start_id: int) -> list[str]:
+    """The texts the Planner may read, in item order.
+
+    Only items whose sources are all older than ``window_start_id`` (the oldest
+    message in the Planner's own history), so nothing is said twice.
+    """
+    return [
+        item["text"]
+        for item in summary.get("items", [])
+        if all(i < window_start_id for i in item["source_message_ids"])
+    ]

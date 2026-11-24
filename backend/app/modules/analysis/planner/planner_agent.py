@@ -48,6 +48,8 @@ class PlannerAgent(Agent):
                 kwargs["planner_memory"] = input.context["planner_memory"]
             if input.context.get("attachment_context"):
                 kwargs["attachment_context"] = input.context["attachment_context"]
+            if input.context.get("history_summary"):
+                kwargs["history_summary"] = input.context["history_summary"]
             decision = self._planning_service.decide(input.question, **kwargs)
         except ModelBudgetExceeded:
             raise
