@@ -1064,3 +1064,15 @@
 - 做了什么：新组 state_summary = state 组 + 摘要；问最后一题前把移出窗口的消息按 12 条一批补齐摘要（不做整体重写），经 planner_summary 过滤后作为 history_summary 交给 Planner；报告每题记摘要和被拒要点，state 与 state_summary 同跑时给出按题 gained/lost。
 - 验证：单元 1668 passed 4 skipped（新增 7 例）；ruff、pyright 0 错误。未录制、未调用模型。
 - 下一步：C9d 付费对比 state 与 state_summary（先批准调用次数与费用上限；录制用 --resume 复用两组相同的抽取调用）。
+
+## 2026-11-24 C9d 摘要开关付费对比（用户批准 3 轮，每轮上限 320 次 / $0.40；state 组重放 C6i 录音）
+- 做了什么：--arms state,state_summary 跑 3 轮，结果在 artifacts/evaluation-20261124-c9d-summary-r1～r3；实际 247/259/272 次调用，$0.142/$0.148/$0.158。
+- 结果：state 44/44/43 → state_summary 48/46/46；按题 gained 4/3/4（early-two-regions-40、early-conclusion-30、early-injection-30 三轮都赢），lost 0/1/1（control-one-off-question-30：摘要里一次性的“华东区7月”被当成长期范围带进新问题）；被拒要点 0。
+- 遗留：early_fact 仍有 3～4 题追问澄清，摘要内容正确但 Planner 不敢用；摘要说明没讲清“过去的问题不是长期范围”。
+- 下一步：C9e 改 history_summary 说明（指代可用摘要解析、长期范围只看 conversation_state），重跑摘要组后再决定是否开 enforce；在此之前开关保持 off。
+
+## 2026-11-24 C9e 摘要说明：指代可用摘要解析，摘要不算长期范围（用户批准重跑 3 轮，每轮上限 80 次 / $0.08）
+- 做了什么：_history_summary_block 新增两句——“最开始问的那个X”按摘要解析、不因 history_truncated 追问；摘要是过去问答不是长期范围，长期范围只看 conversation_state.constraints。无摘要的提示词不变。
+- 验证：单元 1669 passed 4 skipped。重跑（复用 C9d 录音，只重录带摘要的 Planner）每轮 46 次 / $0.072；state 44/44/43 → state_summary 51/50/49，lost 0/0/0，对照题 control-one-off-question-30 三轮都过；early_fact 6/5/4（C9d 3/2/2）。结果在 artifacts/evaluation-20261124-c9e-note-r1～r3。
+- 遗留：early-product-25 两轮、early-metric-30 一轮仍追问澄清。
+- 下一步：满足“开、关按题对比有收益且 lost 为 0”，可提议线上先 shadow 再 enforce；线上需先迁移 a9b0c1d2e3f4（先备份并询问）。
