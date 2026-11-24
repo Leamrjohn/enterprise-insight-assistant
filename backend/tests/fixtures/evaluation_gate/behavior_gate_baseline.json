@@ -5,6 +5,7 @@
     "planner_route/plan_rules: held-out set plan-rules-heldout/v1 (frozen), Planner recorded 2026-11-07 (cassettes_heldout_v1); matches the R0 comparison (Planner 32/43, rules 31/43).",
     "sql_results: re-recorded 2026-11-09 (cassettes_v2, 55 calls, ~$0.028) because the 11-02 recordings no longer match the SQL generation request; 21/24, one fewer than 11-02 (heldout-average-order: correct AVG() SQL refused by the metric contract).",
     "retrieval: main-chain policy only, models pinned in scripts/evaluation/prefetch_models.py; single-policy and eight-policy runs gave identical counts.",
+    "retrieval 2026-11-24 C8a: answer_in_prompt now reads the words the answer gets (C7 excerpts), still 41/45; context_over_budget (knowledge_answer contexts over their token budget) added at 0.",
     "A deliberate change that moves a count updates this file in the same commit and adds a note."
   ],
   "components": {
@@ -44,7 +45,7 @@
         "answer_in_prompt": 41,
         "traps.right_version_first": 12
       },
-      "max": {"traps.wrong_version_above_right": 0}
+      "max": {"traps.wrong_version_above_right": 0, "context_over_budget": 0}
     }
   }
 }

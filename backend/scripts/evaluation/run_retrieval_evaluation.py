@@ -36,7 +36,7 @@ from app.modules.knowledge.rag.embeddings_local import (
     LOCAL_EMBEDDING_MODEL_NAME,
     LocalEmbeddingProvider,
 )
-from app.modules.knowledge.rag.engine import build_prompt, keep_relevant
+from app.modules.knowledge.rag.engine import fit_evidences, keep_relevant
 from app.modules.knowledge.rag.policy import (
     BASELINE_RETRIEVAL_POLICY,
     DUAL_CHUNK_RETRIEVAL_POLICY,
@@ -54,6 +54,9 @@ from app.modules.knowledge.rag.validity import (
     resolve_validity_window,
 )
 from app.modules.organizations.models import Company
+from app.modules.runtime.context.engine import build_context
+from app.modules.runtime.context.policies.knowledge import KNOWLEDGE_ANSWER
+from app.modules.runtime.prompts import get_prompt_registry
 from app.utils.document_chunk import (
     PARAGRAPH_CHUNK_STRATEGY,
     SLIDING_WINDOW_CHUNK_STRATEGY,
@@ -263,6 +266,27 @@ def _index_corpus(
     return document_ids
 
 
+def answer_over_budget(question: str, sent: list) -> bool:
+    """Whether the knowledge_answer context for ``sent`` exceeds its budget.
+
+    Measured as agent.answer_context_manifest builds it: the answer's system
+    prompt, the question and each sent chunk's words; the evaluation has no
+    confirmed data facts.  Nothing sent means no answer call, so not over.
+    """
+    if not sent:
+        return False
+    build = build_context(
+        KNOWLEDGE_ANSWER,
+        {
+            "system": get_prompt_registry().text("knowledge.answer_system"),
+            "question": question,
+            "evidences": [evidence.content for evidence in sent],
+            "confirmed_facts": [],
+        },
+    )
+    return not build.fits
+
+
 def _index_keywords(db: Session, company_id: int, tokenizer: str) -> None:
     """Rebuild the keyword index with this policy's tokenizer."""
     chunks = db.execute(
@@ -303,15 +327,17 @@ def _evaluate_policy(
     prompt_answers: list[dict] = []
     prompt_chars: list[int] = []
 
+    over_budget = 0
+
     def in_prompt(question: str, final: list) -> list:
-        """What the model would really read: the steps RAGTool runs after reranking."""
+        """What the model would really read: the steps RAGTool runs after reranking,
+        with the words of an excerpted chunk, not its whole text (C8a)."""
         kept = (
             keep_relevant(final, min_rerank_score) if policy.rerank_enabled else final
         )
         if not kept:
             return []
-        _, _, allowed = build_prompt(question, kept)
-        return [evidence for evidence in kept if evidence.chunk_id in allowed]
+        return fit_evidences(question, kept)
 
     def retrieve_final(question: str):
         evidences = retrieve_evidence(
@@ -360,6 +386,7 @@ def _evaluate_policy(
                 }
             )
             sent = in_prompt(item["question"], final)
+            over_budget += answer_over_budget(item["question"], sent)
             prompt_chars.append(sum(len(e.content) for e in sent))
             prompt_answers.append(
                 {
@@ -393,6 +420,8 @@ def _evaluate_policy(
         "answer_found": answer_hit_rates(answers),
         "answer_in_prompt": answer_hit_rates(prompt_answers),
         "prompt_chars": {"mean": round(fmean(prompt_chars)), "max": max(prompt_chars)},
+        # Answers whose knowledge_answer context would not fit its token budget.
+        "context_over_budget": over_budget,
         "version_traps": score_version_traps(trap_rows),
         "duration_ms": round((perf_counter() - started) * 1000),
     }

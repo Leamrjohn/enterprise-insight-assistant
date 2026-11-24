@@ -1107,3 +1107,7 @@
 - 判断：冒烟里的 Knowledge 题都没有触发摘句（结果中无“……”，token 与上一轮相差不到 1%），两次异常题目不同，属模型波动，不是 C7 引起；Planner 不合格输出内容未落日志，原因未查。
 - 待办：PR #81 有一项 Secret scan 一直 pending（另一份已通过）；我等待 CI 的命令因此空等约 54 分钟后被停掉，之后合并后不再用 --watch 等全部检查。
 - 下一步：C8 把上下文评测接入门禁。
+## 2026-11-24 C8a 知识上下文指标进门禁（训练；用户选 A 接入现有门禁；分支 feat/c8a-knowledge-context-gate）
+- 做了什么：run_retrieval_evaluation 的 answer_in_prompt 改按 fit_evidences 后的文字（C7 摘句）判断；新增 answer_over_budget，按 knowledge_answer/2 计 token，报告写 context_over_budget；check_behavior_gate 的 retrieval 项加入该计数，基线 max 0。
+- 验证：本地按 CI 做法先 prefetch 模型再跑 behavior_gate.sh retrieval：answer_in_prompt 41/45（与原基线相同，漏的 4 题即 Knowledge 评测的 4 道真错题），context_over_budget 0，门禁通过；临时把 knowledge_answer 预算 4000 调到 1500 重跑，context_over_budget 37 > 0，门禁 regressed、退出 1，随后已改回。tests/scripts 166 passed；pyright 0 错误。未调用模型。
+- 下一步：C8b 长对话重放进门禁（提交 C9e 第 1 轮录音，卡带摘要组通过数、Planner 出错与超预算追问）。
