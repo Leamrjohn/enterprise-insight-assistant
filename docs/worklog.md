@@ -1101,6 +1101,12 @@
 - 待办：C5f 录音无法重放（每次评测重新入库，chunk_id 变化），Knowledge 评测只能重录；本地后端配置把摘要开为 enforce 时 test_worker_terminal_result 6 例失败（FakeTaskRecord 无 conversation_id），与 test_off_freezes_nothing 同类，测试应固定开关。
 - 下一步：C8 把上下文评测接入门禁。
 
+## 2026-11-24 C7 部署与冒烟（代做；main 7cd7d4e）
+- 上线：重建并重启 api/worker/report-worker/beat，readiness 4 项 ok，worker 读到 knowledge_answer/2，摘要仍 enforce。
+- 冒烟 c7-deploy-r1（任务 1103–1110）：前 7 题与 c9-enforce-r1 一致，第 8 题 clarification-missing-time-range 因 Planner 两次输出未过 JSON 校验而 failed，轮次按规则停止（约 $0.021）。用户批准重跑 c7-deploy-r2（任务 1111–1120，$0.027645，74,519 token）：澄清题与两道长文档题成功，hybrid 失败（已知），knowledge-quality-batch-evidence 结果错误（document_qualifications_supported），该题前两轮均成功。
+- 判断：冒烟里的 Knowledge 题都没有触发摘句（结果中无“……”，token 与上一轮相差不到 1%），两次异常题目不同，属模型波动，不是 C7 引起；Planner 不合格输出内容未落日志，原因未查。
+- 待办：PR #81 有一项 Secret scan 一直 pending（另一份已通过）；我等待 CI 的命令因此空等约 54 分钟后被停掉，之后合并后不再用 --watch 等全部检查。
+- 下一步：C8 把上下文评测接入门禁。
 ## 2026-11-24 C8a 知识上下文指标进门禁（训练；用户选 A 接入现有门禁；分支 feat/c8a-knowledge-context-gate）
 - 做了什么：run_retrieval_evaluation 的 answer_in_prompt 改按 fit_evidences 后的文字（C7 摘句）判断；新增 answer_over_budget，按 knowledge_answer/2 计 token，报告写 context_over_budget；check_behavior_gate 的 retrieval 项加入该计数，基线 max 0。
 - 验证：本地按 CI 做法先 prefetch 模型再跑 behavior_gate.sh retrieval：answer_in_prompt 41/45（与原基线相同，漏的 4 题即 Knowledge 评测的 4 道真错题），context_over_budget 0，门禁通过；临时把 knowledge_answer 预算 4000 调到 1500 重跑，context_over_budget 37 > 0，门禁 regressed、退出 1，随后已改回。tests/scripts 166 passed；pyright 0 错误。未调用模型。
