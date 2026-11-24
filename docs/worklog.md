@@ -1111,3 +1111,9 @@
 - 做了什么：run_retrieval_evaluation 的 answer_in_prompt 改按 fit_evidences 后的文字（C7 摘句）判断；新增 answer_over_budget，按 knowledge_answer/2 计 token，报告写 context_over_budget；check_behavior_gate 的 retrieval 项加入该计数，基线 max 0。
 - 验证：本地按 CI 做法先 prefetch 模型再跑 behavior_gate.sh retrieval：answer_in_prompt 41/45（与原基线相同，漏的 4 题即 Knowledge 评测的 4 道真错题），context_over_budget 0，门禁通过；临时把 knowledge_answer 预算 4000 调到 1500 重跑，context_over_budget 37 > 0，门禁 regressed、退出 1，随后已改回。tests/scripts 166 passed；pyright 0 错误。未调用模型。
 - 下一步：C8b 长对话重放进门禁（提交 C9e 第 1 轮录音，卡带摘要组通过数、Planner 出错与超预算追问）。
+
+## 2026-11-24 C8b 长对话重放进门禁（训练；用户选 A；分支 feat/c8b-long-conversation-gate，从 C8a 切出）
+- 做了什么：C9e 付费第 1 轮录音（420 个，1.2MB）提交为 tests/fixtures/evaluation_context/cassettes_c9e_v1；长对话评测加 PlannerBudgetCounter，在 CONTEXT_PLANNER_MODE=shadow 下数 Planner 上下文超预算的调用，报告写 planner_over_budget；门禁新增 long_conversation 项（cases 51；state 通过 ≥44、加摘要通过 ≥51；摘要致失败、Planner 出错、Planner 超预算均 ≤0），behavior_gate.sh 新增该项，CI 的 routing 任务加一步。
+- 验证：本地 behavior_gate.sh long_conversation 通过（state 44、加摘要 51、lost 0、出错 0、超预算 0，0 次模型调用）；临时把 Planner 预算 3000 调到 1200 重跑，planner_over_budget 102 > 0、门禁 regressed 退出 1，已从 git 还原。tests/scripts 与长对话单测 181 passed。CI 上尚未跑。
+- 遗留：录音与 planner/5、state_extract/1、summary/1 的提示词绑定，任何一个提示词改动都会让重放缺录音而失败，需要重录（约 $0.07）并更新录音目录。
+- 下一步：R2 段验收核对。

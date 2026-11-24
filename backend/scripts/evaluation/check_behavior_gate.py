@@ -96,11 +96,28 @@ def retrieval_counts(report: dict) -> dict[str, float]:
     }
 
 
+def long_conversation_counts(report: dict) -> dict[str, float]:
+    """C8b: constraints kept over long conversations, with and without the summary."""
+    state = report["with_conversation_state"]
+    summary = report["with_conversation_summary"]
+    return {
+        "cases": state["cases"],
+        "state.passed": state["passed"],
+        "summary.passed": summary["passed"],
+        "summary.lost": len(report["summary_vs_state"]["lost"]),
+        "planner_errors": sum(
+            row["action"] == "planner_error" for row in state["rows"] + summary["rows"]
+        ),
+        "planner_over_budget": report["planner_over_budget"],
+    }
+
+
 EXTRACTORS: dict[str, Callable[[dict], dict[str, float]]] = {
     "planner_route": planner_route_counts,
     "plan_rules": plan_rules_counts,
     "sql_results": sql_results_counts,
     "retrieval": retrieval_counts,
+    "long_conversation": long_conversation_counts,
 }
 
 

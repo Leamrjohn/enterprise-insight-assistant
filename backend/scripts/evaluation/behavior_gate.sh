@@ -6,6 +6,7 @@
 #   scripts/evaluation/behavior_gate.sh routing    # no database (Settings still needs placeholder passwords)
 #   scripts/evaluation/behavior_gate.sh sql        # needs the acme demo database
 #   scripts/evaluation/behavior_gate.sh retrieval  # needs agent_platform_test and HF_HOME
+#   scripts/evaluation/behavior_gate.sh long_conversation  # no database
 #
 # Reports go to ${GATE_OUT:-gate-reports}; run from backend/.
 set -euo pipefail
@@ -40,8 +41,16 @@ case "${1:-}" in
       --policies paragraph_jieba_rrf_rerank_v1 > "$out/retrieval.json"
     python "$gate" retrieval "$out/retrieval.json"
     ;;
+  long_conversation)
+    # shadow sends the prompt as given (so it matches the recording) and still
+    # measures whether the Planner context would fit.
+    CONTEXT_PLANNER_MODE=shadow python scripts/evaluation/run_long_conversation_evaluation.py \
+      --mode replay --cassette-dir "$fixtures/evaluation_context/cassettes_c9e_v1" \
+      --arms state,state_summary --report "$out/long_conversation.json" > /dev/null
+    python "$gate" long_conversation "$out/long_conversation.json"
+    ;;
   *)
-    echo "usage: $0 routing|sql|retrieval" >&2
+    echo "usage: $0 routing|sql|retrieval|long_conversation" >&2
     exit 2
     ;;
 esac

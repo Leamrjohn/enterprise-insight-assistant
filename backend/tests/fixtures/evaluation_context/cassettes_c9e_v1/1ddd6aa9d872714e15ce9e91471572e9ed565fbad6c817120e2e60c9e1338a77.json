@@ -1,0 +1,1 @@
+{"key": "1ddd6aa9d872714e15ce9e91471572e9ed565fbad6c817120e2e60c9e1338a77", "json_mode": true, "response": "{\"state_update\":[{\"dimension\":\"order_status\",\"op\":\"include\",\"value\":\"已交付订单\",\"source_message_id\":7,\"quote\":\"默认都按已交付订单统计\"}]}"}

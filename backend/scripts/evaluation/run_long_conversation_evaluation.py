@@ -39,6 +39,8 @@ from app.modules.conversations.summary_update import (
     planner_summary,
     window_start,
 )
+from app.modules.runtime import model_governance
+from app.modules.runtime.context.policies.planner import PLANNER
 from app.modules.workflow.summary_tasks import MAX_BATCH_MESSAGES
 from scripts.evaluation.run_planner_route_evaluation import BudgetGuardGateway
 
@@ -65,6 +67,34 @@ class ResumingGateway(RecordReplayGateway):
         if path.exists():
             return json.loads(path.read_text(encoding="utf-8"))["response"]
         return super().chat(prompt, system_prompt, json_mode=json_mode)
+
+
+class PlannerBudgetCounter(ModelGateway):
+    """Counts Planner calls whose context the engine found over budget (C8b).
+
+    Run with CONTEXT_PLANNER_MODE=shadow: the prompt is sent as given, so a
+    recording still matches, and the manifest says whether it would have fit.
+    """
+
+    def __init__(self, inner: ModelGateway) -> None:
+        self._inner = inner
+        self.over_budget = 0
+
+    def chat(self, prompt, system_prompt=None, *, json_mode=False) -> str:
+        manifest = model_governance._context_manifest.get()
+        if (
+            manifest is not None
+            and manifest.policy.startswith(f"{PLANNER.version}")
+            and manifest.over_budget
+        ):
+            self.over_budget += 1
+        return self._inner.chat(prompt, system_prompt, json_mode=json_mode)
+
+    def chat_with_tools(self, messages, tools, *, tool_choice="auto"):
+        return self._inner.chat_with_tools(messages, tools, tool_choice=tool_choice)
+
+    def count_tokens(self, text: str) -> int:
+        return self._inner.count_tokens(text)
 
 
 def build_messages(
@@ -422,6 +452,8 @@ def main() -> None:
         recorder = ResumingGateway if args.resume else RecordReplayGateway
         gateway = recorder(args.cassette_dir, mode="record", inner=guard)
 
+    counter = PlannerBudgetCounter(gateway)
+    gateway = counter
     fixture = json.loads(args.fixture.read_text(encoding="utf-8"))
     report: dict = {}
     if "standing" in arms:
@@ -442,6 +474,7 @@ def main() -> None:
         report["summary_vs_state"] = compare_by_case(
             report["with_conversation_state"], report["with_conversation_summary"]
         )
+    report["planner_over_budget"] = counter.over_budget
     report["model_calls"] = guard.calls if guard else 0
     report["estimated_cost_usd"] = str(guard.estimated_cost) if guard else "0"
     if args.report:
