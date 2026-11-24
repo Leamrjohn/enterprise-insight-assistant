@@ -31,6 +31,15 @@ from app.modules.conversations.state_extractor import (
     extract_state_update,
 )
 from app.modules.conversations.state_update import apply_update
+from app.modules.conversations.summarizer import Summarization, summarize
+from app.modules.conversations.summary import empty_summary
+from app.modules.conversations.summary_update import (
+    apply_summary,
+    messages_to_summarize,
+    planner_summary,
+    window_start,
+)
+from app.modules.workflow.summary_tasks import MAX_BATCH_MESSAGES
 from scripts.evaluation.run_planner_route_evaluation import BudgetGuardGateway
 
 FIXTURE_DIR = (
@@ -149,6 +158,8 @@ def score_case(case: dict, decision) -> dict:
 Planner = Callable[[str, dict], Any]
 # (state, messages before it, current message) -> Extraction; likewise.
 Extractor = Callable[[dict, list[SimpleNamespace], SimpleNamespace], Extraction]
+# (summary so far, the messages to merge) -> Summarization; likewise.
+Summarizer = Callable[[dict, list[SimpleNamespace]], Summarization]
 # The Planner gave no valid plan after its retries: the task would fail.
 PLANNER_ERROR = "planner_error"
 
@@ -190,15 +201,54 @@ def simulate_state(
     return state, rejected
 
 
+def simulate_summary(
+    summarizer: Summarizer, messages: list[SimpleNamespace]
+) -> tuple[dict, list[dict]]:
+    """Catch the summary up before the final question; return (summary, rejected).
+
+    C9c option A: starting from ``empty_summary()``, the messages that left the
+    window go to the summarizer ``MAX_BATCH_MESSAGES`` at a time, oldest first,
+    as the job does on consecutive publishes (no full rewrite).  Each batch's
+    items go through ``apply_summary`` with the messages up to the batch's last
+    one, so ``covered_through`` moves to it.  A failed call is logged as
+    ``{"message_id": None, "index": None, "reason": <error>}`` and ends the
+    catch-up; each rejected item is logged with the batch's last message id.
+    """
+    summary = empty_summary()
+    rejected: list[dict] = []
+    start = window_start(messages, window_size=MAX_CONTEXT_MESSAGES)
+    if start is None:
+        return summary, rejected
+    while batch := messages_to_summarize(
+        messages,
+        covered_through=summary["covered_through"],
+        window_start_id=start,
+        limit=MAX_BATCH_MESSAGES,
+    ):
+        result = summarizer(summary, batch)
+        if result.error is not None:
+            rejected.append({"message_id": None, "index": None, "reason": result.error})
+            break
+        upto = [m for m in messages if m.id <= batch[-1].id]
+        summary, dropped = apply_summary(
+            summary, result.items, upto, window_start_id=start
+        )
+        summary["incremental_count"] += 1
+        rejected += [{"message_id": batch[-1].id, **item} for item in dropped]
+    return summary, rejected
+
+
 def decide_with_state(
     planner: Planner,
     extractor: Extractor,
     case: dict,
     filler_turns: int,
     filler_answer: str = FILLER_ANSWER,
+    history_summary: list[str] | None = None,
 ) -> tuple[Any, dict, list[dict]]:
     """The final question after the simulated turns, as the worker would run it:
-    the extractor first (its id follows the last message), then the Planner.
+    the extractor first (its id follows the last message), then the Planner,
+    given ``history_summary`` too when there is one (C9c).
 
     The decision is None when the Planner could not produce a valid plan."""
     messages = build_messages(case, filler_turns, filler_answer)
@@ -207,32 +257,65 @@ def decide_with_state(
     )
     state, rejected = simulate_state(extractor, [*messages, question])
     try:
-        decision = planner(case["question"], state_context(messages, state))
+        decision = planner(
+            case["question"],
+            state_context(messages, state),
+            **({"history_summary": history_summary} if history_summary else {}),
+        )
     except StructuredOutputError:
         decision = None
     return decision, state, rejected
 
 
-def evaluate_with_state(gateway: ModelGateway, fixture: dict) -> dict:
+def summary_for(
+    summarizer: Summarizer, messages: list[SimpleNamespace]
+) -> tuple[list[str] | None, list[dict]]:
+    """What the Planner would be given, as frozen at task creation, and the
+    rejected items; None when nothing has left the window."""
+    start = window_start(messages, window_size=MAX_CONTEXT_MESSAGES)
+    if start is None:
+        return None, []
+    summary, rejected = simulate_summary(summarizer, messages)
+    return planner_summary(summary, window_start_id=start) or None, rejected
+
+
+def evaluate_with_state(
+    gateway: ModelGateway, fixture: dict, *, with_summary: bool = False
+) -> dict:
     from app.modules.analysis.planner.planning import PlanningService
 
-    def planner(question: str, context: dict):
+    def planner(question: str, context: dict, history_summary=None):
         service = PlanningService(gateway=gateway, sleeper=lambda _seconds: None)
-        return service.decide(question, conversation_context=context)
+        return service.decide(
+            question, conversation_context=context, history_summary=history_summary
+        )
 
     def extractor(state: dict, history: list, current) -> Extraction:
         return extract_state_update(
             gateway, state=state, history=history, current=current
         )
 
+    def summarizer(summary: dict, batch: list) -> Summarization:
+        return summarize(gateway, summary=summary, messages=batch)
+
     rows = []
     for case in fixture["cases"]:
+        filler_answer = fixture.get("filler_answer", FILLER_ANSWER)
+        history_summary, summary_rejected = (
+            summary_for(
+                summarizer,
+                build_messages(case, fixture["filler_turns"], filler_answer),
+            )
+            if with_summary
+            else (None, [])
+        )
         decision, state, rejected = decide_with_state(
             planner,
             extractor,
             case,
             fixture["filler_turns"],
-            fixture.get("filler_answer", FILLER_ANSWER),
+            filler_answer,
+            history_summary,
         )
         scored = (
             score_case(case, decision)
@@ -250,6 +333,14 @@ def evaluate_with_state(gateway: ModelGateway, fixture: dict) -> dict:
                 **scored,
                 "constraints": state["constraints"],
                 "rejected": rejected,
+                **(
+                    {
+                        "history_summary": history_summary,
+                        "summary_rejected": summary_rejected,
+                    }
+                    if with_summary
+                    else {}
+                ),
             }
         )
     return {
@@ -258,6 +349,16 @@ def evaluate_with_state(gateway: ModelGateway, fixture: dict) -> dict:
         "failed": [r["case_id"] for r in rows if not r["passed"]],
         "rejected_items": sum(len(r["rejected"]) for r in rows),
         "rows": rows,
+    }
+
+
+def compare_by_case(base: dict, other: dict) -> dict:
+    """Which cases ``other`` passes that ``base`` fails, and the reverse."""
+    before = {r["case_id"]: r["passed"] for r in base["rows"]}
+    after = {r["case_id"]: r["passed"] for r in other["rows"]}
+    return {
+        "gained": [c for c in after if after[c] and not before.get(c)],
+        "lost": [c for c in after if before.get(c) and not after[c]],
     }
 
 
@@ -299,11 +400,14 @@ def main() -> None:
     parser.add_argument(
         "--arms",
         default="standing,none",
-        help="comma list of standing (regex constraints), none, state (C6)",
+        help=(
+            "comma list of standing (regex constraints), none, state (C6), "
+            "state_summary (C6 plus the C9 summary)"
+        ),
     )
     args = parser.parse_args()
     arms = set(args.arms.split(","))
-    if not arms <= {"standing", "none", "state"}:
+    if not arms <= {"standing", "none", "state", "state_summary"}:
         parser.error(f"unknown arm in {args.arms}")
 
     guard: BudgetGuardGateway | None = None
@@ -330,6 +434,14 @@ def main() -> None:
         )
     if "state" in arms:
         report["with_conversation_state"] = evaluate_with_state(gateway, fixture)
+    if "state_summary" in arms:
+        report["with_conversation_summary"] = evaluate_with_state(
+            gateway, fixture, with_summary=True
+        )
+    if {"state", "state_summary"} <= arms:
+        report["summary_vs_state"] = compare_by_case(
+            report["with_conversation_state"], report["with_conversation_summary"]
+        )
     report["model_calls"] = guard.calls if guard else 0
     report["estimated_cost_usd"] = str(guard.estimated_cost) if guard else "0"
     if args.report:
