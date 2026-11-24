@@ -1059,3 +1059,8 @@
 - 验证：单元 1661 passed 4 skipped；workflow+conversations 集成（CONVERSATION_STATE_MODE=off）92 passed 4 skipped；ruff、pyright 0 错误；import-linter 2 kept。未调用真实模型，默认 off。
 - 待办：摘要任务按“有内容”数窗口，建任务的历史还要求 status 为 completed/partial，两者窗口起点可能不同；冻结时按出处过滤，不会重复，最多漏一段。
 - 下一步：C9c-3 长对话评测加摘要组。
+
+## 2026-11-24 C9c-3 长对话评测加摘要组（共建；用户选 A 一次补齐；分支 feat/c9c-eval-summary，从 C9c-2 切出）
+- 做了什么：新组 state_summary = state 组 + 摘要；问最后一题前把移出窗口的消息按 12 条一批补齐摘要（不做整体重写），经 planner_summary 过滤后作为 history_summary 交给 Planner；报告每题记摘要和被拒要点，state 与 state_summary 同跑时给出按题 gained/lost。
+- 验证：单元 1668 passed 4 skipped（新增 7 例）；ruff、pyright 0 错误。未录制、未调用模型。
+- 下一步：C9d 付费对比 state 与 state_summary（先批准调用次数与费用上限；录制用 --resume 复用两组相同的抽取调用）。
