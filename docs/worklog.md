@@ -1090,6 +1090,11 @@
 - 遗留：验证脚本最后一段查询写错列名退出 1（结果改用 psql 核对），与系统无关。
 - 下一步：用户决定是否开 enforce；开之前再跑一轮冒烟和本长对话，确认第 7 轮能用摘要解析指代。
 
+## 2026-11-24 C9 开 enforce（代做；用户把 CONVERSATION_SUMMARY_MODE 改为 enforce）
+- 上线：重建并重启 api/worker/report-worker/beat，四个服务读到 enforce，readiness 4 项 ok。
+- 冒烟 c9-enforce-r1（任务 1086–1095，$0.02799，75,017 token）：9 成功；hybrid 由以往的 awaiting_review（失败）变为 partial（结果错误，outcome_correct）。该题是会话首问，快照无摘要、提示词与 shadow 相同，判断为模型波动，不是摘要引起。
+- 长对话（租户 297、会话 1066、任务 1096–1102，$0.021342）：7 轮全部 completed；第 7 轮“最开始问的那个区域”在 shadow 下追问澄清，enforce 下借冻结摘要答出华东区 9 月销售额。摘要写入 3 次、3 次 summary/1 调用 settled 并记在触发任务上。
+- 下一步：C9 收尾，进入 C7；hybrid 题仍按冒烟最上游失败另行跟踪。
 ## 2026-11-24 C7 证据按相关性压缩（训练；用户选 A 规则抽句；分支 feat/c7-evidence-excerpt）
 - 做了什么：compressors 新增切句、问题词/编号提取、sentence_score（编号 +3、问题词 +1、已得分且含数字 +1）和 excerpt（按分取句、原文顺序拼接、省略处标“……”）；engine.fit_evidences 让放不下的段改为摘句而非连同后续整段丢弃，剩余不足 40 字才停；tool 让支持度检查、引用和数字校验都用摘句后的文字；策略升 knowledge_answer/2（测试 2 处版本号随之改）。
 - 验证：单元 1683 passed 4 skipped（新增 14 例：第 900 字、末尾限定、300 组随机文本的原文子串与长度属性）；ruff、pyright 0 错误；import-linter 2 kept。付费 Knowledge 评测（用户批准，各上限 150 次/$0.12）：C7 前 50/57（第二评分 52）、C7 48/57（50），134/132 次共 $0.114；免费探针显示 55 个回答提示词中 18 个触发摘句，答错变化的两题 event-quality-high 未触发、crm-066-delay 未到回答环节，摘句的 18 题对错均未变；同一旧代码 C5f 为 48、本次 50，差 2 分在波动内。
