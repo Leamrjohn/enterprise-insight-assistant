@@ -54,4 +54,5 @@ class WorkflowState(TypedDict):
     tool_runtime: NotRequired[ToolRuntime | None]
     stage_callback: NotRequired[Callable[[str, str], None] | None]
     checkpoint_callback: NotRequired[Callable[[str, str | None, dict], None] | None]
+    cancel_check: NotRequired[Callable[[], bool] | None]
     resume_next_node: str | None

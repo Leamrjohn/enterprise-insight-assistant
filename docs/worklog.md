@@ -1133,3 +1133,8 @@
 - 做了什么：`orchestration/nodes.py`（1079 行）按节点拆成 `nodes/` 包（_common、state_extract、planner、knowledge、data、reviewer、smart_router），`__init__` 重新导出，graph.py 不改；6 个测试只把打补丁的位置改到新模块。
 - 验证：全量 1990 通过 40 跳过（与拆前基线相同）；逐行比对无遗漏；冒烟 b1a-deploy-r1 9 成功 + 混合题待复核（已知），0.027 美元。
 - 遗留：logger 名变为 `…nodes.reviewer`（子日志器，配置照常继承）。
+
+## 2026-11-25 B1b run_node（代做，用户批准加取消检查）
+- 做了什么：新增 `orchestration/node_runner.py` 的 `run_node`，固定顺序：取消检查 → skip_if → 阶段 → 节点 → 检查点；9 个节点改为返回 `NodeStep`，删掉各自的 `_set_stage`/`_checkpoint`（15 处）；worker 传 `cancel_check`，节点前查数据库状态。
+- 验证：新增 14 个单元测试 + 1 个 worker 取消集成测试；全量 2005 通过 40 跳过；冒烟 b1b-deploy-r1 9 成功 + 混合题待复核（已知），0.027 美元。
+- 遗留：span 仍在 graph.py 的 `_traced`；设计第 5 步 NodeOutcome 校验未做（会改行为，单独开工单）。
