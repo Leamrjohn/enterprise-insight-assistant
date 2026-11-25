@@ -7,12 +7,13 @@
     "retrieval: main-chain policy only, models pinned in scripts/evaluation/prefetch_models.py; single-policy and eight-policy runs gave identical counts.",
     "retrieval 2026-11-24 C8a: answer_in_prompt now reads the words the answer gets (C7 excerpts), still 41/45; context_over_budget (knowledge_answer contexts over their token budget) added at 0.",
     "long_conversation 2026-11-24 C8b: long_conversations_v2 replayed from cassettes_c9e_v1 (the C9e paid round 1, recorded with planner/5); state 44/51, state with summary 51/51, nothing lost to the summary, no Planner error, no Planner context over budget (CONTEXT_PLANNER_MODE=shadow).",
+    "2026-11-24 C10: planner.system 1.1.0 (trimmed); re-recorded cassettes_heldout_v1 (50 calls, ~$0.028): Planner 36/43, errors 1 (heldout-none-06), rules 34/43, R2-R5 unchanged; re-recorded Planner in cassettes_c9e_v1 with --resume (98 calls, ~$0.143), kept only the 361 cassettes the replay reads; long_conversation counts unchanged.",
     "A deliberate change that moves a count updates this file in the same commit and adds a note."
   ],
   "components": {
     "planner_route": {
       "equal": {"cases": 43},
-      "min": {"correct": 32},
+      "min": {"correct": 36},
       "max": {"errors": 1}
     },
     "plan_rules": {
@@ -21,7 +22,7 @@
         "R3.right": 0,
         "R4.right": 3,
         "R5.right": 5,
-        "with_rules.correct": 31
+        "with_rules.correct": 34
       },
       "max": {
         "R2.wrong": 3,

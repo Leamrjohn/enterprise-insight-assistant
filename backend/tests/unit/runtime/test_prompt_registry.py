@@ -6,7 +6,6 @@ import json
 import pytest
 from app.core.settings import get_settings
 from app.modules.analysis.data.sql_candidate import SQLCandidate
-from app.modules.analysis.planner.planning import build_planning_system_prompt
 from app.modules.knowledge import tool_agent
 from app.modules.knowledge.rag import support
 from app.modules.knowledge.rag.engine import build_prompt
@@ -20,9 +19,9 @@ from app.modules.runtime.prompts import (
 
 # sha256 of each system prompt rendered by the code before G1 moved it into
 # app/prompts/ (extracted from commit eec2f6f).  A changed prompt needs a new
-# version in manifest.json, not a new value here.
+# version in manifest.json, not a new value here; such a prompt leaves this
+# list (planner.system 1.1.0, C10).
 BEFORE_G1 = {
-    "planner": "7a5d73565d75919e7672ed9a5629f5e5034631a68007433c4792a03e33379502",
     "knowledge_tool": "ec4ba6ad6f22fd41d9893660986ecb0ae32e293576e3a2c96b4ccc065e9e8f4c",
     "support_with_facts": "a58971ef1996f3e7493707d5b34309b35a406463d0b00cabefe1de3e112b84ec",
     "support_without_facts": "174f25831b32acef989d1144526528c5ffb3916c4c320ad04012484df6217dfe",
@@ -60,7 +59,6 @@ def test_node_prompts_are_byte_identical_to_before_g1(monkeypatch):
     plan = {"action": "analyze", "route": "data_only"}
     candidate = SQLCandidate(sql="SELECT 1", purpose="test")
     rendered = {
-        "planner": build_planning_system_prompt(),
         "knowledge_tool": tool_agent.SYSTEM_PROMPT,
         "support_with_facts": support._system_prompt(True),
         "support_without_facts": support._system_prompt(False),

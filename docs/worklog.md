@@ -1117,3 +1117,8 @@
 - 验证：本地 behavior_gate.sh long_conversation 通过（state 44、加摘要 51、lost 0、出错 0、超预算 0，0 次模型调用）；临时把 Planner 预算 3000 调到 1200 重跑，planner_over_budget 102 > 0、门禁 regressed 退出 1，已从 git 还原。tests/scripts 与长对话单测 181 passed。CI 上尚未跑。
 - 遗留：录音与 planner/5、state_extract/1、summary/1 的提示词绑定，任何一个提示词改动都会让重放缺录音而失败，需要重录（约 $0.07）并更新录音目录。
 - 下一步：R2 段验收核对。
+
+## 2026-11-24 C10 Planner 系统提示词低风险精简（共建；用户选“做低风险精简”“逐处回退查”“上调基线”；分支 feat/c10-planner-prompt-trim，从 C8b 切出）
+- 做了什么：删去字段说明里“工作流据此……”等用途解释、第 38 行双月方向两句（代码 _canonical_symmetric_month_scope 已纠正）；planner.system 1.0.0→1.1.0，1307→1149 token（每次 -158）。原第 1 处“历史/附件规则挪进用户提示词”已撤回。测试期望改 4 处（两处哈希、current period→compared_to、prompt_registry 锁定名单去掉 planner），待用户确认。
+- 验证：三处全做时路由 34/37/37（基线 32）、长对话 state 43/41/42（基线 44）、加摘要 51/49/50；6 道丢分题×8 次重复（同一状态）：旧提示词 48/48、三处全做 35/48（inject-assistant-permission-30 0/8，漏写战略客户）、只做第 2、3 处 47/48，确认第 1 处是原因（历史规则紧挨会话状态说明，被读成状态也只用于指代）。单元+脚本 1850 passed。C10 付费合计约 $0.71。
+- 门禁：用当前提示词重录 cassettes_heldout_v1（50 次 $0.028）与 cassettes_c9e_v1 的 Planner（--resume，98 次 $0.143，只留重放读到的 361 份）；路由 36/43、错 1，规则 34/43，长对话 44/51、51/51；基线下限 32→36、31→34；本地两门禁通过，单元+脚本 1850 通过。遗留：路由只跑 1 轮。
