@@ -1128,3 +1128,8 @@
 - token：R1 平均 66,573 → 约 74,519（+12%），原“降 30%”未达到；用户将目标修订为“不超过 R1 的 115%”，已写进完整计划 R2 段。
 - 顺带：C10 的 PR 发现 main 自 #83 起 Secret scan 一直失败（录音 key 被当成 API 密钥），568 条误报逐条登记进 .gitleaksignore，本地扫描 0。
 - 待办：按条件跳过状态抽取或语义复核以降 token（改主链，开工前先讲方案）。下一段 R3。
+
+## 2026-11-25 B1a 拆节点（代做）
+- 做了什么：`orchestration/nodes.py`（1079 行）按节点拆成 `nodes/` 包（_common、state_extract、planner、knowledge、data、reviewer、smart_router），`__init__` 重新导出，graph.py 不改；6 个测试只把打补丁的位置改到新模块。
+- 验证：全量 1990 通过 40 跳过（与拆前基线相同）；逐行比对无遗漏；冒烟 b1a-deploy-r1 9 成功 + 混合题待复核（已知），0.027 美元。
+- 遗留：logger 名变为 `…nodes.reviewer`（子日志器，配置照常继承）。
