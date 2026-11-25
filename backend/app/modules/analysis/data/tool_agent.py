@@ -47,7 +47,7 @@ from app.modules.analysis.data.sql_generation import (
 )
 from app.modules.analysis.metrics.claim_validation import assess_numeric_assertion
 from app.modules.analysis.metrics.metric_validation import assess_metric_query
-from app.modules.analysis.tool_protocol import ToolInput, ToolOutput
+from app.modules.analysis.tool_protocol import ToolOutput
 from app.modules.reporting.semantic_review_service import SemanticReviewService
 from app.modules.runtime.context.engine import ContextBudgetExceeded
 from app.modules.runtime.tool_guard import outcome_of_failure
@@ -379,9 +379,7 @@ class _DataToolSession:
         if refused is not None:
             return refused
         self.attempts["sql_attempts"] += 1
-        result = self._agent._sql_tool.execute(
-            ToolInput(parameters={"sql": candidate.sql})
-        )
+        result = self._agent._tools.call("sql_query", {"sql": candidate.sql})
         if not result.success:
             return self._tool_failure(result)
         return self._tool_success(candidate, result, metric_assessment)

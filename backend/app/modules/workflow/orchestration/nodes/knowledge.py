@@ -2,17 +2,9 @@
 
 from app.core.config.snapshot import runtime_settings
 from app.modules.analysis.agent_protocol import AgentInput
-from app.modules.analysis.tool_protocol import Tool
 from app.modules.knowledge.agent import KnowledgeAgent
-from app.modules.knowledge.tool import RAGTool
 from app.modules.knowledge.tool_agent import ToolCallingKnowledgeAgent
 from app.modules.runtime.model_governance import model_node_scope
-from app.modules.runtime.tool_guard import (
-    CircuitBreaker,
-    FallbackTool,
-    GuardedTool,
-    redis_breaker_store,
-)
 from app.modules.workflow.orchestration.node_outcome import NodeOutcome
 from app.modules.workflow.orchestration.node_runner import NodeStep, run_node
 from app.modules.workflow.orchestration.nodes._common import (
@@ -20,24 +12,7 @@ from app.modules.workflow.orchestration.nodes._common import (
     model_tools_enabled,
 )
 from app.modules.workflow.orchestration.state import WorkflowState
-
-
-def _guarded_rag_tool() -> Tool:
-    store = redis_breaker_store()
-    local = GuardedTool(
-        RAGTool(degrade_on_rerank_failure=True),
-        CircuitBreaker("rag_search:local", store),
-    )
-    if runtime_settings().knowledge_evidence_transport != "mcp_stdio":
-        return local
-    from app.modules.knowledge.mcp_adapter import McpEvidenceReadTool
-
-    return FallbackTool(
-        GuardedTool(
-            McpEvidenceReadTool.stdio(), CircuitBreaker("rag_search:mcp", store)
-        ),
-        local,
-    )
+from app.modules.workflow.orchestration.toolsets import build_toolset
 
 
 def _knowledge_node(state: WorkflowState) -> NodeStep:
@@ -47,23 +22,14 @@ def _knowledge_node(state: WorkflowState) -> NodeStep:
     “使用 resolved_question，否则回退原始问题”和 state["user_id"]，
     写 state["knowledge_result"]。
     """
-    runtime = state.get("tool_runtime")
     support_check = runtime_settings().knowledge_support_check_enabled
-    if runtime and model_tools_enabled(state.get("company_id")):
-        agent = ToolCallingKnowledgeAgent(
-            rag_tool=runtime.wrap(_guarded_rag_tool()), support_check=support_check
-        )
+    tools = build_toolset("knowledge", state)
+    if state.get("tool_runtime") is not None and model_tools_enabled(
+        state.get("company_id")
+    ):
+        agent = ToolCallingKnowledgeAgent(tools=tools, support_check=support_check)
     else:
-        rag_tool = RAGTool()
-        if runtime_settings().knowledge_evidence_transport == "mcp_stdio":
-            from app.modules.knowledge.mcp_adapter import McpEvidenceReadTool
-
-            rag_tool = McpEvidenceReadTool.stdio()
-        agent = (
-            KnowledgeAgent(rag_tool=runtime.wrap(rag_tool), support_check=support_check)
-            if runtime
-            else KnowledgeAgent(support_check=support_check)
-        )
+        agent = KnowledgeAgent(tools=tools, support_check=support_check)
     with model_node_scope("knowledge"):
         result = agent.run(
             AgentInput(

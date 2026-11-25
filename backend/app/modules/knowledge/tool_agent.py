@@ -14,7 +14,7 @@ from app.core.config.snapshot import runtime_settings
 from app.core.gateway.base import ModelGateway
 from app.core.gateway.factory import get_model_gateway
 from app.modules.analysis.agent_protocol import AgentInput, AgentOutput
-from app.modules.analysis.tool_protocol import ToolInput, ToolOutput
+from app.modules.analysis.tool_protocol import ToolOutput
 from app.modules.knowledge.agent import (
     CONFIRMED_FACTS_DATA_NOTE,
     CONFIRMED_FACTS_RULES,
@@ -131,8 +131,8 @@ class _KnowledgeToolSession:
     def search(self, query: str) -> ToolOutput:
         self.searches += 1
         self.seen_queries.add(query)
-        result = self._agent._rag_tool.execute(
-            ToolInput(parameters={**self.parameters, "question": query})
+        result = self._agent._tools.call(
+            "rag_search", {**self.parameters, "question": query}
         )
         if not result.success:
             self.failure = result

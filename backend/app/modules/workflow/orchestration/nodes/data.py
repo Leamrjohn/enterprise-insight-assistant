@@ -5,18 +5,12 @@ from typing import Any
 from app.modules.analysis.agent_protocol import AgentInput
 from app.modules.analysis.catalog.snapshot_catalog import SnapshotCatalog
 from app.modules.analysis.data.data_agent import DataAgent
-from app.modules.analysis.data.sql_tool import SQLTool
 from app.modules.analysis.data.tool_agent import ToolCallingDataAgent
 from app.modules.analysis.metrics.facts import (
     build_confirmed_facts,
     build_data_evidence,
 )
 from app.modules.runtime.model_governance import model_node_scope
-from app.modules.runtime.tool_guard import (
-    CircuitBreaker,
-    GuardedTool,
-    redis_breaker_store,
-)
 from app.modules.workflow.orchestration.node_outcome import NodeOutcome
 from app.modules.workflow.orchestration.node_runner import NodeStep, run_node
 from app.modules.workflow.orchestration.nodes._common import (
@@ -24,6 +18,7 @@ from app.modules.workflow.orchestration.nodes._common import (
     model_tools_enabled,
 )
 from app.modules.workflow.orchestration.state import WorkflowState
+from app.modules.workflow.orchestration.toolsets import build_toolset
 
 
 def _data_node(state: WorkflowState) -> NodeStep:
@@ -37,41 +32,21 @@ def _data_node(state: WorkflowState) -> NodeStep:
 
     data_source = state.get("business_data_source")
     snapshot_data = state.get("schema_catalog")
+    tools = build_toolset("data", state)
     if data_source is not None and snapshot_data is not None:
         catalog = SnapshotCatalog.from_snapshot(snapshot_data)
-        tool_runtime = state.get("tool_runtime")
-        if tool_runtime is not None and model_tools_enabled(state.get("company_id")):
-            sql_tool = SQLTool(data_source=data_source, snapshot_catalog=catalog)
+        if state.get("tool_runtime") is not None and model_tools_enabled(
+            state.get("company_id")
+        ):
             agent = ToolCallingDataAgent(
-                sql_tool=tool_runtime.wrap(
-                    GuardedTool(
-                        sql_tool,
-                        CircuitBreaker(
-                            f"sql_query:{state.get('company_id')}",
-                            redis_breaker_store(),
-                        ),
-                    )
-                ),
-                data_source=data_source,
-                snapshot_catalog=catalog,
-            )
-        elif tool_runtime is not None:
-            agent = DataAgent(
-                sql_tool=tool_runtime.wrap(
-                    SQLTool(data_source=data_source, snapshot_catalog=catalog)
-                ),
-                data_source=data_source,
-                snapshot_catalog=catalog,
+                tools=tools, data_source=data_source, snapshot_catalog=catalog
             )
         else:
-            agent = DataAgent(data_source=data_source, snapshot_catalog=catalog)
+            agent = DataAgent(
+                tools=tools, data_source=data_source, snapshot_catalog=catalog
+            )
     else:
-        tool_runtime = state.get("tool_runtime")
-        agent = (
-            DataAgent(sql_tool=tool_runtime.wrap(SQLTool()))
-            if tool_runtime is not None
-            else DataAgent()
-        )
+        agent = DataAgent(tools=tools)
     data_context = {}
     if state.get("routing_feedback") is not None:
         data_context["feedback"] = state["routing_feedback"]
