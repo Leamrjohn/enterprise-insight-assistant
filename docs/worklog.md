@@ -1148,3 +1148,8 @@
 - 做了什么：评审 `docs/design/interview_bar_2026-11-25.md`；按用户决定开放写操作（平台资产、文档、记忆），经营库永久只读；完整计划"本计划不做"改为"经营库写操作"；R3 插入 T11a～T11d、T12～T14，R4 插 M12/M13，R6 插 B6h，R7 插 B4h/B4i，O7 补扩展设计。
 - 边界：`doc_ingest` 只从已登记存储导入，上传入口仍冻结；`memory_write` 只提交候选，写入仍过代码门槛；T13 之前登记表仍拒绝写工具。
 - 待决：公开基准 BIRD/CRUD-RAG 是否下载运行；T12 触发阈值。
+
+## 2026-11-25 T1 工具登记表（共建；用户选"默认工具列表也从登记表读"）
+- 做了什么：新增 `runtime/tools/`（definition、catalog、registry），3 个工具只在 catalog 声明一次，启动时按 5 条规则校验；`ToolRuntime`、`ToolPolicy`、任务快照默认值改读登记表（641148f）。
+- 验证：登记表 12 个测试通过；全量 2017 通过 40 跳过；pyright 0、导入分层 2 条约定满足；冒烟 t1-deploy-r1 9 成功 + 混合题待复核（已知），$0.027。
+- 遗留：本地直接跑 `lint-imports` 退出码 1，要用 `scripts/ci/lint_imports.sh`；版本号写死 v1 的审计问题留给 T2。
