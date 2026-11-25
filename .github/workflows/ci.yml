@@ -246,6 +246,11 @@ jobs:
       - name: Planner replay and plan rules against the baseline
         working-directory: backend
         run: bash scripts/evaluation/behavior_gate.sh routing
+      # C8b: long conversations replayed from committed recordings, constraints
+      # kept with and without the summary, Planner context within budget.
+      - name: Long-conversation replay against the baseline
+        working-directory: backend
+        run: bash scripts/evaluation/behavior_gate.sh long_conversation
 
   behavior-data:
     name: Behavior gate (SQL and Knowledge)

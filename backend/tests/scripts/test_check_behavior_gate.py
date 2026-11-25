@@ -155,3 +155,31 @@ def test_retrieval_refuses_a_report_with_several_policies():
 
     with pytest.raises(ValueError, match="exactly one"):
         retrieval_counts({"policies": [_policy(), _policy("other")]})
+
+
+def test_long_conversation_counts_constraints_kept_errors_and_budget():
+    from check_behavior_gate import long_conversation_counts
+
+    def arm(*actions_passed):
+        rows = [{"action": a, "passed": p} for a, p in actions_passed]
+        return {
+            "cases": len(rows),
+            "passed": sum(p for _, p in actions_passed),
+            "rows": rows,
+        }
+
+    report = {
+        "with_conversation_state": arm(("analyze", True), ("planner_error", False)),
+        "with_conversation_summary": arm(("analyze", True), ("analyze", True)),
+        "summary_vs_state": {"gained": ["b"], "lost": []},
+        "planner_over_budget": 0,
+    }
+
+    assert long_conversation_counts(report) == {
+        "cases": 2,
+        "state.passed": 1,
+        "summary.passed": 2,
+        "summary.lost": 0,
+        "planner_errors": 1,
+        "planner_over_budget": 0,
+    }

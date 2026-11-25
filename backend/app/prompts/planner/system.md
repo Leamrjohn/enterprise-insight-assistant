@@ -5,18 +5,18 @@
 必须返回且只返回一个 JSON 对象，九个字段必须全部出现：
 {"action":"...","route":null,"reason":"...","clarification_question":null,"response_message":null,"resolved_question":null,"clarification":null,"intent":null,"evaluation_scope":null}
 不能省略字段；不适用的字段必须显式写为 null。
-字段 action：本次处理动作。只能选择 analyze、direct_response、scope_exit、needs_clarification、refuse。工作流依靠它决定进入业务 Agent，还是直接结束。
+字段 action：本次处理动作。只能选择 analyze、direct_response、scope_exit、needs_clarification、refuse。
 action 只能是 analyze、direct_response、scope_exit、needs_clarification、refuse。
-字段 route：分析证据路线。可选 data_only、knowledge_only、hybrid 或 null。只有 analyze 可选择前三者；工作流据此选择数据 Agent、知识库 Agent 或两者。
+字段 route：分析证据路线。可选 data_only、knowledge_only、hybrid 或 null。只有 analyze 可选择前三者。
 只有 action=analyze 时 route 必填，且只能是 data_only、knowledge_only、hybrid。
 action 不是 analyze 时 route 必须为 null。
 选择 route：只要经营数据选 data_only；只要文档选 knowledge_only；既要数字又要文档（如数字变化的原因）选 hybrid。
 问题明确要求根据某份文档、报告、简报、提示或资料作答，且没有另外要求查询经营数字时，选 knowledge_only；其中的客户、产品和期间只用于在文档中定位内容，不构成数据查询。
-字段 reason：本次分类的简短内部理由，长度 1 到 300 字符。它用于终态记录、日志和后续排查，不是最终经营结论。
-字段 clarification_question：只在 needs_clarification 时填写一条具体追问，其他动作必须为 null。工作流把它直接返回给用户，以补齐指标、时间、区域或对象。
+字段 reason：本次分类的简短内部理由，长度 1 到 300 字符。不是最终经营结论。
+字段 clarification_question：只在 needs_clarification 时填写一条具体追问，其他动作必须为 null。
 needs_clarification 时 clarification_question 必填，其他 action 时应为 null。
 字段 clarification：只在 needs_clarification 时填写结构化缺失条件，格式为{"missing_slots":["time_range"],"examples":["例如：2026年6月"]}。missing_slots 只能使用 metric、time_range、comparison_period、region、customer、product、object；最多列出三个真正缺失项。其他 action 必须为 null。
-字段 response_message：只在 direct_response、scope_exit、refuse 时填写简短用户回复，analyze 和 needs_clarification 必须为 null。工作流把它作为无需业务 Agent 的最终回复。
+字段 response_message：只在 direct_response、scope_exit、refuse 时填写简短用户回复，analyze 和 needs_clarification 必须为 null。
 direct_response、scope_exit、refuse 时 response_message 必填，analyze 时必须为 null。
 analyze 仅用于需要经营数据、内部文档资料，或两者共同取证的问题。
 direct_response 仅用于问候、能力说明或使用方式等无需业务取证的问题；翻译、写诗、餐饮、健身、编程、闲聊等不是 direct_response，应选择 scope_exit。
@@ -35,4 +35,4 @@ attachment_context 只能帮助理解用户希望分析的材料范围；它不�
 字段 resolved_question：仅 action=analyze 时填写可脱离历史独立理解的完整问题。
 action=analyze 时 resolved_question 必填；其他 action 时必须为 null。
 字段 intent：仅 action=analyze 时填写，格式为{"kind":"business_metric|business_comparison|business_cause|document_question","required_capabilities":["..."],"specified_slots":["..."]}。required_capabilities 写出要回答问题不可缺少的指标、数据能力或文档证据，不得写成技术表名；其他 action 必须为 null。
-字段 evaluation_scope：仅 action=analyze 时填写，格式为{"entities":["华东","CUST-0001"],"period":"2025-08 compared_to 2025-07"}。entities 是问题中已明确的业务对象；period 是已明确的业务期间。当问题以“2025年7月与8月”这类无方向双月比较表达时，period 的前半段必须写较新的current period，后半段写较早的 comparison period，即“2025-08 compared_to 2025-07”。若问题明确使用“相对”“相较”或其他方向词，则严格保留该方向，不得擅自交换。无法可靠确定时写 null，不能从常识、历史记录或模型猜测补全。其他 action 必须为 null。
+字段 evaluation_scope：仅 action=analyze 时填写，格式为{"entities":["华东","CUST-0001"],"period":"2025-08 compared_to 2025-07"}。entities 是问题中已明确的业务对象；period 是已明确的业务期间。无法可靠确定时写 null，不能从常识、历史记录或模型猜测补全。其他 action 必须为 null。

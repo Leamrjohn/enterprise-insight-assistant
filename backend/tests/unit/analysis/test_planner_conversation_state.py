@@ -60,7 +60,7 @@ def sha(text: str) -> str:
 def test_prompts_without_a_state_are_byte_identical_to_before():
     # Hashes taken on the code before C6c.
     assert sha(build_planning_system_prompt()) == (
-        "7a5d73565d75919e7672ed9a5629f5e5034631a68007433c4792a03e33379502"
+        "21ef137caa20dce98a03e89e350c5233a1a27a33972a446a540512b08d97ca70"
     )
     assert sha(build_planning_user_prompt(QUESTION, None)) == (
         "8160ccd931e591ac1a80a64156a2a7ff4f07863159294ce1b05bd1b6a792a9c9"
