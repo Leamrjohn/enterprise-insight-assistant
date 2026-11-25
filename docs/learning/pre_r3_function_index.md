@@ -2878,4 +2878,3 @@
 | 函数 `chunk_text_with_passages(content, *, max_chars) -> list[ChunkText]` | 265-282 | Split text into short passages that each say which document they came from. |
 | 函数 `chunk_text_for_strategy(content, strategy) -> list[ChunkText]` | 285-293 | Return a deterministic, named chunk representation for one strategy. |
 | 函数 `chunk_file(file_path, *, include_metadata) -> list[str] \| list[ChunkText]` | 296-303 | 读取文件并分块。 |
-
