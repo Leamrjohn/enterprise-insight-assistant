@@ -1178,3 +1178,8 @@
 - 做了什么：`ToolDefinition` 补 kind/backed_by/output_model/to_evidence，启动校验加 3 条规则；新增 `runtime/tools/evidence.py`（3 个输出模型 + 统一 Evidence + 转换函数）；执行阶段写审计前校验成功结果（不合格 → `tool_output_contract_invalid`，infra_error），通过则挂 `ToolOutput.evidence`；Agent 暂不读（1fcbcdd，计划 58e7f34）。
 - 验证：证据测试 16 通过；全量 2096 通过 40 跳过；pyright 0；导入分层未加例外；冒烟 t3c-deploy-r1 9 成功 + 混合题待复核（已知），$0.027；审计表本轮 rag_search 6、sql_query 4 次全部成功，契约失败 0。
 - 说明：test_tool_runtime 3 个假工具补齐返回字段、T1 的 FAKE 补输出模型，断言未改。
+
+## 2026-11-25 T3b-1 节点工具集（用户批准改主链、拆 T3b-1/T3b-2、超限一次提交）
+- 做了什么：新增 `workflow/orchestration/toolsets.py`（NODE_TOOLSETS 配置 + TOOL_FACTORIES，唯一构造工具处，熔断/MCP 回退在工厂里；build_toolset 有运行时则登记到 ToolGateway）；`tool_protocol.Toolset`（按名字 call，未在工具集的名字 → tool_unknown）；节点只调 build_toolset，4 个 Agent 改为 `self._tools.call(...)`，删除默认构造，`sql_tool=`/`rag_tool=` 保留给测试；`model_tools_enabled` 移到 toolsets 防循环导入（6d20375）。
+- 验证：验收测试 8 通过（扫描：nodes/ 和 4 个 Agent 无工具构造；假工具只改 4 处即可在 Data 节点调用；5 条路线工具类型不变）；全量 2104 通过 40 跳过；pyright 0；导入分层未加例外；冒烟 t3b1-deploy-r1 9 成功 + 混合题待复核（已知），$0.027；审计 rag_search 6、sql_query 4 全部成功。
+- 说明：6 个 FakeDataAgent 补构造参数、2 个接口测试传入假工具，断言未改。下一步 T3b-2：模型可见说明由登记表生成。
