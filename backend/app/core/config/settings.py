@@ -32,7 +32,11 @@ from app.core.config.infra import InfraConfig
 from app.core.config.memory import MemoryConfig
 from app.core.config.model import ModelConfig
 from app.core.config.rag import RagConfig
-from app.core.config.security import DEVELOPMENT_JWT_SECRET, SecurityConfig
+from app.core.config.security import (
+    DEVELOPMENT_JWT_SECRET,
+    DEVELOPMENT_TOOL_CONTEXT_SIGNING_KEY,
+    SecurityConfig,
+)
 from app.core.config.tool import ToolConfig
 
 DOMAINS: tuple[type[ConfigDomain], ...] = (
@@ -92,6 +96,14 @@ class Settings(
             and self.jwt_secret.get_secret_value() == DEVELOPMENT_JWT_SECRET
         ):
             raise ValueError("JWT_SECRET must be configured in production")
+        if (
+            self.app_env == "production"
+            and self.tool_context_signing_key.get_secret_value()
+            == DEVELOPMENT_TOOL_CONTEXT_SIGNING_KEY
+        ):
+            raise ValueError(
+                "TOOL_CONTEXT_SIGNING_KEY must be configured in production"
+            )
 
         object_storage_values = (
             self.input_artifact_object_storage_endpoint_url,

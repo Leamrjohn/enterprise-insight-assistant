@@ -25,6 +25,8 @@ ERROR_CLASSES: dict[str, ErrorClass] = {
     "data_source_not_allowed": ErrorClass.DENIED,
     "mcp_runtime_context_invalid": ErrorClass.DENIED,
     "mcp_runtime_context_mismatch": ErrorClass.DENIED,
+    "tool_context_signature_invalid": ErrorClass.DENIED,
+    "tool_context_expired": ErrorClass.DENIED,
     # The caller's own request.
     "tool_input_schema_invalid": ErrorClass.CALLER,
     "tool_arguments_not_json": ErrorClass.CALLER,
@@ -51,6 +53,7 @@ ERROR_CLASSES: dict[str, ErrorClass] = {
     "mcp_transport_unavailable": ErrorClass.INFRA,
     "mcp_evidence_read_failed": ErrorClass.INFRA,
     "mcp_evidence_read_malformed": ErrorClass.INFRA,
+    "mcp_response_malformed": ErrorClass.INFRA,
     "mcp_sdk_version_mismatch": ErrorClass.INFRA,
     "mcp_catalog_mismatch": ErrorClass.INFRA,
     "mcp_input_required_not_supported": ErrorClass.INFRA,

@@ -45,7 +45,12 @@ def test_unknown_keys_finds_typos_but_not_unrelated_variables():
 
 
 def test_misspelt_setting_fails_startup_in_production(tmp_path):
-    settings = Settings(**REQUIRED, app_env="production", jwt_secret="a-real-secret")
+    settings = Settings(
+        **REQUIRED,
+        app_env="production",
+        jwt_secret="a-real-secret",
+        tool_context_signing_key="a-real-key",
+    )
     env_file = _env_file(tmp_path, "RAG_RERANK_TOPK=secret-looking-value\n")
 
     with pytest.raises(ValueError, match="RAG_RERANK_TOPK") as raised:
@@ -84,7 +89,12 @@ def test_misspelt_setting_only_warns_in_test(tmp_path, monkeypatch):
 
 
 def test_known_settings_pass(tmp_path):
-    settings = Settings(**REQUIRED, app_env="production", jwt_secret="a-real-secret")
+    settings = Settings(
+        **REQUIRED,
+        app_env="production",
+        jwt_secret="a-real-secret",
+        tool_context_signing_key="a-real-key",
+    )
     env_file = _env_file(tmp_path, "RAG_RERANK_TOP_K=1\n")
 
     assert check_known_keys(settings, env_file=env_file, environ={}) == []

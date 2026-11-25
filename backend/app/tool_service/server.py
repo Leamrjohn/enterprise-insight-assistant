@@ -1,0 +1,120 @@
+"""M1: the agent-tools service.  Every call proves who sent it before anything runs.
+
+Order matters and is fixed: verify the signature, then re-check the database,
+then execute.  A forged request never reaches the database, and a signed one for
+a user who has since lost access never reaches the tool.
+"""
+
+import time
+from collections.abc import Callable, Mapping
+from contextlib import AbstractContextManager
+from dataclasses import fields
+from typing import Any
+
+from mcp.server import MCPServer
+from sqlalchemy.orm import Session
+from starlette.requests import Request
+from starlette.responses import JSONResponse, Response
+
+from app.db.session import SessionLocal, set_tenant_scope
+from app.modules.runtime.tools.authorization import current_member_allowed
+from app.modules.runtime.tools.catalog import ANALYSIS_ROLES
+from app.modules.runtime.tools.context import ContextRejected, RuntimeContext, verify
+from app.modules.workflow.models import AnalysisTask
+
+SERVER_NAME = "agent-tools"
+SERVER_VERSION = "1.0.0"
+SERVER_PORT = 8090
+
+ToolHandler = Callable[[dict[str, Any]], Any]
+
+
+def _echo(arguments: dict[str, Any]) -> dict[str, Any]:
+    return {"echo": arguments.get("text", "")}
+
+
+DEFAULT_TOOLS: Mapping[str, ToolHandler] = {"echo": _echo}
+
+
+def _parse_context(raw: Any) -> RuntimeContext:
+    names = {field.name for field in fields(RuntimeContext)}
+    if not isinstance(raw, dict) or set(raw) != names:
+        # A malformed context cannot have been signed by the worker.
+        raise ContextRejected("tool_context_signature_invalid")
+    try:
+        return RuntimeContext(**raw)
+    except TypeError as error:
+        raise ContextRejected("tool_context_signature_invalid") from error
+
+
+def authorize(
+    db: Session, raw_context: Any, signature: str, *, key: bytes, now: int
+) -> RuntimeContext:
+    """Return the context only if it is signed, current, and the user still may act."""
+    context = _parse_context(raw_context)
+    verify(context, signature, key, now=now)
+    # Only now is company_id trusted enough to scope the database session.
+    set_tenant_scope(db, context.company_id)
+    task = db.get(AnalysisTask, context.task_id)
+    if (
+        task is None
+        or task.company_id != context.company_id
+        or task.user_id != context.actor_id
+        # A worker whose lease was taken over must not keep calling tools.
+        or task.active_execution_id != context.execution_id
+        or not current_member_allowed(
+            db,
+            company_id=context.company_id,
+            user_id=context.actor_id,
+            allowed_roles=ANALYSIS_ROLES,
+        )
+    ):
+        raise ContextRejected("tool_current_authorization_denied")
+    return context
+
+
+def create_tool_server(
+    *,
+    signing_key: bytes,
+    session_factory: Callable[[], AbstractContextManager[Session]] = SessionLocal,
+    clock: Callable[[], float] = time.time,
+    tools: Mapping[str, ToolHandler] = DEFAULT_TOOLS,
+) -> MCPServer:
+    server = MCPServer(SERVER_NAME, version=SERVER_VERSION)
+
+    def register(name: str, handler: ToolHandler) -> None:
+        @server.tool(name=name, description=f"agent-tools: {name}")
+        def call(
+            arguments: dict[str, Any], context: dict[str, Any], signature: str
+        ) -> dict[str, Any]:
+            with session_factory() as db:
+                try:
+                    authorize(db, context, signature, key=signing_key, now=int(clock()))
+                except ContextRejected as rejected:
+                    return {"success": False, "error_code": rejected.code}
+                return {"success": True, "data": handler(arguments)}
+
+    for name, handler in tools.items():
+        register(name, handler)
+
+    @server.custom_route("/health/live", methods=["GET"])
+    async def health(request: Request) -> Response:
+        return JSONResponse({"status": "ok"})
+
+    return server
+
+
+def main() -> None:
+    import uvicorn
+
+    from app.core.settings import get_settings
+
+    key = get_settings().tool_context_signing_key.get_secret_value().encode()
+    app = create_tool_server(signing_key=key).streamable_http_app(
+        stateless_http=True, json_response=True, host="0.0.0.0"
+    )
+    uvicorn.run(app, host="0.0.0.0", port=SERVER_PORT)
+
+
+if __name__ == "__main__":
+    main()

@@ -32,6 +32,16 @@ class InfraConfig(ConfigDomain):
     business_database_name: str = "business_data"
     business_database_user: str = "business_readonly"
     business_database_password: SecretStr = SecretStr("")
+    # M1: the agent-tools service; 5 s so an outage fails clearly (R3 T6 target).
+    tool_server_url: str = "http://tools:8090/mcp"
+    tool_server_timeout_seconds: float = 5.0
+
+    @field_validator("tool_server_timeout_seconds")
+    @classmethod
+    def infra_validate_tool_server_timeout(cls, value: float) -> float:
+        if value <= 0:
+            raise ValueError("tool_server_timeout_seconds must be positive")
+        return value
 
     @field_validator("storage_dir", mode="before")
     @classmethod

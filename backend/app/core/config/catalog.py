@@ -35,6 +35,7 @@ EXAMPLE_VALUES = {
     "STORAGE_DIR": "./storage",
     "CORS_ORIGINS": '["http://localhost:5173","http://127.0.0.1:5173"]',
     "JWT_SECRET": "replace_with_a_long_random_secret",
+    "TOOL_CONTEXT_SIGNING_KEY": "replace_with_a_long_random_secret",
     "DATABASE_PASSWORD": "replace_with_your_project_password",
     "BUSINESS_DATABASE_PASSWORD": "replace_with_readonly_password",
     "MODEL_PRICE_TABLE_VERSION": "deepseek-v4.1-flash-peak-2026-10-10",

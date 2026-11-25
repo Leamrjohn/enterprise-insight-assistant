@@ -1158,3 +1158,13 @@
 - 做了什么：新增 `runtime/tools/errors.py`（5 类 ErrorClass + 43 个错误码表 + classify）；`tool_guard` 改用 classify，删 3 个手写集合；RAG 补 `rag_input_missing`/`rag_search_unavailable`/`rag_retrieval_failed`；审计记 `error_class`，参数校验失败的 schema 改读登记表版本（0799e70）。
 - 验证：T2 测试 25 通过（含扫描：工具层错误码全登记、失败无错误码为 0）；全量 2042 通过 40 跳过；pyright 0；冒烟 t2-deploy-r1 9 成功 + 混合题待复核（已知），$0.027。
 - 行为变化：`data_source_not_allowed`、`mcp_runtime_context_*` 在工具循环里停止原因由 unavailable 变为 denied（都停止，不重试）。
+
+## 2026-11-25 M1 方案课（用户选 B：HTTP 服务容器）
+- 发现：现有 `agent-evidence` 是 stdio 子进程，每次调用新起进程并加载模型（冷启动预算 30 秒）；运行上下文只校验无密钥的 sha256，能防误改不能防伪造。
+- 决定：常驻 `agent-tools` 容器，一个服务放全部工具；上下文 HMAC-SHA256 签名、带过期、绑定任务和执行；服务端验签后回库复核。依赖已有（mcp、uvicorn、httpx），预计不新增。
+
+## 2026-11-25 M1 MCP 服务骨架和签名上下文（共建；用户选 B HTTP 容器，批准改权限逻辑、新增容器、M1b 超限一次提交）
+- 做了什么：M1a 运行上下文 HMAC 签名（c0f5e33，verify 由用户写）；M1b 新增 `app/tool_service`（验签 → 回库复核任务、执行编号、成员资格 → 执行）、`mcp_client.call_tool`、`tools` 容器和健康检查；成员资格检查抽成 `current_member_allowed` 两边共用；服务地址放 InfraConfig（不进任务快照）。
+- 验证：全量 2063 通过 40 跳过；pyright 0；导入分层 2 条约定满足（服务端放顶层包，未加例外）；真实容器：真实签名被复核拒绝 0.15 秒、伪造签名拒绝、停服 1.3 秒返回 mcp_transport_unavailable。
+- 未验证：容器里成功执行一次（需在开发库造数据，未做，成功路径只有单元测试）；冒烟到 M2 主链接入再跑。
+- 待办：`compose start tools` 会带起旧镜像的 migrate 容器（找不到新迁移版本，退出 255，未迁移）；启动 tools 用 `up -d --no-deps tools`，或重建 migrate 镜像。
