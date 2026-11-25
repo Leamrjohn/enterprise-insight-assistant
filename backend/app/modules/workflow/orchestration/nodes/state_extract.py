@@ -30,6 +30,7 @@ def _state_extract_node(state: WorkflowState) -> NodeStep:
     never depends on it.
     """
     frozen = _frozen_state(state)
+    assert frozen, "skip_if=_no_frozen_state keeps this node from running"
     history = [
         _Message(id=m["id"], role=m["role"], content=m["content"])
         for m in (state.get("conversation_context") or {}).get("messages", [])

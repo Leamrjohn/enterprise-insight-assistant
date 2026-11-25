@@ -179,6 +179,7 @@ def _planner_node(state: WorkflowState) -> NodeStep:
 def _planner_semantic_review_node(state: WorkflowState) -> NodeStep:
     """Let a second model pass check the Planner decision against the snapshot."""
     plan = state.get("plan")
+    assert plan, "skip_if=_semantic_review_off keeps this node from running"
     catalog_data = state.get("schema_catalog")
     catalog = (
         SnapshotCatalog.from_snapshot(catalog_data)
