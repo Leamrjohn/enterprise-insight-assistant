@@ -8,10 +8,7 @@ from app.modules.conversations.state_extractor import extract_state_update
 from app.modules.conversations.state_update import apply_update
 from app.modules.runtime.context.policies.state_extract import STATE_EXTRACT
 from app.modules.runtime.model_governance import model_node_scope
-from app.modules.workflow.orchestration.nodes._common import (
-    _checkpoint,
-    _set_stage,
-)
+from app.modules.workflow.orchestration.node_runner import NodeStep, run_node
 from app.modules.workflow.orchestration.state import WorkflowState
 
 
@@ -24,7 +21,7 @@ class _Message:
     content: str | None
 
 
-def state_extract_node(state: WorkflowState) -> dict:
+def _state_extract_node(state: WorkflowState) -> NodeStep:
     """M7: check this message's state proposals before planning.
 
     Runs only when the API froze a state into the snapshot (mode shadow or
@@ -32,10 +29,7 @@ def state_extract_node(state: WorkflowState) -> dict:
     words support.  A failed extraction keeps the frozen state, so planning
     never depends on it.
     """
-    frozen = (state.get("conversation_context") or {}).get(STATE_SNAPSHOT_KEY)
-    if not frozen:
-        return {}
-    _set_stage(state, "planning", "state_extract_node")
+    frozen = _frozen_state(state)
     history = [
         _Message(id=m["id"], role=m["role"], content=m["content"])
         for m in (state.get("conversation_context") or {}).get("messages", [])
@@ -48,9 +42,7 @@ def state_extract_node(state: WorkflowState) -> dict:
     new_state, rejected = apply_update(
         frozen["state"], extraction.updates, [*history, current]
     )
-    return _checkpoint(
-        state,
-        completed_node="state_extract_node",
+    return NodeStep(
         next_node="planner_node",
         update={
             "conversation_state": new_state,
@@ -61,3 +53,16 @@ def state_extract_node(state: WorkflowState) -> dict:
             },
         },
     )
+
+
+def _frozen_state(state: WorkflowState) -> dict | None:
+    return (state.get("conversation_context") or {}).get(STATE_SNAPSHOT_KEY)
+
+
+def _no_frozen_state(state: WorkflowState) -> bool:
+    return not _frozen_state(state)
+
+
+state_extract_node = run_node(
+    "state_extract_node", "planning", _state_extract_node, skip_if=_no_frozen_state
+)

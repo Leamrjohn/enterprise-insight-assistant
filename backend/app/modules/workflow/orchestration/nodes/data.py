@@ -18,16 +18,15 @@ from app.modules.runtime.tool_guard import (
     redis_breaker_store,
 )
 from app.modules.workflow.orchestration.node_outcome import NodeOutcome
+from app.modules.workflow.orchestration.node_runner import NodeStep, run_node
 from app.modules.workflow.orchestration.nodes._common import (
-    _checkpoint,
     _effective_question,
-    _set_stage,
     model_tools_enabled,
 )
 from app.modules.workflow.orchestration.state import WorkflowState
 
 
-def data_node(state: WorkflowState) -> dict:
+def _data_node(state: WorkflowState) -> NodeStep:
     """
     Data 节点：执行 SQL 查询。
 
@@ -36,7 +35,6 @@ def data_node(state: WorkflowState) -> dict:
     写 state["data_result"]。
     """
 
-    _set_stage(state, "querying_data", "data_node")
     data_source = state.get("business_data_source")
     snapshot_data = state.get("schema_catalog")
     if data_source is not None and snapshot_data is not None:
@@ -114,9 +112,7 @@ def data_node(state: WorkflowState) -> dict:
             output=update["data_result"],
             checkpoint_patch={"stage": "querying_data"},
         ).model_dump()
-        return _checkpoint(
-            state,
-            completed_node="data_node",
+        return NodeStep(
             next_node=(
                 "knowledge_node"
                 if (state.get("plan") or {}).get("route") == "hybrid"
@@ -141,9 +137,7 @@ def data_node(state: WorkflowState) -> dict:
                 checkpoint_patch={"stage": "querying_data"},
             ).model_dump(),
         }
-        return _checkpoint(
-            state,
-            completed_node="data_node",
+        return NodeStep(
             next_node=(
                 "knowledge_node"
                 if (state.get("plan") or {}).get("route") == "hybrid"
@@ -186,9 +180,7 @@ def data_node(state: WorkflowState) -> dict:
                 checkpoint_patch={"stage": "querying_data"},
             ).model_dump(),
         }
-        return _checkpoint(
-            state,
-            completed_node="data_node",
+        return NodeStep(
             next_node=(
                 "knowledge_node"
                 if (state.get("plan") or {}).get("route") == "hybrid"
@@ -221,9 +213,7 @@ def data_node(state: WorkflowState) -> dict:
         ).model_dump(),
         "error": result.error,
     }
-    return _checkpoint(
-        state,
-        completed_node="data_node",
+    return NodeStep(
         next_node=(
             "knowledge_node"
             if (state.get("plan") or {}).get("route") == "hybrid"
@@ -231,3 +221,6 @@ def data_node(state: WorkflowState) -> dict:
         ),
         update=update,
     )
+
+
+data_node = run_node("data_node", "querying_data", _data_node)

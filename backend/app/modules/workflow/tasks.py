@@ -307,6 +307,12 @@ def _stop_if_cancelled(db, record: AnalysisTask) -> bool:
     return True
 
 
+def _is_cancelled(db, record: AnalysisTask) -> bool:
+    """B1b: re-read the status before each graph node starts."""
+    db.refresh(record)
+    return record.status == "cancelled"
+
+
 def _update_stage(
     db,
     record: AnalysisTask,
@@ -826,6 +832,7 @@ def process_analysis_task(self, task_id: int):
                         patch,
                     )
                 ),
+                cancel_check=lambda: _is_cancelled(db, workflow_record),
                 resume_next_node=execution.resume_next_node,
                 resume_state=execution.resume_state,
                 **workflow_kwargs,

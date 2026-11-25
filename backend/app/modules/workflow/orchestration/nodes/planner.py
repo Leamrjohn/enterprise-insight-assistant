@@ -20,10 +20,9 @@ from app.modules.reporting.semantic_review_service import SemanticReviewService
 from app.modules.runtime.context.engine import ContextBudgetExceeded
 from app.modules.runtime.model_governance import model_node_scope
 from app.modules.workflow.orchestration.node_outcome import NodeOutcome
+from app.modules.workflow.orchestration.node_runner import NodeStep, run_node
 from app.modules.workflow.orchestration.nodes._common import (
-    _checkpoint,
     _next_after_plan,
-    _set_stage,
 )
 from app.modules.workflow.orchestration.router import (
     build_scope_fingerprint,
@@ -93,14 +92,13 @@ def _planner_history_summary(state: WorkflowState) -> list[str] | None:
     return (frozen or {}).get("items") or None
 
 
-def planner_node(state: WorkflowState) -> dict:
+def _planner_node(state: WorkflowState) -> NodeStep:
     """
     Planner 节点：分析问题，输出计划。
 
     读 state["question"] 和 state["user_id"]，
     写 state["plan"]。
     """
-    _set_stage(state, "planning", "planner_node")
     agent = PlannerAgent()
     history_summary = _planner_history_summary(state)
     with model_node_scope("planner"):
@@ -148,9 +146,7 @@ def planner_node(state: WorkflowState) -> dict:
                 checkpoint_patch={"stage": "planning"},
             ).model_dump(),
         }
-        return _checkpoint(
-            state,
-            completed_node="planner_node",
+        return NodeStep(
             next_node="planner_semantic_review_node",
             update=update,
         )
@@ -174,23 +170,15 @@ def planner_node(state: WorkflowState) -> dict:
             checkpoint_patch={"stage": "planning"},
         ).model_dump(),
     }
-    return _checkpoint(
-        state,
-        completed_node="planner_node",
+    return NodeStep(
         next_node="planning_failure_node",
         update=update,
     )
 
 
-def planner_semantic_review_node(state: WorkflowState) -> dict:
+def _planner_semantic_review_node(state: WorkflowState) -> NodeStep:
     """Let a second model pass check the Planner decision against the snapshot."""
-    if not state.get("semantic_review_enabled"):
-        return {}
     plan = state.get("plan")
-    if not plan:
-        return {}
-    # The durable task stage remains "planning"; semantic review is a planning substep.
-    _set_stage(state, "planning", "planner_semantic_review_node")
     catalog_data = state.get("schema_catalog")
     catalog = (
         SnapshotCatalog.from_snapshot(catalog_data)
@@ -258,9 +246,7 @@ def planner_semantic_review_node(state: WorkflowState) -> dict:
                 "message": f"Planner 语义复核失败: {error}",
                 "retryable": True,
             }
-        return _checkpoint(
-            state,
-            completed_node="planner_semantic_review_node",
+        return NodeStep(
             next_node="planning_failure_node" if retryable else "planner_terminal_node",
             update=update,
         )
@@ -294,9 +280,7 @@ def planner_semantic_review_node(state: WorkflowState) -> dict:
                 checkpoint_patch={"stage": "planning"},
             ).model_dump(),
         }
-        return _checkpoint(
-            state,
-            completed_node="planner_semantic_review_node",
+        return NodeStep(
             next_node="planner_terminal_node",
             update=update,
         )
@@ -316,15 +300,13 @@ def planner_semantic_review_node(state: WorkflowState) -> dict:
             checkpoint_patch={"stage": "planning"},
         ).model_dump(),
     }
-    return _checkpoint(
-        state,
-        completed_node="planner_semantic_review_node",
+    return NodeStep(
         next_node=_next_after_plan(update["plan"]),
         update=update,
     )
 
 
-def planner_terminal_node(state: WorkflowState) -> dict:
+def _planner_terminal_node(state: WorkflowState) -> dict:
     """Return a deterministic terminal response for non-analysis Planner actions."""
     plan = state.get("plan") or {}
     action = plan.get("action")
@@ -352,7 +334,7 @@ def planner_terminal_node(state: WorkflowState) -> dict:
     }
 
 
-def planning_failure_node(state: WorkflowState) -> dict:
+def _planning_failure_node(state: WorkflowState) -> dict:
     """Stop safely when the Planner model call or JSON validation failed."""
     failure = state.get("planner_failure") or {}
     retryable = bool(failure.get("retryable"))
@@ -369,3 +351,21 @@ def planning_failure_node(state: WorkflowState) -> dict:
         "final_answer": answer,
         "error": message,
     }
+
+
+planner_node = run_node("planner_node", "planning", _planner_node)
+
+
+def _semantic_review_off(state: WorkflowState) -> bool:
+    return not state.get("semantic_review_enabled") or not state.get("plan")
+
+
+# The durable task stage remains "planning"; semantic review is a planning substep.
+planner_semantic_review_node = run_node(
+    "planner_semantic_review_node",
+    "planning",
+    _planner_semantic_review_node,
+    skip_if=_semantic_review_off,
+)
+planner_terminal_node = run_node("planner_terminal_node", None, _planner_terminal_node)
+planning_failure_node = run_node("planning_failure_node", None, _planning_failure_node)

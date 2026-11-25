@@ -1,10 +1,7 @@
 """智能路由节点。"""
 
 from app.modules.workflow.lifecycle.recovery import recovery_decision_for_node
-from app.modules.workflow.orchestration.nodes._common import (
-    _checkpoint,
-    _set_stage,
-)
+from app.modules.workflow.orchestration.node_runner import NodeStep, run_node
 from app.modules.workflow.orchestration.router import (
     MAX_EXTERNAL_RETRIES,
     build_feedback,
@@ -13,9 +10,8 @@ from app.modules.workflow.orchestration.router import (
 from app.modules.workflow.orchestration.state import WorkflowState
 
 
-def smart_router_node(state: WorkflowState) -> dict:
+def _smart_router_node(state: WorkflowState) -> NodeStep:
     """Bounded policy engine: choose a node from typed execution state only."""
-    _set_stage(state, "composing_report", "smart_router_node")
     action, reason = choose_next_action(state)
     retries = state.get("external_retry_count", 0)
     maximum = state.get("max_external_retries", MAX_EXTERNAL_RETRIES)
@@ -48,9 +44,7 @@ def smart_router_node(state: WorkflowState) -> dict:
             or reason.endswith("_denied")
             else "completed"
         )
-        return _checkpoint(
-            state,
-            completed_node="smart_router_node",
+        return NodeStep(
             next_node=None,
             update={
                 "routing_action": action,
@@ -105,9 +99,12 @@ def smart_router_node(state: WorkflowState) -> dict:
         updates["empty_result_replanned"] = state.get("empty_result_replanned") or (
             reason == "empty_result_scope_check"
         )
-    return _checkpoint(
-        state,
-        completed_node="smart_router_node",
+    return NodeStep(
         next_node=decision.resume_node,
         update=updates,
     )
+
+
+smart_router_node = run_node(
+    "smart_router_node", "composing_report", _smart_router_node
+)

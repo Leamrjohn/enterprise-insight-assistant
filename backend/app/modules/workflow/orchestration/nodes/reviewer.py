@@ -8,10 +8,9 @@ from app.modules.reporting.citation_validation import validate_citations
 from app.modules.reporting.reviewer_agent import ReviewerAgent
 from app.modules.runtime.model_governance import model_node_scope
 from app.modules.workflow.orchestration.node_outcome import NodeOutcome
+from app.modules.workflow.orchestration.node_runner import NodeStep, run_node
 from app.modules.workflow.orchestration.nodes._common import (
-    _checkpoint,
     _effective_question,
-    _set_stage,
 )
 from app.modules.workflow.orchestration.state import WorkflowState
 
@@ -42,14 +41,13 @@ def _flag_contradicted_memories(state: WorkflowState, review_result: dict) -> No
         db.close()
 
 
-def reviewer_node(state: WorkflowState) -> dict:
+def _reviewer_node(state: WorkflowState) -> NodeStep:
     """
     Reviewer 节点：检查一致性，输出最终回答。
 
     读 state["data_result"] 和 state["knowledge_result"]，
     写 state["review_result"] 和 state["final_answer"]。
     """
-    _set_stage(state, "composing_report", "reviewer_node")
     agent = ReviewerAgent()
     if hasattr(agent, "set_citation_validator"):
         agent.set_citation_validator(validate_citations)
@@ -113,15 +111,11 @@ def reviewer_node(state: WorkflowState) -> dict:
                 checkpoint_patch={"stage": "composing_report"},
             ).model_dump(),
         }
-        return _checkpoint(
-            state,
-            completed_node="reviewer_node",
+        return NodeStep(
             next_node="smart_router_node",
             update=update,
         )
-    return _checkpoint(
-        state,
-        completed_node="reviewer_node",
+    return NodeStep(
         next_node="smart_router_node",
         update={
             "error": result.error,
@@ -135,3 +129,6 @@ def reviewer_node(state: WorkflowState) -> dict:
             ).model_dump(),
         },
     )
+
+
+reviewer_node = run_node("reviewer_node", "composing_report", _reviewer_node)

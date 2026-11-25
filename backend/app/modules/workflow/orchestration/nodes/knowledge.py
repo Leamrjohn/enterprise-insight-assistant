@@ -14,10 +14,9 @@ from app.modules.runtime.tool_guard import (
     redis_breaker_store,
 )
 from app.modules.workflow.orchestration.node_outcome import NodeOutcome
+from app.modules.workflow.orchestration.node_runner import NodeStep, run_node
 from app.modules.workflow.orchestration.nodes._common import (
-    _checkpoint,
     _effective_question,
-    _set_stage,
     model_tools_enabled,
 )
 from app.modules.workflow.orchestration.state import WorkflowState
@@ -41,14 +40,13 @@ def _guarded_rag_tool() -> Tool:
     )
 
 
-def knowledge_node(state: WorkflowState) -> dict:
+def _knowledge_node(state: WorkflowState) -> NodeStep:
     """
     Knowledge 节点：检索文档证据。
 
     “使用 resolved_question，否则回退原始问题”和 state["user_id"]，
     写 state["knowledge_result"]。
     """
-    _set_stage(state, "retrieving_knowledge", "knowledge_node")
     runtime = state.get("tool_runtime")
     support_check = runtime_settings().knowledge_support_check_enabled
     if runtime and model_tools_enabled(state.get("company_id")):
@@ -111,9 +109,7 @@ def knowledge_node(state: WorkflowState) -> dict:
                 checkpoint_patch={"stage": "retrieving_knowledge"},
             ).model_dump(),
         }
-        return _checkpoint(
-            state,
-            completed_node="knowledge_node",
+        return NodeStep(
             next_node="reviewer_node",
             update=update,
         )
@@ -136,9 +132,10 @@ def knowledge_node(state: WorkflowState) -> dict:
         ).model_dump(),
         "error": result.error,
     }
-    return _checkpoint(
-        state,
-        completed_node="knowledge_node",
+    return NodeStep(
         next_node="reviewer_node",
         update=update,
     )
+
+
+knowledge_node = run_node("knowledge_node", "retrieving_knowledge", _knowledge_node)

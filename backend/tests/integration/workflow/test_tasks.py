@@ -20,6 +20,7 @@ from app.modules.organizations.models import Company, CompanyMember
 from app.modules.reporting.schemas import FinalAnalysisReport
 from app.modules.runtime.model_governance import (
     ModelBudgetExceeded,
+    ModelCallCancelled,
     record_model_call,
     reserve_model_call,
 )
@@ -1449,6 +1450,48 @@ def _delete_created_records(
             db.delete(user)
     db.commit()
     db.close()
+
+
+def test_worker_cancel_check_sees_cancel_made_mid_workflow(monkeypatch) -> None:
+    """B1b: run_node raises before the next node once the user cancels."""
+    db = SessionLocal()
+    task_id: int | None = None
+    user_id: int | None = None
+    try:
+        suffix = uuid4().hex
+        user = User(name=f"cancel-user-{suffix}", api_key=f"cancel-key-{suffix}")
+        db.add(user)
+        db.flush()
+        user_id = user.id
+        task = AnalysisTask(
+            user_id=user.id, question="销售额", status="queued", stage="queued"
+        )
+        db.add(task)
+        db.commit()
+        task_id = task.id
+        seen: list[bool] = []
+
+        def fake_run_analysis(question, user_id, **kwargs):
+            seen.append(kwargs["cancel_check"]())
+            other = SessionLocal()
+            try:
+                other.get(AnalysisTask, task_id).status = "cancelled"
+                other.commit()
+            finally:
+                other.close()
+            seen.append(kwargs["cancel_check"]())
+            raise ModelCallCancelled("task cancelled")
+
+        monkeypatch.setattr(analysis_tasks, "run_analysis", fake_run_analysis)
+        process_analysis_task.run(task_id=task.id)
+
+        db.expire_all()
+        stored = db.get(AnalysisTask, task.id)
+        assert stored is not None
+        assert seen == [False, True]
+        assert stored.status == "cancelled"
+    finally:
+        _delete_created_records(db, task_id, user_id)
 
 
 def test_worker_resumes_from_database_checkpoint(monkeypatch) -> None:

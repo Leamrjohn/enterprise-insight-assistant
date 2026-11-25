@@ -210,6 +210,7 @@ def run_analysis(
     semantic_review_enabled: bool = True,
     stage_callback: Callable[[str, str], None] | None = None,
     checkpoint_callback: Callable[[str, str | None, dict], None] | None = None,
+    cancel_check: Callable[[], bool] | None = None,
     resume_next_node: str | None = None,
     resume_state: dict | None = None,
     tool_runtime: ToolRuntime | None = None,
@@ -256,6 +257,7 @@ def run_analysis(
         "tool_runtime": tool_runtime,
         "stage_callback": stage_callback,
         "checkpoint_callback": checkpoint_callback,
+        "cancel_check": cancel_check,
         "resume_next_node": resume_next_node,
     }
     # The persisted patch is selected by the Worker, not supplied by a client.
