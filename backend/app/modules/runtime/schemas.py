@@ -27,10 +27,17 @@ class TemplateQueryInputSchema(DataRequest):
     """Runtime contract for the registered-query tool."""
 
 
+def _registered_tool_names() -> tuple[str, ...]:
+    # Imported here: the catalog itself imports the input schemas above.
+    from app.modules.runtime.tools.registry import default_registry
+
+    return default_registry().names()
+
+
 class ToolPolicy(BaseModel):
     """The allowlist and scope rules frozen when an analysis task is created."""
 
-    allowed_tools: tuple[str, ...] = ("rag_search", "sql_query", "template_query")
+    allowed_tools: tuple[str, ...] = Field(default_factory=_registered_tool_names)
     require_company_scope: bool = True
     require_frozen_document_scope: bool = True
     sql_statement_timeout_ms: int = Field(default=10_000, ge=100, le=60_000)

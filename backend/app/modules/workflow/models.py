@@ -3,6 +3,7 @@ from typing import TYPE_CHECKING, Any, Optional
 
 from app.core.settings import get_settings
 from app.db.base import Base
+from app.modules.runtime.tools.registry import default_registry
 from app.modules.workflow.lifecycle.model_budget import configured_model_budget
 from sqlalchemy import (
     CheckConstraint,
@@ -143,7 +144,7 @@ class AnalysisTask(Base):
         JSONB,
         nullable=False,
         default=lambda: {
-            "allowed_tools": ["rag_search", "sql_query", "template_query"],
+            "allowed_tools": list(default_registry().names()),
             "require_company_scope": True,
             "require_frozen_document_scope": True,
             "sql_statement_timeout_ms": 10000,
