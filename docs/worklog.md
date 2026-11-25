@@ -1168,3 +1168,8 @@
 - 验证：全量 2063 通过 40 跳过；pyright 0；导入分层 2 条约定满足（服务端放顶层包，未加例外）；真实容器：真实签名被复核拒绝 0.15 秒、伪造签名拒绝、停服 1.3 秒返回 mcp_transport_unavailable。
 - 未验证：容器里成功执行一次（需在开发库造数据，未做，成功路径只有单元测试）；冒烟到 M2 主链接入再跑。
 - 待办：`compose start tools` 会带起旧镜像的 migrate 容器（找不到新迁移版本，退出 255，未迁移）；启动 tools 用 `up -d --no-deps tools`，或重建 migrate 镜像。
+
+## 2026-11-25 T3a 唯一入口和固定顺序流水线（训练→用户批准改主链、不加回退开关、拆 T3a/T3c）
+- 做了什么：新增 `runtime/tools/pipeline.py`（STAGE_ORDER 8 阶段 + run，顺序不符直接拒绝运行）；`ToolRuntime._execute` 拆成 8 个 `_stage_*`，逻辑不变；新增 `ToolGateway.call(name, 参数)`，`wrap` 登记工具、`RuntimeTool.execute` 只走入口；未登记名称返回 `tool_unknown`（08bcb0d）。
+- 验证：流水线测试 17 通过；全量 2080 通过 40 跳过，原有期望未改；pyright 0；导入分层未加例外；冒烟 t3a-deploy-r1 9 成功 + 混合题待复核（已知），$0.028。
+- 下一步：T3c 登记表补 kind/backed_by/output_model、统一 Evidence、执行阶段按 transport 分发。

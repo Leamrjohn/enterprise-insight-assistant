@@ -1,7 +1,7 @@
 """Single execution boundary for workflow tools."""
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from hashlib import sha256
 from time import perf_counter
 
@@ -16,6 +16,7 @@ from app.modules.runtime.model_governance import (
     ModelCallCancelled,
 )
 from app.modules.runtime.schemas import ToolBudget, ToolPolicy
+from app.modules.runtime.tools import pipeline
 from app.modules.runtime.tools.authorization import current_member_allowed
 from app.modules.runtime.tools.errors import classify
 from app.modules.runtime.tools.registry import default_registry
@@ -38,6 +39,7 @@ DENY_MESSAGES = {
     "tool_document_scope_denied": "只能检索本任务冻结的文档范围。",
     "tool_document_current_authorization_denied": "部分文档已不再对当前用户可见。",
     "tool_task_missing": "任务记录不存在，无法继续调用工具。",
+    "tool_unknown": "本任务没有登记这个工具，请改用已提供的工具。",
 }
 _GENERIC_DENY_MESSAGE = "工具调用不在已授权范围内。"
 
@@ -53,11 +55,50 @@ class ToolRuntimeContext:
     allowed_document_ids: frozenset[int]
 
 
+@dataclass
+class ToolCall:
+    """One call as it moves through the pipeline; earlier stages fill later fields."""
+
+    tool: Tool
+    input: ToolInput
+    policy: ToolPolicy | None = None
+    requested_parameter_keys: list[str] = field(default_factory=list)
+
+
+class ToolGateway:
+    """T3: the only entry for a task's tool calls: call(name, parameters).
+
+    Tools are registered once by name; every call then runs the same pipeline.
+    """
+
+    def __init__(self, runtime: "ToolRuntime") -> None:
+        self._runtime = runtime
+        self._tools: dict[str, Tool] = {}
+
+    def register(self, tool: Tool) -> None:
+        # A node that runs again registers a fresh instance under the same name.
+        self._tools[tool.name] = tool
+
+    def call(self, name: str, parameters: dict) -> ToolOutput:
+        tool = self._tools.get(name)
+        if tool is None:
+            return ToolOutput(
+                success=False,
+                error=deny_message("tool_unknown"),
+                error_code="tool_unknown",
+            )
+        input = ToolInput(parameters=parameters)
+        empty_scope = self._runtime.resolve_empty_document_scope(tool, input)
+        if empty_scope is not None:
+            return empty_scope
+        return self._runtime.execute(tool, input)
+
+
 class RuntimeTool(Tool):
     """Adapter that preserves the existing Tool protocol for Agents."""
 
-    def __init__(self, runtime: "ToolRuntime", tool: Tool) -> None:
-        self._runtime = runtime
+    def __init__(self, gateway: ToolGateway, tool: Tool) -> None:
+        self._gateway = gateway
         self._tool = tool
 
     @property
@@ -69,10 +110,7 @@ class RuntimeTool(Tool):
         return self._tool.description
 
     def execute(self, input: ToolInput) -> ToolOutput:
-        empty_scope = self._runtime.resolve_empty_document_scope(self._tool, input)
-        if empty_scope is not None:
-            return empty_scope
-        return self._runtime.execute(self._tool, input)
+        return self._gateway.call(self._tool.name, input.parameters)
 
 
 class ToolRuntime:
@@ -90,9 +128,11 @@ class ToolRuntime:
         self._db = db
         self._attempt = attempt
         self._context = context
+        self.gateway = ToolGateway(self)
 
     def wrap(self, tool: Tool) -> RuntimeTool:
-        return RuntimeTool(self, tool)
+        self.gateway.register(tool)
+        return RuntimeTool(self.gateway, tool)
 
     def resolve_empty_document_scope(
         self, tool: Tool, input: ToolInput
@@ -361,28 +401,54 @@ class ToolRuntime:
             return output
 
     def _execute(self, tool: Tool, input: ToolInput) -> ToolOutput:
-        policy = ToolPolicy.model_validate(self._task().tool_policy_snapshot)
-        if tool.name not in policy.allowed_tools:
-            return self._deny(tool, "tool_not_allowlisted", {})
-        denied = self._validate_current_authorization(tool)
-        if denied is not None:
-            return denied
-        validated = self._validate_input(tool, input)
+        return pipeline.run(self._stages(), ToolCall(tool=tool, input=input))
+
+    def _stages(self) -> list[tuple[str, pipeline.Stage]]:
+        return [
+            ("allowlist", self._stage_allowlist),
+            ("current_authorization", self._stage_current_authorization),
+            ("input_schema", self._stage_input_schema),
+            ("scope", self._stage_scope),
+            ("document_visibility", self._stage_document_visibility),
+            ("server_parameters", self._stage_server_parameters),
+            ("budget", self._stage_budget),
+            ("execute", self._stage_execute),
+        ]
+
+    def _stage_allowlist(self, call: ToolCall) -> ToolOutput | None:
+        call.policy = ToolPolicy.model_validate(self._task().tool_policy_snapshot)
+        if call.tool.name not in call.policy.allowed_tools:
+            return self._deny(call.tool, "tool_not_allowlisted", {})
+        return None
+
+    def _stage_current_authorization(self, call: ToolCall) -> ToolOutput | None:
+        return self._validate_current_authorization(call.tool)
+
+    def _stage_input_schema(self, call: ToolCall) -> ToolOutput | None:
+        validated = self._validate_input(call.tool, call.input)
         if isinstance(validated, ToolOutput):
             return validated
-        input = validated
-        denied = self._validate_scope(tool, input, policy)
-        if denied is not None:
-            return denied
-        denied = self._validate_current_document_scope(tool, input)
-        if denied is not None:
-            return denied
-        requested_parameter_keys = sorted(input.parameters)
-        input = self._with_server_parameters(tool, input, policy)
-        exhausted = self._reserve_call(tool)
-        if exhausted is not None:
-            return exhausted
+        call.input = validated
+        return None
 
+    def _stage_scope(self, call: ToolCall) -> ToolOutput | None:
+        assert call.policy is not None, "the allowlist stage loads the policy"
+        return self._validate_scope(call.tool, call.input, call.policy)
+
+    def _stage_document_visibility(self, call: ToolCall) -> ToolOutput | None:
+        return self._validate_current_document_scope(call.tool, call.input)
+
+    def _stage_server_parameters(self, call: ToolCall) -> ToolOutput | None:
+        assert call.policy is not None, "the allowlist stage loads the policy"
+        call.requested_parameter_keys = sorted(call.input.parameters)
+        call.input = self._with_server_parameters(call.tool, call.input, call.policy)
+        return None
+
+    def _stage_budget(self, call: ToolCall) -> ToolOutput | None:
+        return self._reserve_call(call.tool)
+
+    def _stage_execute(self, call: ToolCall) -> ToolOutput:
+        tool, input = call.tool, call.input
         append_workflow_event(
             self._db,
             attempt=self._attempt,
@@ -390,7 +456,7 @@ class ToolRuntime:
             event_type="tool_started",
             tool_name=tool.name,
             status="running",
-            details={"parameter_keys": requested_parameter_keys},
+            details={"parameter_keys": call.requested_parameter_keys},
         )
         self._db.commit()
         started = perf_counter()
