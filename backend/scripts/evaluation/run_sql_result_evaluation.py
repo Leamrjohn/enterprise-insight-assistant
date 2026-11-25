@@ -131,11 +131,14 @@ def evaluate_case(
 ) -> dict:
     from app.modules.analysis.data.data_agent import DataAgent
     from app.modules.analysis.data.sql_generation import SQLGenerationService
+    from app.modules.analysis.data.sql_tool import SQLTool
     from app.modules.analysis.data.tool_agent import ToolCallingDataAgent
     from app.modules.reporting.semantic_review_service import SemanticReviewService
 
     shared = {
         "sql_generator": SQLGenerationService(gateway=gateway, catalog=catalog),
+        # T3b: agents no longer build their own tool; the caller hands it over.
+        "sql_tool": SQLTool(data_source=source, snapshot_catalog=catalog),
         "data_source": source,
         "snapshot_catalog": catalog,
         "semantic_reviewer": SemanticReviewService(
