@@ -1158,3 +1158,7 @@
 - 做了什么：新增 `runtime/tools/errors.py`（5 类 ErrorClass + 43 个错误码表 + classify）；`tool_guard` 改用 classify，删 3 个手写集合；RAG 补 `rag_input_missing`/`rag_search_unavailable`/`rag_retrieval_failed`；审计记 `error_class`，参数校验失败的 schema 改读登记表版本（0799e70）。
 - 验证：T2 测试 25 通过（含扫描：工具层错误码全登记、失败无错误码为 0）；全量 2042 通过 40 跳过；pyright 0；冒烟 t2-deploy-r1 9 成功 + 混合题待复核（已知），$0.027。
 - 行为变化：`data_source_not_allowed`、`mcp_runtime_context_*` 在工具循环里停止原因由 unavailable 变为 denied（都停止，不重试）。
+
+## 2026-11-25 M1 方案课（用户选 B：HTTP 服务容器）
+- 发现：现有 `agent-evidence` 是 stdio 子进程，每次调用新起进程并加载模型（冷启动预算 30 秒）；运行上下文只校验无密钥的 sha256，能防误改不能防伪造。
+- 决定：常驻 `agent-tools` 容器，一个服务放全部工具；上下文 HMAC-SHA256 签名、带过期、绑定任务和执行；服务端验签后回库复核。依赖已有（mcp、uvicorn、httpx），预计不新增。
