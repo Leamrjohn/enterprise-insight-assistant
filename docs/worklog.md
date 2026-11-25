@@ -1183,3 +1183,4 @@
 - 做了什么：新增 `workflow/orchestration/toolsets.py`（NODE_TOOLSETS 配置 + TOOL_FACTORIES，唯一构造工具处，熔断/MCP 回退在工厂里；build_toolset 有运行时则登记到 ToolGateway）；`tool_protocol.Toolset`（按名字 call，未在工具集的名字 → tool_unknown）；节点只调 build_toolset，4 个 Agent 改为 `self._tools.call(...)`，删除默认构造，`sql_tool=`/`rag_tool=` 保留给测试；`model_tools_enabled` 移到 toolsets 防循环导入（6d20375）。
 - 验证：验收测试 8 通过（扫描：nodes/ 和 4 个 Agent 无工具构造；假工具只改 4 处即可在 Data 节点调用；5 条路线工具类型不变）；全量 2104 通过 40 跳过；pyright 0；导入分层未加例外；冒烟 t3b1-deploy-r1 9 成功 + 混合题待复核（已知），$0.027；审计 rag_search 6、sql_query 4 全部成功。
 - 说明：6 个 FakeDataAgent 补构造参数、2 个接口测试传入假工具，断言未改。下一步 T3b-2：模型可见说明由登记表生成。
+- 2026-11-25 补：CI 行为门禁 SQL 回放 1/24（基线 21）。根因：`run_sql_result_evaluation.py` 构造 `DataAgent(data_source, catalog)` 不传工具，原来靠 Agent 默认建 SQLTool，T3b-1 删了默认后工具集为空、调用全部 tool_unknown；单元测试没有这种构造。修复：评测脚本自己传 `sql_tool=SQLTool(...)`（bd68ab7）；评测容器里本地重跑 SQL 门禁 21/24 通过。待办：Agent 有数据源却没有工具时应直接报错，而不是静默返回 tool_unknown。
