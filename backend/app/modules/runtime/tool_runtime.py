@@ -1,7 +1,7 @@
 """Single execution boundary for workflow tools."""
 
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from hashlib import sha256
 from time import perf_counter
 
@@ -40,6 +40,7 @@ DENY_MESSAGES = {
     "tool_document_current_authorization_denied": "部分文档已不再对当前用户可见。",
     "tool_task_missing": "任务记录不存在，无法继续调用工具。",
     "tool_unknown": "本任务没有登记这个工具，请改用已提供的工具。",
+    "tool_output_contract_invalid": "工具返回的结果不符合契约，请稍后重试或说明限制。",
 }
 _GENERIC_DENY_MESSAGE = "工具调用不在已授权范围内。"
 
@@ -170,6 +171,7 @@ class ToolRuntime:
                 "answer": "当前任务没有可用的文档证据，未执行文档检索。",
                 "evidences": [],
             },
+            evidence=[],
         )
 
     @staticmethod
@@ -364,6 +366,25 @@ class ToolRuntime:
             }
         )
 
+    @staticmethod
+    def _with_evidence(tool: Tool, result: ToolOutput) -> ToolOutput:
+        """Check a successful result against its contract and attach its Evidence."""
+        definition = default_registry().get(tool.name)
+        if definition is None or not (
+            definition.output_model and definition.to_evidence
+        ):
+            return result
+        try:
+            output = definition.output_model.model_validate(result.data)
+        except ValidationError:
+            # A tool that broke its own contract is a defect, not the caller's error.
+            return ToolOutput(
+                success=False,
+                error=deny_message("tool_output_contract_invalid"),
+                error_code="tool_output_contract_invalid",
+            )
+        return replace(result, evidence=definition.to_evidence(output))
+
     def _task(self) -> AnalysisTask:
         task = self._db.get(AnalysisTask, self._attempt.task_id)
         if task is None:
@@ -477,6 +498,8 @@ class ToolRuntime:
                 error="工具执行暂时不可用。",
                 error_code="tool_runtime_unexpected_error",
             )
+        if result.success:
+            result = self._with_evidence(tool, result)
         duration_ms = round((perf_counter() - started) * 1000)
         details: dict[str, object] = {"duration_ms": duration_ms}
         if result.success and isinstance(result.data, dict):
