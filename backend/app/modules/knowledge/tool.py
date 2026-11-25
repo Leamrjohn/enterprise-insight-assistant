@@ -65,7 +65,9 @@ class RAGTool(Tool):
         company_id = input.parameters.get("company_id")
         document_ids = input.parameters.get("document_ids")
         if not question or not company_id:
-            return ToolOutput(success=False, error="缺少参数")
+            return ToolOutput(
+                success=False, error="缺少参数", error_code="rag_input_missing"
+            )
         raw_window = input.parameters.get("validity_window")
         try:
             # Without an explicit window only documents valid today are eligible.
@@ -270,6 +272,7 @@ class RAGTool(Tool):
             return ToolOutput(
                 success=False,
                 error="文档检索暂时不可用",
+                error_code="rag_search_unavailable",
             )
 
         except Exception:
@@ -280,6 +283,7 @@ class RAGTool(Tool):
             return ToolOutput(
                 success=False,
                 error="RAG retrieval failed",
+                error_code="rag_retrieval_failed",
             )
         finally:
             if db is not None:

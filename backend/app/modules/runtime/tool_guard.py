@@ -15,54 +15,28 @@ from typing import Literal, Protocol, cast
 
 from app.modules.analysis.tool_protocol import Tool, ToolInput, ToolOutput
 from app.modules.runtime.tool_loop import Outcome
+from app.modules.runtime.tools.errors import ErrorClass, classify
 
 logger = logging.getLogger(__name__)
 
-# Denials stop the loop at once: asking again cannot change who the user is.
-DENIED_CODES = frozenset(
-    {
-        "tool_not_allowlisted",
-        "tool_schema_unregistered",
-        "tool_company_scope_missing",
-        "tool_company_scope_denied",
-        "tool_current_authorization_denied",
-        "tool_document_scope_denied",
-        "tool_document_current_authorization_denied",
-        "tool_task_missing",
-    }
-)
-EXHAUSTED_CODES = frozenset({"tool_budget_exhausted"})
 CIRCUIT_OPEN_CODE = "tool_circuit_open"
-INFRASTRUCTURE_CODES = frozenset(
-    {
-        "business_db_execution_failed",
-        "sql_statement_timeout",
-        "mcp_transport_unavailable",
-        "mcp_evidence_read_failed",
-        "mcp_evidence_read_malformed",
-        "mcp_sdk_version_mismatch",
-    }
-)
 
 
 def is_infrastructure_failure(output: ToolOutput) -> bool:
     """True when the tool, not the request, is what failed."""
     if output.success or output.model_feedback:
         return False
-    if output.error_code is None:  # RAGTool reports retrieval outages without a code.
-        return True
-    # A timeout is usually the statement's fault, so it is left for the model to fix.
-    return (
-        output.error_code in INFRASTRUCTURE_CODES
-        and output.error_code != "sql_statement_timeout"
-    )
+    # The class table decides; an unnamed code counts as an outage.
+    return classify(output.error_code) is ErrorClass.INFRA
 
 
 def outcome_of_failure(output: ToolOutput) -> Outcome:
     """How a tool's failure counts in the tool loop."""
-    if output.error_code in DENIED_CODES:
+    error_class = classify(output.error_code)
+    # Denials stop the loop at once: asking again cannot change who the user is.
+    if error_class is ErrorClass.DENIED:
         return "denied"
-    if output.error_code in EXHAUSTED_CODES:
+    if error_class is ErrorClass.EXHAUSTED:
         return "exhausted"
     # An outage first: some transports flag themselves repairable for the fixed
     # route's retry, but no rewording by the model can bring a service back.

@@ -16,6 +16,7 @@ from app.modules.runtime.model_governance import (
     ModelCallCancelled,
 )
 from app.modules.runtime.schemas import ToolBudget, ToolPolicy
+from app.modules.runtime.tools.errors import classify
 from app.modules.runtime.tools.registry import default_registry
 from app.modules.workflow.audit.events import append_workflow_event
 from app.modules.workflow.audit.tool_call import ToolCallRecord
@@ -136,6 +137,7 @@ class ToolRuntime:
         return definition.contract_version if definition else f"{tool.name}/v1"
 
     def _deny(self, tool: Tool, code: str, details: dict) -> ToolOutput:
+        details = {**details, "error_class": classify(code).value}
         append_workflow_event(
             self._db,
             attempt=self._attempt,
@@ -307,7 +309,7 @@ class ToolRuntime:
                 "tool_input_schema_invalid",
                 {
                     "parameter_keys": sorted(input.parameters),
-                    "schema": f"{tool.name}/v1",
+                    "schema": definition.contract_version,
                 },
             )
 
@@ -419,12 +421,15 @@ class ToolRuntime:
                 error="工具执行暂时不可用。",
                 error_code="tool_runtime_unexpected_error",
             )
-        details = {"duration_ms": round((perf_counter() - started) * 1000)}
+        duration_ms = round((perf_counter() - started) * 1000)
+        details: dict[str, object] = {"duration_ms": duration_ms}
         if result.success and isinstance(result.data, dict):
             rows = result.data.get("rows")
             if isinstance(rows, list):
                 details["row_count"] = len(rows)
             details["result_status"] = result.data.get("status", "ready")
+        if not result.success:
+            details["error_class"] = classify(result.error_code).value
         append_workflow_event(
             self._db,
             attempt=self._attempt,
@@ -434,7 +439,7 @@ class ToolRuntime:
             status="succeeded" if result.success else "failed",
             error_code=result.error_code,
             details=details,
-            duration_ms=details["duration_ms"],
+            duration_ms=duration_ms,
         )
         self._db.add(
             ToolCallRecord(
@@ -444,7 +449,7 @@ class ToolRuntime:
                 tool_contract_version=self._tool_contract_version(tool),
                 status="succeeded" if result.success else "failed",
                 error_code=result.error_code,
-                duration_ms=details["duration_ms"],
+                duration_ms=duration_ms,
                 metadata_json={
                     key: value for key, value in details.items() if key != "duration_ms"
                 },
