@@ -300,9 +300,9 @@ Agent 层   Planner │ Data │ Knowledge │ Reviewer │ 确定性校验
 | T1 登记表 | 收拢现有 3 个工具，行为不变；定义里加 `transport`（进程内 / MCP 服务名） | 契约测试通过；新增假工具只改一处 | 共建 | — |
 | T2 错误分类 | `caller_error`、`denied`、`infra_error`、`exhausted`、`task_stop`；RAG 补错误码；MCP 连接失败、协议错误、服务超时归入 `infra_error` | 空错误码为 0；各类错误处理都有测试 | **训练** | — |
 | M1 MCP 服务骨架和身份传递 | **2026-11-25 用户选 B：HTTP 服务容器 `agent-tools`**（常驻、启动时加载一次模型；经营库只读凭据最终只放服务容器），先一个服务放全部工具、按领域分文件，以后拆分只改登记表 `transport`；运行上下文用 HMAC-SHA256 签名（密钥键名 `TOOL_CONTEXT_SIGNING_KEY`），带过期时间并绑定 `task_id`、`execution_id`；服务端验签后回库复核成员资格和文档可见性；本工单只放一个回声工具跑通链路，真实工具在 M2、M3 迁移 | 伪造签名、篡改公司或角色、过期、跨公司：0 次执行；服务停止时客户端明确失败（`mcp_transport_unavailable`）；健康检查可用 | 共建 | **改权限逻辑、新增容器，需批准** |
-| T3 唯一入口和执行流水线 | 新增唯一入口 `ToolGateway.call(name, 参数)`，替换 `ToolRuntime.execute`，执行阶段按 `transport` 走进程内或 MCP 客户端；登记表补 `kind`（runtime / capability / control）、`backed_by`、`output_model` 和结果转换函数 | 拒绝和审计回归全过；中间层顺序有测试；结果都转成统一 `Evidence` | **训练** | **改主链，需批准** |
+| T3 唯一入口和执行流水线 | 新增唯一入口 `ToolGateway.call(name, 参数)`，替换 `ToolRuntime.execute`，（2026-11-25 拆为 T3a 唯一入口和固定顺序流水线、T3c 登记表补字段和统一 Evidence；按 `transport` 分发经用户同意移到 M2，与真实的 `rag_search` 一起做）；登记表补 `kind`（runtime / capability / control）、`backed_by`、`output_model` 和结果转换函数 | 拒绝和审计回归全过；中间层顺序有测试；结果都转成统一 `Evidence` | **训练** | **改主链，需批准** |
 | T3b 节点工具集 | 节点和 Agent 不再自己创建工具对象（`SQLTool(`、`RAGTool(`、`GuardedTool(`），改为拿工具集按名字调用；模型可见的工具说明从登记表生成 | 给 Data 节点加一个假工具只改登记、实现、结果转换、工具集配置 4 处，`nodes/` 和 `analysis/` 零改动（测试保证）；扫描测试：节点和 Agent 中不出现工具类构造 | 共建 | **改主链，需批准** |
-| M2 迁移 `rag_search` | 以现有 `agent-evidence` 为基础改为正式服务，直接挂到工具集上 | Knowledge 不低于 49/57；冒烟不变差 | 共建 | **改主链，需批准** |
+| M2 迁移 `rag_search` | 以现有 `agent-evidence` 为基础改为正式服务，直接挂到工具集上；执行阶段加按 `transport` 分发（进程内 / MCP 客户端，从 T3 移来） | Knowledge 不低于 49/57；冒烟不变差 | 共建 | **改主链，需批准** |
 | M3 迁移 `sql_query`、`template_query` | 服务端执行前仍过 Schema 和 AST 校验，经营库只读；直接挂到工具集上 | 拒绝回归全过；冒烟不变差 | 共建 | **改主链，需批准** |
 | T4 每次执行写审计 | 用 `logical_call_id` 串起重试，ID 随请求传到服务端 | 注入重试 1 次，出现 2 条记录和同一逻辑 ID | **训练** | **改表** |
 | T5 超时和大小控制 | 慢工具、超大结果按配置处理；服务健康检查 | 慢工具和超大结果被按配置处理 | 共建 | — |
