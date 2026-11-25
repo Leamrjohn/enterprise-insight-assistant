@@ -15,27 +15,14 @@ from app.modules.runtime.model_governance import (
     ModelBudgetExceeded,
     ModelCallCancelled,
 )
-from app.modules.runtime.schemas import (
-    RAGSearchInputSchema,
-    SQLQueryInputSchema,
-    TemplateQueryInputSchema,
-    ToolBudget,
-    ToolPolicy,
-)
+from app.modules.runtime.schemas import ToolBudget, ToolPolicy
+from app.modules.runtime.tools.registry import default_registry
 from app.modules.workflow.audit.events import append_workflow_event
 from app.modules.workflow.audit.tool_call import ToolCallRecord
 from app.modules.workflow.lifecycle.execution_attempt import TaskExecutionAttempt
 from app.modules.workflow.models import AnalysisTask
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
-
-ANALYSIS_ROLES = frozenset({"owner", "admin", "analyst"})
-TOOL_ALLOWED_ROLES = {
-    "rag_search": ANALYSIS_ROLES,
-    "sql_query": ANALYSIS_ROLES,
-    "template_query": ANALYSIS_ROLES,
-}
-
 
 # Each denial tells the caller what to change; codes stay the machine contract.
 DENY_MESSAGES = {
@@ -145,8 +132,8 @@ class ToolRuntime:
 
     @staticmethod
     def _tool_contract_version(tool: Tool) -> str:
-        versions = {"rag_search": "rag_search/v2"}
-        return versions.get(tool.name, f"{tool.name}/v1")
+        definition = default_registry().get(tool.name)
+        return definition.contract_version if definition else f"{tool.name}/v1"
 
     def _deny(self, tool: Tool, code: str, details: dict) -> ToolOutput:
         append_workflow_event(
@@ -213,7 +200,8 @@ class ToolRuntime:
             )
             .one_or_none()
         )
-        allowed_roles = TOOL_ALLOWED_ROLES.get(tool.name, frozenset())
+        definition = default_registry().get(tool.name)
+        allowed_roles = definition.allowed_roles if definition else frozenset()
         if (
             user is None
             or not user.is_active
@@ -300,13 +288,8 @@ class ToolRuntime:
         return None
 
     def _validate_input(self, tool: Tool, input: ToolInput) -> ToolInput | ToolOutput:
-        schemas = {
-            "rag_search": RAGSearchInputSchema,
-            "sql_query": SQLQueryInputSchema,
-            "template_query": TemplateQueryInputSchema,
-        }
-        schema = schemas.get(tool.name)
-        if schema is None:
+        definition = default_registry().get(tool.name)
+        if definition is None:
             return self._deny(
                 tool,
                 "tool_schema_unregistered",
@@ -314,7 +297,9 @@ class ToolRuntime:
             )
         try:
             return ToolInput(
-                parameters=schema.model_validate(input.parameters).model_dump()
+                parameters=definition.input_model.model_validate(
+                    input.parameters
+                ).model_dump()
             )
         except ValidationError:
             return self._deny(
