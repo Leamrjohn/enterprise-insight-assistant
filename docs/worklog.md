@@ -1153,3 +1153,8 @@
 - 做了什么：新增 `runtime/tools/`（definition、catalog、registry），3 个工具只在 catalog 声明一次，启动时按 5 条规则校验；`ToolRuntime`、`ToolPolicy`、任务快照默认值改读登记表（641148f）。
 - 验证：登记表 12 个测试通过；全量 2017 通过 40 跳过；pyright 0、导入分层 2 条约定满足；冒烟 t1-deploy-r1 9 成功 + 混合题待复核（已知），$0.027。
 - 遗留：本地直接跑 `lint-imports` 退出码 1，要用 `scripts/ci/lint_imports.sh`；版本号写死 v1 的审计问题留给 T2。
+
+## 2026-11-25 T2 工具错误分类（训练；用户批准 data_source_not_allowed 归 denied、改 3 处审计期望）
+- 做了什么：新增 `runtime/tools/errors.py`（5 类 ErrorClass + 43 个错误码表 + classify）；`tool_guard` 改用 classify，删 3 个手写集合；RAG 补 `rag_input_missing`/`rag_search_unavailable`/`rag_retrieval_failed`；审计记 `error_class`，参数校验失败的 schema 改读登记表版本（0799e70）。
+- 验证：T2 测试 25 通过（含扫描：工具层错误码全登记、失败无错误码为 0）；全量 2042 通过 40 跳过；pyright 0；冒烟 t2-deploy-r1 9 成功 + 混合题待复核（已知），$0.027。
+- 行为变化：`data_source_not_allowed`、`mcp_runtime_context_*` 在工具循环里停止原因由 unavailable 变为 denied（都停止，不重试）。
