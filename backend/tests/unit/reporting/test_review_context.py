@@ -201,7 +201,9 @@ def test_data_agent_stops_when_the_sql_review_cannot_fit():
 
 
 def test_plan_review_that_cannot_fit_asks_back_without_retrying(monkeypatch):
-    monkeypatch.setattr(workflow_nodes, "SemanticReviewService", _RefusingReviewer)
+    monkeypatch.setattr(
+        workflow_nodes.planner, "SemanticReviewService", _RefusingReviewer
+    )
     result = workflow_nodes.planner_semantic_review_node(
         {
             "question": "华东区2025年8月销售额是多少？",

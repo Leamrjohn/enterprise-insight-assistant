@@ -137,13 +137,13 @@ def _result(flags):
 
 def test_node_passes_only_the_used_memories_as_allowed(monkeypatch):
     seen = {}
-    monkeypatch.setattr(nodes, "SessionLocal", _FakeSession)
-    monkeypatch.setattr(nodes, "set_tenant_scope", lambda *_: None)
+    monkeypatch.setattr(nodes.reviewer, "SessionLocal", _FakeSession)
+    monkeypatch.setattr(nodes.reviewer, "set_tenant_scope", lambda *_: None)
     monkeypatch.setattr(
         "app.modules.memory.service.flag_memories_from_model",
         lambda _db, **kwargs: seen.update(kwargs),
     )
-    nodes._flag_contradicted_memories(_state(), _result([{"memory_id": 7}]))
+    nodes.reviewer._flag_contradicted_memories(_state(), _result([{"memory_id": 7}]))
     assert seen["allowed_ids"] == {7}
     assert seen["company_id"] == 3
 
@@ -152,20 +152,20 @@ def test_no_flags_opens_no_session(monkeypatch):
     def fail():
         raise AssertionError("no session should be opened")
 
-    monkeypatch.setattr(nodes, "SessionLocal", fail)
-    nodes._flag_contradicted_memories(_state(), _result([]))
-    nodes._flag_contradicted_memories(_state(), {})
+    monkeypatch.setattr(nodes.reviewer, "SessionLocal", fail)
+    nodes.reviewer._flag_contradicted_memories(_state(), _result([]))
+    nodes.reviewer._flag_contradicted_memories(_state(), {})
 
 
 def test_a_flagging_failure_does_not_cost_the_report(monkeypatch):
-    monkeypatch.setattr(nodes, "SessionLocal", _FakeSession)
-    monkeypatch.setattr(nodes, "set_tenant_scope", lambda *_: None)
+    monkeypatch.setattr(nodes.reviewer, "SessionLocal", _FakeSession)
+    monkeypatch.setattr(nodes.reviewer, "set_tenant_scope", lambda *_: None)
 
     def boom(_db, **_kwargs):
         raise RuntimeError("database down")
 
     monkeypatch.setattr("app.modules.memory.service.flag_memories_from_model", boom)
-    nodes._flag_contradicted_memories(_state(), _result([{"memory_id": 7}]))
+    nodes.reviewer._flag_contradicted_memories(_state(), _result([{"memory_id": 7}]))
     assert _FakeSession.rolled_back
 
 

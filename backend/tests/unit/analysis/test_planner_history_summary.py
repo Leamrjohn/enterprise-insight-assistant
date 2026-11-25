@@ -113,6 +113,6 @@ def test_only_enforce_hands_the_frozen_summary_to_the_planner(
     context = {"messages": [], SUMMARY_SNAPSHOT_KEY: {"version": 1, "items": SUMMARY}}
     state = {"conversation_context": context}
 
-    assert nodes._planner_history_summary(state) == expected  # type: ignore[arg-type]
+    assert nodes.planner._planner_history_summary(state) == expected  # type: ignore[arg-type]
     # The frozen copy never reaches the history section.
-    assert nodes._planner_conversation_context(state) == {"messages": []}  # type: ignore[arg-type]
+    assert nodes.planner._planner_conversation_context(state) == {"messages": []}  # type: ignore[arg-type]

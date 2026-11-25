@@ -79,7 +79,7 @@ class FakeGateway:
 
 
 def run_node(monkeypatch, gateway, ctx) -> tuple[dict, list]:
-    monkeypatch.setattr(nodes, "get_model_gateway", lambda: gateway)
+    monkeypatch.setattr(nodes.state_extract, "get_model_gateway", lambda: gateway)
     checkpoints: list = []
     update = nodes.state_extract_node(
         {
@@ -127,7 +127,7 @@ def test_a_failed_extraction_keeps_the_frozen_state(monkeypatch):
 @pytest.mark.parametrize("mode", ["off", "shadow"])
 def test_off_and_shadow_hide_the_state_from_the_planner(monkeypatch, mode):
     monkeypatch.setattr(get_settings(), "conversation_state_mode", mode)
-    planned = nodes._planner_conversation_context(
+    planned = nodes.planner._planner_conversation_context(
         {"conversation_context": context(), "conversation_state": frozen_state()}  # type: ignore[typeddict-item]
     )
 
@@ -137,7 +137,7 @@ def test_off_and_shadow_hide_the_state_from_the_planner(monkeypatch, mode):
 def test_enforce_swaps_the_regex_constraints_for_the_state(monkeypatch):
     monkeypatch.setattr(get_settings(), "conversation_state_mode", "enforce")
     extracted = frozen_state()
-    planned = nodes._planner_conversation_context(
+    planned = nodes.planner._planner_conversation_context(
         {"conversation_context": context(), "conversation_state": extracted}  # type: ignore[typeddict-item]
     )
 
@@ -149,7 +149,10 @@ def test_enforce_swaps_the_regex_constraints_for_the_state(monkeypatch):
 def test_a_context_without_a_frozen_state_is_passed_unchanged(monkeypatch):
     monkeypatch.setattr(get_settings(), "conversation_state_mode", "enforce")
     ctx = context(with_state=False)
-    assert nodes._planner_conversation_context({"conversation_context": ctx}) is ctx  # type: ignore[typeddict-item]
+    assert (
+        nodes.planner._planner_conversation_context({"conversation_context": ctx})
+        is ctx
+    )  # type: ignore[typeddict-item]
 
 
 def test_a_new_run_starts_with_the_extractor_and_old_checkpoints_still_resume():
