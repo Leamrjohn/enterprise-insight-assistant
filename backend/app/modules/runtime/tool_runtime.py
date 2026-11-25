@@ -16,6 +16,7 @@ from app.modules.runtime.model_governance import (
     ModelCallCancelled,
 )
 from app.modules.runtime.schemas import ToolBudget, ToolPolicy
+from app.modules.runtime.tools.authorization import current_member_allowed
 from app.modules.runtime.tools.errors import classify
 from app.modules.runtime.tools.registry import default_registry
 from app.modules.workflow.audit.events import append_workflow_event
@@ -193,23 +194,12 @@ class ToolRuntime:
         task = self._task()
         if self._context.company_id is None:
             return self._deny(tool, "tool_current_authorization_denied", {})
-        user = self._db.get(User, task.user_id)
-        membership = (
-            self._db.query(CompanyMember)
-            .filter(
-                CompanyMember.company_id == self._context.company_id,
-                CompanyMember.user_id == task.user_id,
-            )
-            .one_or_none()
-        )
         definition = default_registry().get(tool.name)
-        allowed_roles = definition.allowed_roles if definition else frozenset()
-        if (
-            user is None
-            or not user.is_active
-            or membership is None
-            or membership.status != "approved"
-            or membership.role not in allowed_roles
+        if not current_member_allowed(
+            self._db,
+            company_id=self._context.company_id,
+            user_id=task.user_id,
+            allowed_roles=definition.allowed_roles if definition else frozenset(),
         ):
             return self._deny(tool, "tool_current_authorization_denied", {})
         return None

@@ -14,6 +14,8 @@ TOOL_LAYER = [
     APP / "runtime" / "tool_guard.py",
     APP / "runtime" / "tool_loop.py",
     APP / "runtime" / "model_governance.py",
+    APP.parent / "tool_service" / "server.py",
+    APP / "runtime" / "tools" / "mcp_client.py",
     APP / "knowledge" / "tool.py",
     APP / "knowledge" / "mcp_adapter.py",
     APP / "analysis" / "data" / "sql_tool.py",
@@ -42,7 +44,10 @@ def _literal(node: ast.AST | None) -> str | None:
 
 def _codes_in(tree: ast.AST) -> set[str]:
     codes: set[str] = set()
-    for call in _calls_named(tree, "ToolOutput"):
+    for call in [
+        *_calls_named(tree, "ToolOutput"),
+        *_calls_named(tree, "ServiceReply"),
+    ]:
         for keyword in call.keywords:
             if keyword.arg == "error_code" and (code := _literal(keyword.value)):
                 codes.add(code)

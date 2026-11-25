@@ -37,6 +37,7 @@ class SecurityConfig(ConfigDomain):
             "worker",
             "report-worker",
             "beat",
+            "tools",
             "frontend",
             "clamd",
             "localstack",

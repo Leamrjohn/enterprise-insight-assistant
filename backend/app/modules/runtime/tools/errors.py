@@ -53,6 +53,7 @@ ERROR_CLASSES: dict[str, ErrorClass] = {
     "mcp_transport_unavailable": ErrorClass.INFRA,
     "mcp_evidence_read_failed": ErrorClass.INFRA,
     "mcp_evidence_read_malformed": ErrorClass.INFRA,
+    "mcp_response_malformed": ErrorClass.INFRA,
     "mcp_sdk_version_mismatch": ErrorClass.INFRA,
     "mcp_catalog_mismatch": ErrorClass.INFRA,
     "mcp_input_required_not_supported": ErrorClass.INFRA,
