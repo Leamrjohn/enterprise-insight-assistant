@@ -421,7 +421,7 @@ def test_tool_runtime_denies_document_ids_outside_frozen_scope(db_session) -> No
         .one()
     )
     assert event.event_type == "tool_denied"
-    assert event.details == {}
+    assert event.details == {"error_class": "denied"}
     assert db_session.query(ToolCallRecord).one().status == "denied"
     observation = observation_from_runtime_tool_rejection(
         db_session,
@@ -540,7 +540,7 @@ def test_tool_runtime_denies_revoked_user_before_tool_execution(db_session) -> N
         .one()
     )
     assert event.event_type == "tool_denied"
-    assert event.details == {}
+    assert event.details == {"error_class": "denied"}
 
 
 def test_tool_runtime_denies_revoked_user_before_mcp_evidence_read(
@@ -643,7 +643,8 @@ def test_tool_runtime_rejects_invalid_rag_schema_before_execution(db_session) ->
     assert event.event_type == "tool_denied"
     assert event.details == {
         "parameter_keys": ["company_id", "document_ids", "question"],
-        "schema": "rag_search/v1",
+        "schema": "rag_search/v2",
+        "error_class": "caller_error",
     }
 
 
