@@ -1173,3 +1173,8 @@
 - 做了什么：新增 `runtime/tools/pipeline.py`（STAGE_ORDER 8 阶段 + run，顺序不符直接拒绝运行）；`ToolRuntime._execute` 拆成 8 个 `_stage_*`，逻辑不变；新增 `ToolGateway.call(name, 参数)`，`wrap` 登记工具、`RuntimeTool.execute` 只走入口；未登记名称返回 `tool_unknown`（08bcb0d）。
 - 验证：流水线测试 17 通过；全量 2080 通过 40 跳过，原有期望未改；pyright 0；导入分层未加例外；冒烟 t3a-deploy-r1 9 成功 + 混合题待复核（已知），$0.028。
 - 下一步：T3c 登记表补 kind/backed_by/output_model、统一 Evidence、执行阶段按 transport 分发。
+
+## 2026-11-25 T3c 登记表扩展和统一 Evidence（用户批准；按 transport 分发移到 M2）
+- 做了什么：`ToolDefinition` 补 kind/backed_by/output_model/to_evidence，启动校验加 3 条规则；新增 `runtime/tools/evidence.py`（3 个输出模型 + 统一 Evidence + 转换函数）；执行阶段写审计前校验成功结果（不合格 → `tool_output_contract_invalid`，infra_error），通过则挂 `ToolOutput.evidence`；Agent 暂不读（1fcbcdd，计划 58e7f34）。
+- 验证：证据测试 16 通过；全量 2096 通过 40 跳过；pyright 0；导入分层未加例外；冒烟 t3c-deploy-r1 9 成功 + 混合题待复核（已知），$0.027；审计表本轮 rag_search 6、sql_query 4 次全部成功，契约失败 0。
+- 说明：test_tool_runtime 3 个假工具补齐返回字段、T1 的 FAKE 补输出模型，断言未改。
