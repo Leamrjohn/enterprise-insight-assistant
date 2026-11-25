@@ -26,6 +26,8 @@ FAKE = ToolDefinition(
     contract_version="fake_lookup/v3",
     input_model=_LookupInput,
     allowed_roles=frozenset({"analyst"}),
+    output_model=_LookupInput,
+    to_evidence=lambda output: [],
 )
 
 

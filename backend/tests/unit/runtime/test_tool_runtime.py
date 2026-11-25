@@ -37,7 +37,9 @@ class _FakeRagTool(Tool):
 
     def execute(self, input: ToolInput) -> ToolOutput:
         self.inputs.append(input)
-        return ToolOutput(success=True, data={"status": "ready", "rows": []})
+        return ToolOutput(
+            success=True, data={"status": "ready", "rows": [], "evidences": []}
+        )
 
 
 class _FaultyRagTool(_FakeRagTool):
@@ -66,7 +68,9 @@ class _FakeSqlTool(Tool):
 
     def execute(self, input: ToolInput) -> ToolOutput:
         self.inputs.append(input)
-        return ToolOutput(success=True, data={"status": "ready", "rows": []})
+        return ToolOutput(
+            success=True, data={"status": "ready", "columns": [], "rows": []}
+        )
 
 
 class _FakeTemplateTool(Tool):
@@ -83,7 +87,16 @@ class _FakeTemplateTool(Tool):
 
     def execute(self, input: ToolInput) -> ToolOutput:
         self.inputs.append(input)
-        return ToolOutput(success=True, data={"status": "ready", "rows": []})
+        return ToolOutput(
+            success=True,
+            data={
+                "status": "ready",
+                "query_id": "q",
+                "parameters": {},
+                "columns": [],
+                "rows": [],
+            },
+        )
 
 
 class _UnknownTool(Tool):

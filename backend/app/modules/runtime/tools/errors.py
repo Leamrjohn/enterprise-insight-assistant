@@ -59,6 +59,7 @@ ERROR_CLASSES: dict[str, ErrorClass] = {
     "mcp_input_required_not_supported": ErrorClass.INFRA,
     "tool_circuit_open": ErrorClass.INFRA,
     "tool_runtime_unexpected_error": ErrorClass.INFRA,
+    "tool_output_contract_invalid": ErrorClass.INFRA,
     # Budgets.
     "tool_budget_exhausted": ErrorClass.EXHAUSTED,
     "model_budget_exhausted": ErrorClass.TASK_STOP,

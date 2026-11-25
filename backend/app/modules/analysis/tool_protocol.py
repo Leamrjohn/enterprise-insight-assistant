@@ -2,7 +2,10 @@
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from app.modules.runtime.tools.evidence import Evidence
 
 
 @dataclass
@@ -23,6 +26,8 @@ class ToolOutput:
     repairable: bool = False
     # Reason a model can act on. Set only for its own mistakes, never for outages.
     model_feedback: str | None = None
+    # T3c: filled by ToolRuntime from the registered to_evidence; read from T3b.
+    evidence: "list[Evidence] | None" = None
 
 
 class Tool(ABC):
