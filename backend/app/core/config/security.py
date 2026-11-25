@@ -7,12 +7,18 @@ from pydantic import Field, SecretStr, field_validator
 from app.core.config.base import ConfigDomain, require_positive
 
 DEVELOPMENT_JWT_SECRET = "development-only-change-before-production"
+DEVELOPMENT_TOOL_CONTEXT_SIGNING_KEY = "development-only-tool-context-key"
 
 
 class SecurityConfig(ConfigDomain):
     jwt_secret: SecretStr = SecretStr(DEVELOPMENT_JWT_SECRET)
     jwt_algorithm: str = "HS256"
     jwt_access_token_minutes: int = 30
+    # M1: the worker signs each tool call's runtime context; the tool service verifies it.
+    tool_context_signing_key: SecretStr = SecretStr(
+        DEVELOPMENT_TOOL_CONTEXT_SIGNING_KEY
+    )
+    tool_context_ttl_seconds: int = 60
     # Requests one client may send per sliding window (core/middleware.py).
     rate_limit_max_requests: int = 100
     rate_limit_window_seconds: int = 60
@@ -39,7 +45,11 @@ class SecurityConfig(ConfigDomain):
         ]
     )
 
-    @field_validator("rate_limit_max_requests", "rate_limit_window_seconds")
+    @field_validator(
+        "rate_limit_max_requests",
+        "rate_limit_window_seconds",
+        "tool_context_ttl_seconds",
+    )
     @classmethod
     def security_validate_positive_int(cls, value: int) -> int:
         return require_positive(value)
