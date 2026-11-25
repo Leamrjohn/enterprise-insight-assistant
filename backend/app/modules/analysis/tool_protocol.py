@@ -1,7 +1,9 @@
 """工具协议 —— 所有工具必须实现这个接口"""
 
 from abc import ABC, abstractmethod
+from collections.abc import Mapping
 from dataclasses import dataclass
+from types import MappingProxyType
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
@@ -49,3 +51,34 @@ class Tool(ABC):
     def execute(self, input: ToolInput) -> ToolOutput:
         """执行工具，输入参数，返回结果"""
         ...
+
+
+class Toolset:
+    """T3b: the tools one node may use, called by name.
+
+    Nodes build it (workflow/orchestration/toolsets.py); agents only call it, so
+    adding a tool to a node never changes the agent.  Unknown names are refused.
+    """
+
+    def __init__(self, tools: Mapping[str, "Tool"] = MappingProxyType({})) -> None:
+        self._tools = dict(tools)
+
+    @classmethod
+    def of(cls, *tools: "Tool | None") -> "Toolset":
+        return cls({tool.name: tool for tool in tools if tool is not None})
+
+    def names(self) -> tuple[str, ...]:
+        return tuple(self._tools)
+
+    def tools(self) -> list[Tool]:
+        return list(self._tools.values())
+
+    def call(self, name: str, parameters: dict[str, Any]) -> ToolOutput:
+        tool = self._tools.get(name)
+        if tool is None:
+            return ToolOutput(
+                success=False,
+                error="本节点没有这个工具。",
+                error_code="tool_unknown",
+            )
+        return tool.execute(ToolInput(parameters=parameters))

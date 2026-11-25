@@ -152,7 +152,7 @@ class FakePlanningService:
 
 
 def test_knowledge_agent_interface():
-    agent = KnowledgeAgent()
+    agent = KnowledgeAgent(rag_tool=FakeRAGTool(ToolOutput(success=True)))
     assert agent.name == "knowledge"
     assert len(agent.description) > 0
     assert len(agent.allowed_tools) == 1
@@ -355,7 +355,7 @@ def test_knowledge_agent_retries_the_same_question_and_scope_without_feedback_in
 
 
 def test_data_agent_interface():
-    agent = DataAgent()
+    agent = DataAgent(sql_tool=FakeSQLTool(ToolOutput(success=True)))
     assert agent.name == "data"
     assert len(agent.description) > 0
     assert len(agent.allowed_tools) == 1

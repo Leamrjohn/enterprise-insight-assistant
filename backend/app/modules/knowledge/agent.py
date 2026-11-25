@@ -8,7 +8,7 @@ from app.core.exceptions import StructuredOutputError
 from app.core.gateway.base import ModelGateway
 from app.core.gateway.factory import get_model_gateway
 from app.modules.analysis.agent_protocol import Agent, AgentInput, AgentOutput
-from app.modules.analysis.tool_protocol import Tool, ToolInput
+from app.modules.analysis.tool_protocol import Tool, Toolset
 from app.modules.knowledge.rag.result_parser import parse_analysis_result
 from app.modules.knowledge.rag.support import check_support
 from app.modules.knowledge.rag.validity import (
@@ -17,7 +17,6 @@ from app.modules.knowledge.rag.validity import (
     resolve_validity_window,
 )
 from app.modules.knowledge.schemas import RetrievalBrief
-from app.modules.knowledge.tool import RAGTool
 from app.modules.runtime.context.engine import (
     ContextBudgetExceeded,
     build_context,
@@ -77,8 +76,10 @@ class KnowledgeAgent(Agent):
         rag_tool: Tool | None = None,
         gateway: ModelGateway | None = None,
         support_check: bool = False,
+        tools: Toolset | None = None,
     ) -> None:
-        self._rag_tool = rag_tool or RAGTool()
+        # T3b: the node hands over its toolset; rag_tool stays for tests.
+        self._tools = tools or Toolset({"rag_search": rag_tool} if rag_tool else {})
         self._gateway = gateway
         self._support_check = support_check
 
@@ -92,7 +93,7 @@ class KnowledgeAgent(Agent):
 
     @property
     def allowed_tools(self) -> list[Tool]:
-        return [self._rag_tool]
+        return self._tools.tools()
 
     @staticmethod
     def _retrieval_brief(input: AgentInput) -> tuple[RetrievalBrief, list]:
@@ -145,8 +146,7 @@ class KnowledgeAgent(Agent):
             "question": brief.render_query(),
             **self._search_parameters(input),
         }
-        tool_input = ToolInput(parameters=parameters)
-        result = self._rag_tool.execute(tool_input)
+        result = self._tools.call("rag_search", parameters)
         if not result.success:
             return AgentOutput(
                 success=False,

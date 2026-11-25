@@ -538,6 +538,9 @@ def test_data_node_maps_semantic_schema_gap_to_insufficient_evidence(
     monkeypatch,
 ) -> None:
     class FakeDataAgent:
+        def __init__(self, **_kwargs) -> None:
+            pass
+
         def run(self, input):
             assert input.context["semantic_review_enabled"] is True
             return AgentOutput(
@@ -570,6 +573,9 @@ def test_data_node_keeps_feedback_when_semantic_review_is_enabled(monkeypatch) -
     }
 
     class FakeDataAgent:
+        def __init__(self, **_kwargs) -> None:
+            pass
+
         def run(self, input):
             assert input.context == {
                 "plan": {"route": "data_only"},
@@ -638,6 +644,9 @@ def test_data_node_uses_question_instead_of_plan_sql(monkeypatch) -> None:
     captured = {}
 
     class FakeDataAgent:
+        def __init__(self, **_kwargs) -> None:
+            pass
+
         def run(self, input):
             captured["input"] = input
             return AgentOutput(
@@ -671,6 +680,9 @@ def test_data_node_uses_question_instead_of_plan_sql(monkeypatch) -> None:
 
 def test_data_node_records_agent_failure(monkeypatch) -> None:
     class FakeDataAgent:
+        def __init__(self, **_kwargs) -> None:
+            pass
+
         def run(self, input):
             return AgentOutput(
                 success=False,
@@ -716,7 +728,7 @@ def test_data_node_builds_agent_with_company_source_and_snapshot(monkeypatch) ->
     }
 
     class FakeDataAgent:
-        def __init__(self, *, data_source, snapshot_catalog) -> None:
+        def __init__(self, *, data_source, snapshot_catalog, tools) -> None:
             captured["data_source"] = data_source
             captured["snapshot_catalog"] = snapshot_catalog
 
@@ -743,6 +755,9 @@ def test_data_checkpoint_keeps_the_prior_planner_contract(monkeypatch) -> None:
     captured: dict[str, object] = {}
 
     class FakeDataAgent:
+        def __init__(self, **_kwargs) -> None:
+            pass
+
         def run(self, input):
             return AgentOutput(success=True, evidence=[{"rows": [[100]]}])
 

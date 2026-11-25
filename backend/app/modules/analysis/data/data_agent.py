@@ -14,11 +14,10 @@ from app.modules.analysis.catalog.snapshot_catalog import SnapshotCatalog
 from app.modules.analysis.data.query_contract import QueryContract
 from app.modules.analysis.data.query_validation import assess_query_result
 from app.modules.analysis.data.sql_generation import SQLGenerationService
-from app.modules.analysis.data.sql_tool import SQLTool
 from app.modules.analysis.metrics.claim_validation import assess_numeric_assertion
 from app.modules.analysis.metrics.metric_validation import assess_metric_query
 from app.modules.analysis.planner.planner_decision import EvaluationScope
-from app.modules.analysis.tool_protocol import Tool, ToolInput
+from app.modules.analysis.tool_protocol import Tool, Toolset
 from app.modules.organizations.models import BusinessDataSource
 from app.modules.reporting.semantic_review_service import SemanticReviewService
 from app.modules.runtime.context.engine import ContextBudgetExceeded
@@ -74,16 +73,15 @@ class DataAgent(Agent):
         data_source: BusinessDataSource | None = None,
         snapshot_catalog: SnapshotCatalog | None = None,
         semantic_reviewer: SemanticReviewService | None = None,
+        tools: Toolset | None = None,
     ) -> None:
         if (data_source is None) != (snapshot_catalog is None):
             raise ValueError("公司数据源和 schema snapshot 必须同时提供")
         self._sql_generator = sql_generator
         self._snapshot_catalog = snapshot_catalog
         self._semantic_reviewer = semantic_reviewer
-        self._sql_tool = sql_tool or SQLTool(
-            data_source=data_source,
-            snapshot_catalog=snapshot_catalog,
-        )
+        # T3b: the node hands over its toolset; sql_tool stays for tests.
+        self._tools = tools or Toolset({"sql_query": sql_tool} if sql_tool else {})
 
     @property
     def name(self) -> str:
@@ -95,7 +93,7 @@ class DataAgent(Agent):
 
     @property
     def allowed_tools(self) -> list[Tool]:
-        return [self._sql_tool]
+        return self._tools.tools()
 
     def run(self, input: AgentInput) -> AgentOutput:
         feedback = input.context.get("feedback") or {}
@@ -322,9 +320,7 @@ class DataAgent(Agent):
                 )
 
             attempts["sql_attempts"] += 1
-            result = self._sql_tool.execute(
-                ToolInput(parameters={"sql": candidate.sql})
-            )
+            result = self._tools.call("sql_query", {"sql": candidate.sql})
 
             if result.success:
                 columns = result.data.get("columns") if result.data else []
@@ -478,7 +474,7 @@ class DataAgent(Agent):
                 error=metric_assessment.reason,
                 error_code="metric_contract_" + metric_assessment.status,
             )
-        result = self._sql_tool.execute(ToolInput(parameters={"sql": sql}))
+        result = self._tools.call("sql_query", {"sql": sql})
         if result.success:
             columns = result.data.get("columns") if result.data else []
             rows = result.data.get("rows") if result.data else []
