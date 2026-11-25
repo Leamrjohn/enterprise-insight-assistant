@@ -104,7 +104,13 @@ def test_unknown_snapshot_version_is_refused():
 def test_business_reads_in_nodes_go_through_runtime_settings():
     """The K4 reads must not drift back to get_settings()."""
     backend = Path(config_snapshot.__file__).resolve().parents[3]
+    nodes_package = backend / "app/modules/workflow/orchestration/nodes"
+    node_files = sorted(
+        str(path.relative_to(backend)) for path in nodes_package.glob("*.py")
+    )
+    assert node_files
     for relative in (
+        *node_files,
         "app/modules/analysis/data/sql_generation.py",
         "app/modules/analysis/planner/planning.py",
         "app/modules/knowledge/tool.py",
@@ -117,7 +123,6 @@ def test_business_reads_in_nodes_go_through_runtime_settings():
         "app/modules/runtime/context_budget.py",
         "app/modules/runtime/context/engine.py",
         "app/modules/runtime/tool_loop.py",
-        "app/modules/workflow/orchestration/nodes.py",
     ):
         source = (backend / relative).read_text(encoding="utf-8")
         for name in SNAPSHOT_FIELDS:

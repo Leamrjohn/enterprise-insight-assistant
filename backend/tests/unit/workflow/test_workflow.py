@@ -82,7 +82,7 @@ def test_router_reviewer_retry_reenters_reviewer_with_existing_evidence(
 
 def test_effective_question_prefers_the_planner_resolution() -> None:
     assert (
-        workflow_nodes._effective_question(
+        workflow_nodes._common._effective_question(
             {
                 "question": "那华南区呢？",
                 "plan": {"resolved_question": "分析华南区 2025 年 8 月销售额变化。"},
@@ -168,7 +168,9 @@ def test_planner_terminal_falls_back_to_structured_clarification() -> None:
         "missing_fields": ["time_range", "region"],
     }
     assert (
-        workflow_nodes._effective_question({"question": "销售额是多少？", "plan": None})
+        workflow_nodes._common._effective_question(
+            {"question": "销售额是多少？", "plan": None}
+        )
         == "销售额是多少？"
     )
 
@@ -203,7 +205,7 @@ def test_run_analysis_uses_planner_node_for_terminal_plan(monkeypatch) -> None:
                 },
             )
 
-    monkeypatch.setattr(workflow_nodes, "PlannerAgent", FakePlannerAgent)
+    monkeypatch.setattr(workflow_nodes.planner, "PlannerAgent", FakePlannerAgent)
 
     result = workflow_graph.run_analysis(
         "写一首诗",
@@ -251,7 +253,7 @@ def test_run_analysis_passes_attachment_context_only_to_planner(monkeypatch) -> 
                 },
             )
 
-    monkeypatch.setattr(workflow_nodes, "PlannerAgent", FakePlannerAgent)
+    monkeypatch.setattr(workflow_nodes.planner, "PlannerAgent", FakePlannerAgent)
 
     result = workflow_graph.run_analysis(
         "分析附件",
@@ -296,7 +298,7 @@ def test_run_analysis_passes_retry_context_only_to_resumed_planner(monkeypatch) 
                 },
             )
 
-    monkeypatch.setattr(workflow_nodes, "PlannerAgent", FakePlannerAgent)
+    monkeypatch.setattr(workflow_nodes.planner, "PlannerAgent", FakePlannerAgent)
 
     result = workflow_graph.run_analysis(
         "写一首诗",
@@ -347,7 +349,7 @@ def test_planner_node_keeps_attempts_when_planner_failed(monkeypatch) -> None:
                 attempts={"model_attempts": 2},
             )
 
-    monkeypatch.setattr(workflow_nodes, "PlannerAgent", FakePlannerAgent)
+    monkeypatch.setattr(workflow_nodes.planner, "PlannerAgent", FakePlannerAgent)
 
     result = workflow_nodes.planner_node(
         {"question": "华东区销售额是多少？", "user_id": 1}
@@ -378,7 +380,7 @@ def test_planner_semantic_review_can_replace_an_unsafe_initial_plan(
             )
 
     monkeypatch.setattr(
-        workflow_nodes,
+        workflow_nodes.planner,
         "SemanticReviewService",
         FakeSemanticReviewService,
     )
@@ -423,7 +425,7 @@ def test_planner_semantic_review_stops_analysis_without_structured_intent(
             )
 
     monkeypatch.setattr(
-        workflow_nodes, "SemanticReviewService", FakeSemanticReviewService
+        workflow_nodes.planner, "SemanticReviewService", FakeSemanticReviewService
     )
 
     result = workflow_nodes.planner_semantic_review_node(
@@ -462,7 +464,7 @@ def test_planner_semantic_review_cannot_expand_document_evidence_to_data(
             )
 
     monkeypatch.setattr(
-        workflow_nodes, "SemanticReviewService", FakeSemanticReviewService
+        workflow_nodes.planner, "SemanticReviewService", FakeSemanticReviewService
     )
 
     result = workflow_nodes.planner_semantic_review_node(
@@ -502,7 +504,7 @@ def test_retryable_semantic_review_failure_enters_the_worker_retry_path(
 
     checkpoints: list[tuple[str, str | None, dict]] = []
     monkeypatch.setattr(
-        workflow_nodes, "SemanticReviewService", FakeSemanticReviewService
+        workflow_nodes.planner, "SemanticReviewService", FakeSemanticReviewService
     )
 
     result = workflow_nodes.planner_semantic_review_node(
@@ -545,7 +547,7 @@ def test_data_node_maps_semantic_schema_gap_to_insufficient_evidence(
                 evidence=[{"missing_requirements": ["广告点击量"]}],
             )
 
-    monkeypatch.setattr(workflow_nodes, "DataAgent", FakeDataAgent)
+    monkeypatch.setattr(workflow_nodes.data, "DataAgent", FakeDataAgent)
 
     result = workflow_nodes.data_node(
         {
@@ -581,7 +583,7 @@ def test_data_node_keeps_feedback_when_semantic_review_is_enabled(monkeypatch) -
                 error_code="business_db_execution_failed",
             )
 
-    monkeypatch.setattr(workflow_nodes, "DataAgent", FakeDataAgent)
+    monkeypatch.setattr(workflow_nodes.data, "DataAgent", FakeDataAgent)
 
     workflow_nodes.data_node(
         {
@@ -615,7 +617,7 @@ def test_knowledge_node_preserves_insufficient_evidence_error_code(monkeypatch) 
                 error_code="insufficient_evidence",
             )
 
-    monkeypatch.setattr(workflow_nodes, "KnowledgeAgent", FakeKnowledgeAgent)
+    monkeypatch.setattr(workflow_nodes.knowledge, "KnowledgeAgent", FakeKnowledgeAgent)
 
     result = workflow_nodes.knowledge_node(
         {"question": "为什么下降？", "user_id": 1, "retry_context": retry_context}
@@ -650,7 +652,7 @@ def test_data_node_uses_question_instead_of_plan_sql(monkeypatch) -> None:
                 ],
             )
 
-    monkeypatch.setattr(workflow_nodes, "DataAgent", FakeDataAgent)
+    monkeypatch.setattr(workflow_nodes.data, "DataAgent", FakeDataAgent)
 
     result = workflow_nodes.data_node(
         {
@@ -676,7 +678,7 @@ def test_data_node_records_agent_failure(monkeypatch) -> None:
                 error_code="sql_generation_invalid_output",
             )
 
-    monkeypatch.setattr(workflow_nodes, "DataAgent", FakeDataAgent)
+    monkeypatch.setattr(workflow_nodes.data, "DataAgent", FakeDataAgent)
 
     result = workflow_nodes.data_node({"question": "销售额是多少？", "user_id": 1})
 
@@ -721,7 +723,7 @@ def test_data_node_builds_agent_with_company_source_and_snapshot(monkeypatch) ->
         def run(self, input):
             return AgentOutput(success=True, evidence=[])
 
-    monkeypatch.setattr(workflow_nodes, "DataAgent", FakeDataAgent)
+    monkeypatch.setattr(workflow_nodes.data, "DataAgent", FakeDataAgent)
 
     result = workflow_nodes.data_node(
         {
@@ -744,7 +746,7 @@ def test_data_checkpoint_keeps_the_prior_planner_contract(monkeypatch) -> None:
         def run(self, input):
             return AgentOutput(success=True, evidence=[{"rows": [[100]]}])
 
-    monkeypatch.setattr(workflow_nodes, "DataAgent", FakeDataAgent)
+    monkeypatch.setattr(workflow_nodes.data, "DataAgent", FakeDataAgent)
     workflow_nodes.data_node(
         {
             "question": "销售额是多少？",
@@ -803,7 +805,7 @@ def test_knowledge_node_keeps_answer_and_citations(monkeypatch) -> None:
                 ],
             )
 
-    monkeypatch.setattr(workflow_nodes, "KnowledgeAgent", FakeKnowledgeAgent)
+    monkeypatch.setattr(workflow_nodes.knowledge, "KnowledgeAgent", FakeKnowledgeAgent)
 
     result = workflow_nodes.knowledge_node(
         {"question": "华东区销售额为什么下降？", "user_id": 1}
@@ -841,7 +843,7 @@ def test_reviewer_node_preserves_final_answer_and_review_evidence(monkeypatch) -
                 ],
             )
 
-    monkeypatch.setattr(workflow_nodes, "ReviewerAgent", FakeReviewerAgent)
+    monkeypatch.setattr(workflow_nodes.reviewer, "ReviewerAgent", FakeReviewerAgent)
     state = {
         "question": "华东区销售额为什么下降？",
         "user_id": 1,
@@ -896,7 +898,7 @@ def test_reviewer_node_returns_retryable_outcome_without_revealing_error(
                 retryable=True,
             )
 
-    monkeypatch.setattr(workflow_nodes, "ReviewerAgent", FakeReviewerAgent)
+    monkeypatch.setattr(workflow_nodes.reviewer, "ReviewerAgent", FakeReviewerAgent)
     result = workflow_nodes.reviewer_node({"question": "销售额", "user_id": 1})
 
     assert result["reviewer_outcome"]["status"] == "retryable_error"
