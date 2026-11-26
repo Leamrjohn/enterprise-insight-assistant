@@ -1193,3 +1193,8 @@
 - 做了什么：`ToolDefinition` 加 `model_text`（ModelText），启动校验加“capability/control 必须有 model_text”，capability 的 backed_by 可空（describe_table 只读任务快照）；`ToolSpec.from_definition`；Data 4 个、Knowledge 3 个工具用脚本机械转成 `DATA_TOOLS`/`KNOWLEDGE_TOOLS` 定义（run_sql→sql_query、search_documents→rag_search），ToolSpec 由定义生成；`toolsets.tool_catalog()` 把 runtime 3 个和这 7 个合进一个登记表统一校验（d0183af）。
 - 验证：改前存的逐字快照 7 条说明和版本号完全一致；新测试 9 通过；全量 2113 通过 40 跳过；pyright 0；导入分层未加例外；冒烟 t3b2-deploy-r1 9 成功 + 混合题待复核（已知），$0.027；审计 rag_search 6、sql_query 4 全部成功。
 - 未验证：模型自选路线的真实效果（冒烟默认关闭），待 T15 的回放门禁。
+
+## 2026-11-26 M2a 工具服务可执行 rag_search（用户批准 M2 拆 M2a/M2b）
+- 做了什么：`authorization.documents_still_visible` 从 ToolRuntime 抽出，Worker 和服务端共用；`context.document_scope_sha256` 把公司和文档清单绑进签名；服务端 `ServiceTool(run, check)` + `check_rag_scope`（公司一致、文档清单与签名一致、文档当前可见）后才执行 RAGTool；tools 容器挂载 storage 共用模型缓存（31d49a8）。
+- 验证：服务测试 14 通过（新增 7，越权 5 种情况检索执行 0 次）；全量 2120 通过 40 跳过；pyright 0；导入分层未加例外；容器健康，真实签名被回库复核拒绝、伪造签名被拒；冒烟 m2a-deploy-r1 9 成功 + 混合题待复核（已知），$0.027；审计 rag_search 6、sql_query 4 全部成功。
+- 未验证：容器内真实检索和模型加载（Worker 尚未走服务，M2b 开开关后首次真跑）；RAGTool 在服务端按固定路线设置，重排失败不降级，M2b 接客户端时统一。
