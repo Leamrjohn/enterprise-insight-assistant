@@ -28,7 +28,6 @@ TOOL_CLASSES = {
     "GuardedTool",
     "FallbackTool",
     "CircuitBreaker",
-    "McpEvidenceReadTool",
 }
 
 

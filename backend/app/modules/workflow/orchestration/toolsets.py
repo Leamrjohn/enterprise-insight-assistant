@@ -22,7 +22,6 @@ from app.modules.knowledge.tool import RAGTool
 from app.modules.knowledge.tool_agent import KNOWLEDGE_TOOLS
 from app.modules.runtime.tool_guard import (
     CircuitBreaker,
-    FallbackTool,
     GuardedTool,
     redis_breaker_store,
 )
@@ -69,28 +68,16 @@ def _sql_query(state: WorkflowState) -> Tool:
     )
 
 
-def _mcp_evidence_tool() -> Tool:
-    from app.modules.knowledge.mcp_adapter import McpEvidenceReadTool
-
-    return McpEvidenceReadTool.stdio()
-
-
 def _rag_search(state: WorkflowState) -> Tool:
-    via_mcp = runtime_settings().knowledge_evidence_transport == "mcp_stdio"
-    if state.get("tool_runtime") is None:
+    # M2b: with the tool service on, the runtime sends rag_search there and this
+    # object only names the tool; with it off, the worker runs it in process.
+    if state.get("tool_runtime") is None or not model_tools_enabled(
+        state.get("company_id")
+    ):
         return RAGTool()
-    if not model_tools_enabled(state.get("company_id")):
-        return _mcp_evidence_tool() if via_mcp else RAGTool()
-    store = redis_breaker_store()
-    local = GuardedTool(
+    return GuardedTool(
         RAGTool(degrade_on_rerank_failure=True),
-        CircuitBreaker("rag_search:local", store),
-    )
-    if not via_mcp:
-        return local
-    return FallbackTool(
-        GuardedTool(_mcp_evidence_tool(), CircuitBreaker("rag_search:mcp", store)),
-        local,
+        CircuitBreaker("rag_search:local", redis_breaker_store()),
     )
 
 

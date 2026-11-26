@@ -14,8 +14,9 @@ SideEffect = Literal["read", "write"]
 # the runtime tool it is backed_by (or, without one, by code reading only what the
 # task already holds); a control tool only ends a tool loop.
 ToolKind = Literal["runtime", "capability", "control"]
-# "in_process" calls the tool object directly; M2~M3 add the MCP transport.
-ALLOWED_TRANSPORTS = frozenset({"in_process"})
+# "in_process" runs the tool object inside the worker, for small fast tools;
+# "mcp" runs it on the agent-tools service (M2b), which re-checks the signed context.
+ALLOWED_TRANSPORTS = frozenset({"in_process", "mcp"})
 
 
 @dataclass(frozen=True)
