@@ -55,6 +55,16 @@ def issue(
     )
 
 
+def document_scope_sha256(company_id: int, document_ids: list[int] | None) -> str:
+    """Bind a context to exactly the documents one call may read (order ignored)."""
+    payload = {
+        "company_id": company_id,
+        "document_ids": sorted(document_ids) if document_ids is not None else None,
+    }
+    encoded = json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
+    return hashlib.sha256(encoded).hexdigest()
+
+
 def _canonical(context: RuntimeContext) -> bytes:
     # Sorted keys and fixed separators: both sides must sign the same bytes.
     payload = {"version": CONTEXT_VERSION, **asdict(context)}

@@ -258,6 +258,10 @@ services:
       - ./backend/.env
     environment:
       <<: *backend-environment
+      # M2: rag_search loads its embedding and rerank models from the shared cache.
+      HF_HOME: /app/storage/huggingface
+    volumes:
+      - ./backend/storage:/app/storage
     depends_on:
       migrate:
         condition: service_completed_successfully

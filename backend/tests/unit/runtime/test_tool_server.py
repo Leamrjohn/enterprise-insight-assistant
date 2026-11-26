@@ -3,12 +3,19 @@ from contextlib import nullcontext
 from dataclasses import replace
 
 import pytest
+from app.db.session import set_tenant_scope
+from app.modules.analysis.tool_protocol import ToolOutput
+from app.modules.documents.models import Documents
 from app.modules.identity.models import User
 from app.modules.organizations.models import Company, CompanyMember
-from app.modules.runtime.tools.context import RuntimeContext, issue
+from app.modules.runtime.tools.context import (
+    RuntimeContext,
+    document_scope_sha256,
+    issue,
+)
 from app.modules.runtime.tools.mcp_client import call_tool
 from app.modules.workflow.models import AnalysisTask
-from app.tool_service.server import create_tool_server
+from app.tool_service.server import ServiceTool, check_rag_scope, create_tool_server
 
 KEY = b"worker-and-tool-service-share-this"
 NOW = 1_800_000_000
@@ -148,3 +155,156 @@ def test_unreachable_service_fails_clearly_within_the_timeout(seeded):
 
     assert result.error_code == "mcp_transport_unavailable"
     assert time.monotonic() - started < 3
+
+
+@pytest.fixture
+def documents(db_session, seeded):
+    company, other, user = seeded["company"], seeded["other"], seeded["user"]
+    rows = [
+        Documents(
+            uploaded_by_user_id=user.id,
+            company_id=company.id,
+            name="制度.txt",
+            source="test",
+            min_view_role="any",
+        ),
+        Documents(
+            uploaded_by_user_id=user.id,
+            company_id=company.id,
+            name="董事会纪要.txt",
+            source="test",
+            min_view_role="admin",  # an analyst may not read it
+        ),
+        Documents(
+            uploaded_by_user_id=user.id,
+            company_id=other.id,
+            name="别家制度.txt",
+            source="test",
+            min_view_role="any",
+        ),
+    ]
+    # Documents have row-level security: insert each under its own company scope.
+    set_tenant_scope(db_session, other.id)
+    db_session.add(rows[2])
+    db_session.flush()
+    set_tenant_scope(db_session, company.id)
+    db_session.add_all(rows[:2])
+    db_session.flush()
+    return {
+        "visible": rows[0].id,
+        "admin_only": rows[1].id,
+        "other_company": rows[2].id,
+    }
+
+
+@pytest.fixture
+def rag_server(db_session, executed):
+    def search(arguments):
+        executed.append(arguments)
+        return ToolOutput(
+            success=True, data={"status": "ready", "evidences": [], "rows": []}
+        )
+
+    return create_tool_server(
+        signing_key=KEY,
+        session_factory=lambda: nullcontext(db_session),
+        clock=lambda: NOW,
+        tools={"rag_search": ServiceTool(run=search, check=check_rag_scope)},
+    )
+
+
+def _search(server, seeded, document_ids, *, company_id=None, signed_ids=None, key=KEY):
+    company_id = company_id or seeded["company"].id
+    context = _context(
+        seeded,
+        document_scope_sha256=document_scope_sha256(
+            seeded["company"].id, signed_ids if signed_ids is not None else document_ids
+        ),
+    )
+    return call_tool(
+        server,
+        "rag_search",
+        {
+            "question": "退货流程",
+            "company_id": company_id,
+            "document_ids": document_ids,
+        },
+        context,
+        key=key,
+        timeout_seconds=5,
+    )
+
+
+def test_signed_search_over_visible_documents_runs(
+    rag_server, seeded, documents, executed
+):
+    result = _search(rag_server, seeded, [documents["visible"]])
+
+    assert result.success
+    assert result.data["status"] == "ready"
+    assert executed[0]["document_ids"] == [documents["visible"]]
+
+
+def test_search_naming_another_company_never_runs(
+    rag_server, seeded, documents, executed
+):
+    result = _search(
+        rag_server, seeded, [documents["visible"]], company_id=seeded["other"].id
+    )
+
+    assert result.error_code == "tool_company_scope_denied"
+    assert executed == []
+
+
+def test_documents_other_than_the_signed_ones_never_run(
+    rag_server, seeded, documents, executed
+):
+    # Signed for one document, sent with another added.
+    result = _search(
+        rag_server,
+        seeded,
+        [documents["visible"], documents["admin_only"]],
+        signed_ids=[documents["visible"]],
+    )
+
+    assert result.error_code == "tool_document_scope_denied"
+    assert executed == []
+
+
+@pytest.mark.parametrize("which", ["admin_only", "other_company"])
+def test_documents_the_user_cannot_see_never_run(
+    rag_server, seeded, documents, executed, which
+):
+    result = _search(rag_server, seeded, [documents["visible"], documents[which]])
+
+    assert result.error_code == "tool_document_current_authorization_denied"
+    assert executed == []
+
+
+def test_forged_search_never_reaches_the_documents(
+    rag_server, seeded, documents, executed
+):
+    result = _search(rag_server, seeded, [documents["visible"]], key=b"guessed-key")
+
+    assert result.error_code == "tool_context_signature_invalid"
+    assert executed == []
+
+
+def test_a_tool_failure_comes_back_with_its_own_code(db_session, seeded, documents):
+    server = create_tool_server(
+        signing_key=KEY,
+        session_factory=lambda: nullcontext(db_session),
+        clock=lambda: NOW,
+        tools={
+            "rag_search": ServiceTool(
+                run=lambda arguments: ToolOutput(
+                    success=False, error_code="rag_search_unavailable"
+                ),
+                check=check_rag_scope,
+            )
+        },
+    )
+
+    result = _search(server, seeded, [documents["visible"]])
+
+    assert result.error_code == "rag_search_unavailable"

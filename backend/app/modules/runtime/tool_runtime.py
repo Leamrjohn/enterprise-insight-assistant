@@ -7,8 +7,6 @@ from time import perf_counter
 
 from app.core import tracing
 from app.modules.analysis.tool_protocol import Tool, ToolInput, ToolOutput
-from app.modules.documents.models import Documents
-from app.modules.documents.repository import allowed_min_view_roles
 from app.modules.identity.models import User
 from app.modules.organizations.models import CompanyMember
 from app.modules.runtime.model_governance import (
@@ -17,7 +15,10 @@ from app.modules.runtime.model_governance import (
 )
 from app.modules.runtime.schemas import ToolBudget, ToolPolicy
 from app.modules.runtime.tools import pipeline
-from app.modules.runtime.tools.authorization import current_member_allowed
+from app.modules.runtime.tools.authorization import (
+    current_member_allowed,
+    documents_still_visible,
+)
 from app.modules.runtime.tools.errors import classify
 from app.modules.runtime.tools.registry import default_registry
 from app.modules.workflow.audit.events import append_workflow_event
@@ -291,33 +292,13 @@ class ToolRuntime:
         """Require frozen RAG documents to remain visible to the initiator."""
         if tool.name != "rag_search":
             return None
-        document_ids = input.parameters["document_ids"]
-        task = self._task()
-        membership = (
-            self._db.query(CompanyMember)
-            .filter(
-                CompanyMember.company_id == self._context.company_id,
-                CompanyMember.user_id == task.user_id,
-            )
-            .one_or_none()
-        )
-        if membership is None:
-            return self._deny(tool, "tool_document_current_authorization_denied", {})
-        visible_document_ids = {
-            document_id
-            for (document_id,) in (
-                self._db.query(Documents.id)
-                .filter(
-                    Documents.id.in_(document_ids),
-                    Documents.company_id == self._context.company_id,
-                    Documents.min_view_role.in_(
-                        allowed_min_view_roles(membership.role)
-                    ),
-                )
-                .all()
-            )
-        }
-        if not set(document_ids).issubset(visible_document_ids):
+        assert self._context.company_id is not None, "the scope stage requires it"
+        if not documents_still_visible(
+            self._db,
+            company_id=self._context.company_id,
+            user_id=self._task().user_id,
+            document_ids=input.parameters["document_ids"],
+        ):
             return self._deny(tool, "tool_document_current_authorization_denied", {})
         return None
 

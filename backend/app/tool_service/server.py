@@ -1,14 +1,16 @@
 """M1: the agent-tools service.  Every call proves who sent it before anything runs.
 
-Order matters and is fixed: verify the signature, then re-check the database,
-then execute.  A forged request never reaches the database, and a signed one for
-a user who has since lost access never reaches the tool.
+Order matters and is fixed: verify the signature, then re-check the database
+(task, execution, membership), then the tool's own scope check, then execute.
+A forged request never reaches the database, and a signed one for a user who
+has since lost access never reaches the tool.
 """
 
 import time
 from collections.abc import Callable, Mapping
 from contextlib import AbstractContextManager
-from dataclasses import fields
+from dataclasses import dataclass, fields
+from functools import lru_cache
 from typing import Any
 
 from mcp.server import MCPServer
@@ -17,9 +19,17 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
 from app.db.session import SessionLocal, set_tenant_scope
-from app.modules.runtime.tools.authorization import current_member_allowed
+from app.modules.runtime.tools.authorization import (
+    current_member_allowed,
+    documents_still_visible,
+)
 from app.modules.runtime.tools.catalog import ANALYSIS_ROLES
-from app.modules.runtime.tools.context import ContextRejected, RuntimeContext, verify
+from app.modules.runtime.tools.context import (
+    ContextRejected,
+    RuntimeContext,
+    document_scope_sha256,
+    verify,
+)
 from app.modules.workflow.models import AnalysisTask
 
 SERVER_NAME = "agent-tools"
@@ -27,13 +37,71 @@ SERVER_VERSION = "1.0.0"
 SERVER_PORT = 8090
 
 ToolHandler = Callable[[dict[str, Any]], Any]
+ScopeCheck = Callable[[Session, RuntimeContext, dict[str, Any]], None]
+
+
+@dataclass(frozen=True)
+class ServiceTool:
+    """run returns plain data or a ToolOutput; check raises ContextRejected."""
+
+    run: ToolHandler
+    check: ScopeCheck | None = None
 
 
 def _echo(arguments: dict[str, Any]) -> dict[str, Any]:
     return {"echo": arguments.get("text", "")}
 
 
-DEFAULT_TOOLS: Mapping[str, ToolHandler] = {"echo": _echo}
+def check_rag_scope(
+    db: Session, context: RuntimeContext, arguments: dict[str, Any]
+) -> None:
+    """M2: the documents searched are the signed ones and still visible to the user."""
+    document_ids = arguments.get("document_ids")
+    if arguments.get("company_id") != context.company_id or not isinstance(
+        document_ids, list
+    ):
+        raise ContextRejected("tool_company_scope_denied")
+    if document_scope_sha256(context.company_id, document_ids) != (
+        context.document_scope_sha256
+    ):
+        raise ContextRejected("tool_document_scope_denied")
+    if not documents_still_visible(
+        db,
+        company_id=context.company_id,
+        user_id=context.actor_id,
+        document_ids=document_ids,
+    ):
+        raise ContextRejected("tool_document_current_authorization_denied")
+
+
+@lru_cache(maxsize=1)
+def _rag_tool() -> Any:
+    # Built once per process: the embedding and rerank models load on first use.
+    from app.modules.knowledge.tool import RAGTool
+
+    return RAGTool()
+
+
+def _rag_search(arguments: dict[str, Any]) -> Any:
+    from app.modules.analysis.tool_protocol import ToolInput
+
+    return _rag_tool().execute(ToolInput(parameters=arguments))
+
+
+DEFAULT_TOOLS: Mapping[str, ToolHandler | ServiceTool] = {
+    "echo": _echo,
+    "rag_search": ServiceTool(run=_rag_search, check=check_rag_scope),
+}
+
+
+def _reply(result: Any) -> dict[str, Any]:
+    from app.modules.analysis.tool_protocol import ToolOutput
+
+    if not isinstance(result, ToolOutput):
+        return {"success": True, "data": result}
+    if result.success:
+        return {"success": True, "data": result.data}
+    return {"success": False, "error_code": result.error_code}
 
 
 def _parse_context(raw: Any) -> RuntimeContext:
@@ -78,24 +146,28 @@ def create_tool_server(
     signing_key: bytes,
     session_factory: Callable[[], AbstractContextManager[Session]] = SessionLocal,
     clock: Callable[[], float] = time.time,
-    tools: Mapping[str, ToolHandler] = DEFAULT_TOOLS,
+    tools: Mapping[str, ToolHandler | ServiceTool] = DEFAULT_TOOLS,
 ) -> MCPServer:
     server = MCPServer(SERVER_NAME, version=SERVER_VERSION)
 
-    def register(name: str, handler: ToolHandler) -> None:
+    def register(name: str, tool: ServiceTool) -> None:
         @server.tool(name=name, description=f"agent-tools: {name}")
         def call(
             arguments: dict[str, Any], context: dict[str, Any], signature: str
         ) -> dict[str, Any]:
             with session_factory() as db:
                 try:
-                    authorize(db, context, signature, key=signing_key, now=int(clock()))
+                    trusted = authorize(
+                        db, context, signature, key=signing_key, now=int(clock())
+                    )
+                    if tool.check is not None:
+                        tool.check(db, trusted, arguments)
                 except ContextRejected as rejected:
                     return {"success": False, "error_code": rejected.code}
-                return {"success": True, "data": handler(arguments)}
+            return _reply(tool.run(arguments))
 
-    for name, handler in tools.items():
-        register(name, handler)
+    for name, tool in tools.items():
+        register(name, tool if isinstance(tool, ServiceTool) else ServiceTool(run=tool))
 
     @server.custom_route("/health/live", methods=["GET"])
     async def health(request: Request) -> Response:
