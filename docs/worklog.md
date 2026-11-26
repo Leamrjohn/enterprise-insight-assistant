@@ -1188,3 +1188,8 @@
 ## 2026-11-26 插入 T15 分层业务集（用户决定）
 - 盘点：冒烟 10 题且默认 `model_tool_mode=off`（T8 的循环测不到）；黄金集 30 题（开发 23 / 留出 7）按路线有分布但无“应走层级”标注；SQL 回放 24 题只跑固定路线；工具选择集 14 题无大结果多轮；模板查询 0 题。
 - 决定：T8 之前插 T15，只补 T8/T9/T10 验收所需；录制费用开工时报上限。T3b-2 按方案 A。
+
+## 2026-11-26 T3b-2 模型可见说明由登记表生成（用户批准方案 A）
+- 做了什么：`ToolDefinition` 加 `model_text`（ModelText），启动校验加“capability/control 必须有 model_text”，capability 的 backed_by 可空（describe_table 只读任务快照）；`ToolSpec.from_definition`；Data 4 个、Knowledge 3 个工具用脚本机械转成 `DATA_TOOLS`/`KNOWLEDGE_TOOLS` 定义（run_sql→sql_query、search_documents→rag_search），ToolSpec 由定义生成；`toolsets.tool_catalog()` 把 runtime 3 个和这 7 个合进一个登记表统一校验（d0183af）。
+- 验证：改前存的逐字快照 7 条说明和版本号完全一致；新测试 9 通过；全量 2113 通过 40 跳过；pyright 0；导入分层未加例外；冒烟 t3b2-deploy-r1 9 成功 + 混合题待复核（已知），$0.027；审计 rag_search 6、sql_query 4 全部成功。
+- 未验证：模型自选路线的真实效果（冒烟默认关闭），待 T15 的回放门禁。
