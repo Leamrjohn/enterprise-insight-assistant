@@ -17,6 +17,7 @@ from typing import Any, Literal
 from app.core.config.snapshot import runtime_settings
 from app.core.exceptions import PermanentModelError, RetryableModelError
 from app.core.gateway.base import ModelGateway, ToolCall
+from app.modules.runtime.tools.definition import ToolDefinition
 from pydantic import BaseModel, ValidationError
 
 logger = logging.getLogger(__name__)
@@ -46,6 +47,23 @@ class ToolSpec:
     example: dict
     common_errors: tuple[str, ...]
     input_model: type[BaseModel]
+
+    @classmethod
+    def from_definition(cls, definition: ToolDefinition) -> ToolSpec:
+        """T3b-2: the model reads what the registry declares, never a second copy."""
+        text = definition.model_text
+        if text is None:
+            raise ValueError(f"{definition.name} declares no model_text")
+        return cls(
+            name=definition.name,
+            version=definition.contract_version,
+            purpose=text.purpose,
+            when_to_use=text.when_to_use,
+            when_not_to_use=text.when_not_to_use,
+            example=text.example,
+            common_errors=text.common_errors,
+            input_model=definition.input_model,
+        )
 
     def to_openai(self) -> dict:
         description = (

@@ -4,21 +4,30 @@ Adding a read-only tool to a node takes four edits and none in nodes/ or the
 agents: declare it in runtime/tools/catalog.py, implement it, give it an
 output model and to_evidence, and list its name in NODE_TOOLSETS below with a
 factory in TOOL_FACTORIES.
+
+T3b-2: the capability and control tools a model calls are declared next to the
+agents that handle them; tool_catalog() puts them and the runtime tools into
+one registry, so every declaration passes the same startup rules.
 """
 
 from collections.abc import Callable, Mapping
+from functools import lru_cache
 
 from app.core.config.snapshot import runtime_settings
 from app.modules.analysis.catalog.snapshot_catalog import SnapshotCatalog
 from app.modules.analysis.data.sql_tool import SQLTool
+from app.modules.analysis.data.tool_agent import DATA_TOOLS
 from app.modules.analysis.tool_protocol import Tool, Toolset
 from app.modules.knowledge.tool import RAGTool
+from app.modules.knowledge.tool_agent import KNOWLEDGE_TOOLS
 from app.modules.runtime.tool_guard import (
     CircuitBreaker,
     FallbackTool,
     GuardedTool,
     redis_breaker_store,
 )
+from app.modules.runtime.tools import catalog
+from app.modules.runtime.tools.registry import ToolRegistry
 from app.modules.workflow.orchestration.state import WorkflowState
 
 NODE_TOOLSETS: Mapping[str, tuple[str, ...]] = {
@@ -91,8 +100,15 @@ TOOL_FACTORIES: Mapping[str, ToolFactory] = {
 }
 
 
+@lru_cache(maxsize=1)
+def tool_catalog() -> ToolRegistry:
+    """Every declared tool, runtime and model-facing alike; a bad one fails here."""
+    return ToolRegistry((*catalog.TOOLS, *DATA_TOOLS, *KNOWLEDGE_TOOLS))
+
+
 def build_toolset(node: str, state: WorkflowState) -> Toolset:
     """Build the node's tools; with a runtime, every call goes through its gateway."""
+    tool_catalog()  # the first task refuses to run on a broken declaration
     runtime = state.get("tool_runtime")
     tools = [TOOL_FACTORIES[name](state) for name in NODE_TOOLSETS[node]]
     if runtime is not None:

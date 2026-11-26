@@ -29,6 +29,8 @@ from app.modules.runtime.tool_loop import (
     ToolSpec,
     run_tool_loop,
 )
+from app.modules.runtime.tools.catalog import ANALYSIS_ROLES
+from app.modules.runtime.tools.definition import ModelText, ToolDefinition
 from pydantic import BaseModel, ConfigDict, Field
 
 MAX_SEARCHES = 3
@@ -54,37 +56,54 @@ class ReportNoEvidenceArgs(BaseModel):
 
 
 KNOWLEDGE_TOOL_CATALOG_VERSION = "knowledge-tools/v1"
-KNOWLEDGE_TOOL_SPECS = [
-    ToolSpec(
+KNOWLEDGE_TOOLS: tuple[ToolDefinition, ...] = (
+    ToolDefinition(
         name="search_documents",
-        version="search_documents/v1",
-        purpose="用另一组关键词再检索一次公司文档。范围和有效期由系统决定。",
-        when_to_use="已有资料不足以回答，而且换一种说法可能找到时。",
-        when_not_to_use="已有资料够回答时；不要重复相同的关键词。",
-        example={"query": "退货 审批 流程"},
-        common_errors=("把整段问题原样再搜一次",),
+        contract_version="search_documents/v1",
         input_model=SearchDocumentsArgs,
+        allowed_roles=ANALYSIS_ROLES,
+        kind="capability",
+        backed_by="rag_search",
+        model_text=ModelText(
+            purpose="用另一组关键词再检索一次公司文档。范围和有效期由系统决定。",
+            when_to_use="已有资料不足以回答，而且换一种说法可能找到时。",
+            when_not_to_use="已有资料够回答时；不要重复相同的关键词。",
+            example={"query": "退货 审批 流程"},
+            common_errors=("把整段问题原样再搜一次",),
+        ),
     ),
-    ToolSpec(
+    ToolDefinition(
         name="submit_answer",
-        version="submit_answer/v1",
-        purpose="提交基于资料的回答和它引用的 chunk_id，结束检索。",
-        when_to_use="资料能支持回答时。",
-        when_not_to_use="资料不足时，不要凭常识作答。",
-        example={"answer": "退货需要主管审批。", "citations": [{"chunk_id": 123}]},
-        common_errors=("引用了没有出现过的 chunk_id",),
+        contract_version="submit_answer/v1",
         input_model=SubmitAnswerArgs,
+        allowed_roles=ANALYSIS_ROLES,
+        kind="control",
+        model_text=ModelText(
+            purpose="提交基于资料的回答和它引用的 chunk_id，结束检索。",
+            when_to_use="资料能支持回答时。",
+            when_not_to_use="资料不足时，不要凭常识作答。",
+            example={"answer": "退货需要主管审批。", "citations": [{"chunk_id": 123}]},
+            common_errors=("引用了没有出现过的 chunk_id",),
+        ),
     ),
-    ToolSpec(
+    ToolDefinition(
         name="report_no_evidence",
-        version="report_no_evidence/v1",
-        purpose="说明文档里找不到答案，结束检索。",
-        when_to_use="换过关键词后资料仍然不足时。",
-        when_not_to_use="资料已能回答问题的一部分时，应回答这一部分。",
-        example={"reason": "文档没有提到库存周转天数"},
-        common_errors=(),
+        contract_version="report_no_evidence/v1",
         input_model=ReportNoEvidenceArgs,
+        allowed_roles=ANALYSIS_ROLES,
+        kind="control",
+        model_text=ModelText(
+            purpose="说明文档里找不到答案，结束检索。",
+            when_to_use="换过关键词后资料仍然不足时。",
+            when_not_to_use="资料已能回答问题的一部分时，应回答这一部分。",
+            example={"reason": "文档没有提到库存周转天数"},
+            common_errors=(),
+        ),
     ),
+)
+# T3b-2: the model reads exactly what the definitions above declare.
+KNOWLEDGE_TOOL_SPECS = [
+    ToolSpec.from_definition(definition) for definition in KNOWLEDGE_TOOLS
 ]
 SYSTEM_PROMPT = get_prompt_registry().text("knowledge.tool_system")
 

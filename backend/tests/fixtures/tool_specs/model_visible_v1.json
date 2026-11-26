@@ -1,0 +1,353 @@
+{
+  "data": [
+    {
+      "function": {
+        "description": "查看业务表的字段、允许的关联和允许的筛选值。不查询任何数据。\n何时用：写 SQL 前还不知道某张表的字段或筛选值时。\n何时不用：提示里已列出该表字段时，不要重复查看。\n示例参数：{\"tables\": [\"sales_orders\", \"customers\"]}\n常见错误：表名不在可用表列表中",
+        "name": "describe_table",
+        "parameters": {
+          "additionalProperties": false,
+          "properties": {
+            "tables": {
+              "description": "要查看的表名",
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 4,
+              "minItems": 1,
+              "title": "Tables",
+              "type": "array"
+            }
+          },
+          "required": [
+            "tables"
+          ],
+          "title": "DescribeTableArgs",
+          "type": "object"
+        }
+      },
+      "type": "function"
+    },
+    {
+      "function": {
+        "description": "提交一条只读 SELECT 查询。代码会先校验再执行，公司范围由系统决定。\n何时用：已知道所需的表和字段，可以回答问题时。\n何时不用：资料类问题，或可用表确实没有所需数据时。\n示例参数：{\"sql\": \"SELECT SUM(o.total_amount) AS \\\"销售额\\\" FROM sales_orders o\", \"purpose\": \"统计销售额\", \"query_contract\": {\"required_concepts\": [\"销售额\"], \"expected_columns\": [\"销售额\"], \"result_kind\": \"aggregate\", \"empty_result_policy\": \"no_matching_records\", \"metric_definition_ref\": \"<上面列出的指标引用>\", \"time_scope_column\": \"sales_orders.order_date\"}}\n常见错误：日期写成 '2025-08'，应写完整日期；用了未列出的字段；结果列没有用中文别名；没有满足指标的固定筛选",
+        "name": "run_sql",
+        "parameters": {
+          "$defs": {
+            "NumericAssertion": {
+              "description": "A bounded, machine-checkable numeric statement about one query result.",
+              "properties": {
+                "column": {
+                  "maxLength": 160,
+                  "minLength": 1,
+                  "title": "Column",
+                  "type": "string"
+                },
+                "operator": {
+                  "enum": [
+                    "equals",
+                    "greater_than",
+                    "less_than"
+                  ],
+                  "title": "Operator",
+                  "type": "string"
+                },
+                "value": {
+                  "anyOf": [
+                    {
+                      "type": "number"
+                    },
+                    {
+                      "type": "string"
+                    }
+                  ],
+                  "title": "Value"
+                }
+              },
+              "required": [
+                "column",
+                "operator",
+                "value"
+              ],
+              "title": "NumericAssertion",
+              "type": "object"
+            },
+            "QueryContract": {
+              "description": "What one candidate query must return before it may become business evidence.",
+              "properties": {
+                "empty_result_policy": {
+                  "const": "no_matching_records",
+                  "default": "no_matching_records",
+                  "title": "Empty Result Policy",
+                  "type": "string"
+                },
+                "expected_columns": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "maxItems": 12,
+                  "minItems": 1,
+                  "title": "Expected Columns",
+                  "type": "array"
+                },
+                "metric_definition_ref": {
+                  "anyOf": [
+                    {
+                      "maxLength": 80,
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null,
+                  "title": "Metric Definition Ref"
+                },
+                "numeric_assertion": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/NumericAssertion"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null
+                },
+                "required_concepts": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "maxItems": 8,
+                  "minItems": 1,
+                  "title": "Required Concepts",
+                  "type": "array"
+                },
+                "result_kind": {
+                  "enum": [
+                    "aggregate",
+                    "records",
+                    "comparison"
+                  ],
+                  "title": "Result Kind",
+                  "type": "string"
+                },
+                "time_scope_column": {
+                  "anyOf": [
+                    {
+                      "maxLength": 160,
+                      "type": "string"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "default": null,
+                  "title": "Time Scope Column"
+                }
+              },
+              "required": [
+                "required_concepts",
+                "expected_columns",
+                "result_kind"
+              ],
+              "title": "QueryContract",
+              "type": "object"
+            }
+          },
+          "additionalProperties": false,
+          "properties": {
+            "purpose": {
+              "description": "这条 SQL 要验证的业务问题。",
+              "maxLength": 300,
+              "minLength": 1,
+              "title": "Purpose",
+              "type": "string"
+            },
+            "query_contract": {
+              "$ref": "#/$defs/QueryContract"
+            },
+            "sql": {
+              "description": "待校验的 PostgreSQL SELECT 查询。",
+              "maxLength": 8000,
+              "minLength": 1,
+              "title": "Sql",
+              "type": "string"
+            }
+          },
+          "required": [
+            "sql",
+            "purpose",
+            "query_contract"
+          ],
+          "title": "RunSqlArgs",
+          "type": "object"
+        }
+      },
+      "type": "function"
+    },
+    {
+      "function": {
+        "description": "确认用哪一条查询结果回答问题，结束查询。\n何时用：run_sql 返回了结果，并且你判断它能回答问题时。\n何时不用：结果不符合问题时，应修改查询。\n示例参数：{\"evidence_id\": \"E1\"}\n常见错误：证据编号不存在",
+        "name": "submit_result",
+        "parameters": {
+          "additionalProperties": false,
+          "properties": {
+            "evidence_id": {
+              "description": "run_sql 返回的证据编号",
+              "title": "Evidence Id",
+              "type": "string"
+            }
+          },
+          "required": [
+            "evidence_id"
+          ],
+          "title": "SubmitResultArgs",
+          "type": "object"
+        }
+      },
+      "type": "function"
+    },
+    {
+      "function": {
+        "description": "说明可用的表无法回答这个问题，结束查询。\n何时用：查看表结构后确认缺少所需数据时。\n何时不用：只是一次查询失败时，应先根据错误原因修改。\n示例参数：{\"reason\": \"没有记录客户满意度的表\", \"missing\": [\"客户满意度\"]}\n常见错误：没有查看表结构就下结论",
+        "name": "report_insufficient",
+        "parameters": {
+          "additionalProperties": false,
+          "properties": {
+            "missing": {
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 10,
+              "title": "Missing",
+              "type": "array"
+            },
+            "reason": {
+              "maxLength": 300,
+              "minLength": 1,
+              "title": "Reason",
+              "type": "string"
+            }
+          },
+          "required": [
+            "reason"
+          ],
+          "title": "ReportInsufficientArgs",
+          "type": "object"
+        }
+      },
+      "type": "function"
+    }
+  ],
+  "knowledge": [
+    {
+      "function": {
+        "description": "用另一组关键词再检索一次公司文档。范围和有效期由系统决定。\n何时用：已有资料不足以回答，而且换一种说法可能找到时。\n何时不用：已有资料够回答时；不要重复相同的关键词。\n示例参数：{\"query\": \"退货 审批 流程\"}\n常见错误：把整段问题原样再搜一次",
+        "name": "search_documents",
+        "parameters": {
+          "additionalProperties": false,
+          "properties": {
+            "query": {
+              "description": "要检索的中文关键词",
+              "maxLength": 300,
+              "minLength": 1,
+              "title": "Query",
+              "type": "string"
+            }
+          },
+          "required": [
+            "query"
+          ],
+          "title": "SearchDocumentsArgs",
+          "type": "object"
+        }
+      },
+      "type": "function"
+    },
+    {
+      "function": {
+        "description": "提交基于资料的回答和它引用的 chunk_id，结束检索。\n何时用：资料能支持回答时。\n何时不用：资料不足时，不要凭常识作答。\n示例参数：{\"answer\": \"退货需要主管审批。\", \"citations\": [{\"chunk_id\": 123}]}\n常见错误：引用了没有出现过的 chunk_id",
+        "name": "submit_answer",
+        "parameters": {
+          "$defs": {
+            "AnalysisCitation": {
+              "properties": {
+                "chunk_id": {
+                  "exclusiveMinimum": 0,
+                  "title": "Chunk Id",
+                  "type": "integer"
+                }
+              },
+              "required": [
+                "chunk_id"
+              ],
+              "title": "AnalysisCitation",
+              "type": "object"
+            }
+          },
+          "additionalProperties": false,
+          "properties": {
+            "answer": {
+              "description": "只基于资料的回答",
+              "minLength": 1,
+              "title": "Answer",
+              "type": "string"
+            },
+            "citations": {
+              "description": "支撑答案的 chunk_id",
+              "items": {
+                "$ref": "#/$defs/AnalysisCitation"
+              },
+              "minItems": 1,
+              "title": "Citations",
+              "type": "array"
+            }
+          },
+          "required": [
+            "answer",
+            "citations"
+          ],
+          "title": "SubmitAnswerArgs",
+          "type": "object"
+        }
+      },
+      "type": "function"
+    },
+    {
+      "function": {
+        "description": "说明文档里找不到答案，结束检索。\n何时用：换过关键词后资料仍然不足时。\n何时不用：资料已能回答问题的一部分时，应回答这一部分。\n示例参数：{\"reason\": \"文档没有提到库存周转天数\"}\n常见错误：",
+        "name": "report_no_evidence",
+        "parameters": {
+          "additionalProperties": false,
+          "properties": {
+            "reason": {
+              "maxLength": 300,
+              "minLength": 1,
+              "title": "Reason",
+              "type": "string"
+            }
+          },
+          "required": [
+            "reason"
+          ],
+          "title": "ReportNoEvidenceArgs",
+          "type": "object"
+        }
+      },
+      "type": "function"
+    }
+  ],
+  "versions": {
+    "data": [
+      "describe_table/v1",
+      "run_sql/v1",
+      "submit_result/v1",
+      "report_insufficient/v1"
+    ],
+    "knowledge": [
+      "search_documents/v1",
+      "submit_answer/v1",
+      "report_no_evidence/v1"
+    ]
+  }
+}

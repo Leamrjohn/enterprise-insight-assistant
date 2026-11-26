@@ -23,8 +23,9 @@ def validate_definitions(definitions: Iterable[ToolDefinition]) -> list[str]:
     4. transport is in ALLOWED_TRANSPORTS;
     5. allowed_roles is not empty;
     6. a runtime tool declares output_model and to_evidence, and no backed_by;
-    7. a capability is backed_by a declared runtime tool;
-    8. a control tool has no backed_by.
+    7. a capability's backed_by, when set, is a declared runtime tool;
+    8. a control tool has no backed_by;
+    9. capability and control tools carry model_text.
     """
     definitions = tuple(definitions)
     kinds = {definition.name: definition.kind for definition in definitions}
@@ -60,12 +61,17 @@ def validate_definitions(definitions: Iterable[ToolDefinition]) -> list[str]:
             if definition.backed_by is not None:
                 problems.append(f"{name}: a runtime tool runs itself, not backed_by")
         elif definition.kind == "capability":
-            if kinds.get(definition.backed_by or "") != "runtime":
+            if (
+                definition.backed_by is not None
+                and kinds.get(definition.backed_by) != "runtime"
+            ):
                 problems.append(
                     f"{name}: backed_by {definition.backed_by!r} is not a runtime tool"
                 )
         elif definition.backed_by is not None:
             problems.append(f"{name}: a control tool has no backed_by")
+        if definition.kind != "runtime" and definition.model_text is None:
+            problems.append(f"{name}: a {definition.kind} tool needs model_text")
     return problems
 
 
