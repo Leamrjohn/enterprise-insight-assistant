@@ -1,13 +1,11 @@
 """Single execution boundary for workflow tools."""
 
-import json
 from dataclasses import dataclass, field, replace
-from hashlib import sha256
-from time import perf_counter
+from time import perf_counter, time
 
 from app.core import tracing
+from app.core.config.snapshot import runtime_settings
 from app.modules.analysis.tool_protocol import Tool, ToolInput, ToolOutput
-from app.modules.identity.models import User
 from app.modules.organizations.models import CompanyMember
 from app.modules.runtime.model_governance import (
     ModelBudgetExceeded,
@@ -19,12 +17,19 @@ from app.modules.runtime.tools.authorization import (
     current_member_allowed,
     documents_still_visible,
 )
+from app.modules.runtime.tools.context import (
+    RuntimeContext,
+    document_scope_sha256,
+    issue,
+)
 from app.modules.runtime.tools.errors import classify
+from app.modules.runtime.tools.mcp_client import call_tool
 from app.modules.runtime.tools.registry import default_registry
 from app.modules.workflow.audit.events import append_workflow_event
 from app.modules.workflow.audit.tool_call import ToolCallRecord
 from app.modules.workflow.lifecycle.execution_attempt import TaskExecutionAttempt
 from app.modules.workflow.models import AnalysisTask
+from mcp.server import MCPServer
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
@@ -42,12 +47,35 @@ DENY_MESSAGES = {
     "tool_task_missing": "任务记录不存在，无法继续调用工具。",
     "tool_unknown": "本任务没有登记这个工具，请改用已提供的工具。",
     "tool_output_contract_invalid": "工具返回的结果不符合契约，请稍后重试或说明限制。",
+    "mcp_transport_unavailable": "工具服务暂时不可用，请基于已有结果作答或说明限制。",
 }
 _GENERIC_DENY_MESSAGE = "工具调用不在已授权范围内。"
+_FAILED_MESSAGE = "工具执行暂时不可用。"
 
 
 def deny_message(code: str) -> str:
     return DENY_MESSAGES.get(code, _GENERIC_DENY_MESSAGE)
+
+
+def call_service(
+    server: str | MCPServer,
+    name: str,
+    parameters: dict,
+    context: RuntimeContext,
+    *,
+    key: bytes,
+    timeout_seconds: float,
+) -> ToolOutput:
+    """M2b: one call on the tool service; its failure is the answer, never retried locally."""
+    reply = call_tool(
+        server, name, parameters, context, key=key, timeout_seconds=timeout_seconds
+    )
+    if reply.success:
+        return ToolOutput(success=True, data=reply.data)
+    code = reply.error_code or "mcp_response_malformed"
+    return ToolOutput(
+        success=False, error=DENY_MESSAGES.get(code, _FAILED_MESSAGE), error_code=code
+    )
 
 
 @dataclass(frozen=True)
@@ -124,12 +152,15 @@ class ToolRuntime:
         db: Session,
         attempt: TaskExecutionAttempt,
         context: ToolRuntimeContext,
+        tool_server: str | MCPServer | None = None,
     ) -> None:
         if context.task_id != attempt.task_id:
             raise ValueError("tool runtime task scope does not match execution attempt")
         self._db = db
         self._attempt = attempt
         self._context = context
+        # None calls the configured service URL; tests pass an in-process server.
+        self._tool_server = tool_server
         self.gateway = ToolGateway(self)
 
     def wrap(self, tool: Tool) -> RuntimeTool:
@@ -247,15 +278,35 @@ class ToolRuntime:
             return self._deny(tool, "tool_current_authorization_denied", {})
         return None
 
-    def _runtime_mcp_context(self, input: ToolInput) -> dict[str, object]:
-        """Attach a Runtime-owned, request-specific binding for trusted MCP.
+    def _run(self, tool: Tool, input: ToolInput) -> ToolOutput:
+        """M2b: run the tool where the registry says; a service call never falls back."""
+        definition = default_registry().get(tool.name)
+        if (
+            definition is None
+            or definition.transport == "in_process"
+            or not runtime_settings().tool_service_enabled
+        ):
+            return tool.execute(input)
+        return self._call_service(tool, input)
 
-        The MCP server only validates and echoes this context.  It never decides
-        authorization from it; Runtime has already enforced current membership,
-        role and frozen scope before the request crosses the transport boundary.
+    def _call_service(self, tool: Tool, input: ToolInput) -> ToolOutput:
+        settings = runtime_settings()
+        return call_service(
+            self._tool_server or settings.tool_server_url,
+            tool.name,
+            input.parameters,
+            self._service_context(input),
+            key=settings.tool_context_signing_key.get_secret_value().encode(),
+            timeout_seconds=settings.tool_server_timeout_seconds,
+        )
+
+    def _service_context(self, input: ToolInput) -> RuntimeContext:
+        """Sign who calls, for which task and documents; the service re-checks it all.
+
+        The earlier stages already checked the same facts here; signing lets the
+        service trust where the request came from, not what it may do.
         """
         task = self._task()
-        user = self._db.get(User, task.user_id)
         membership = (
             self._db.query(CompanyMember)
             .filter(
@@ -264,27 +315,20 @@ class ToolRuntime:
             )
             .one_or_none()
         )
-        if user is None or membership is None or self._context.company_id is None:
-            raise RuntimeError("authorized MCP context disappeared")
-        document_ids = input.parameters.get("document_ids")
-        scope_payload = {
-            "company_id": self._context.company_id,
-            "document_ids": sorted(document_ids) if document_ids is not None else None,
-        }
-        scope_sha256 = sha256(
-            json.dumps(scope_payload, sort_keys=True, separators=(",", ":")).encode()
-        ).hexdigest()
-        return {
-            "version": "agent-evidence-runtime/v1",
-            "tool_contract_version": "evidence_read/v1",
-            "task_id": self._attempt.task_id,
-            "execution_id": self._attempt.execution_id,
-            "actor_id": task.user_id,
-            "actor_auth_version": user.auth_version,
-            "authorized_role": membership.role,
-            "company_id": self._context.company_id,
-            "document_scope_sha256": scope_sha256,
-        }
+        if membership is None or self._context.company_id is None:
+            raise RuntimeError("authorized tool context disappeared")
+        return issue(
+            task_id=self._attempt.task_id,
+            execution_id=self._attempt.execution_id,
+            actor_id=task.user_id,
+            authorized_role=membership.role,
+            company_id=self._context.company_id,
+            document_scope_sha256=document_scope_sha256(
+                self._context.company_id, input.parameters.get("document_ids")
+            ),
+            now=int(time()),
+            ttl_seconds=runtime_settings().tool_context_ttl_seconds,
+        )
 
     def _validate_current_document_scope(
         self, tool: Tool, input: ToolInput
@@ -335,7 +379,6 @@ class ToolRuntime:
                 parameters={
                     **input.parameters,
                     "_runtime_database_timeout_ms": policy.rag_database_timeout_ms,
-                    "_runtime_mcp_context": self._runtime_mcp_context(input),
                 }
             )
         if tool.name != "sql_query":
@@ -464,7 +507,7 @@ class ToolRuntime:
         started = perf_counter()
         task_stop: ModelBudgetExceeded | ModelCallCancelled | None = None
         try:
-            result = tool.execute(input)
+            result = self._run(tool, input)
             if not isinstance(result, ToolOutput):
                 raise TypeError("tool returned an invalid result contract")
         except (ModelBudgetExceeded, ModelCallCancelled) as stop:

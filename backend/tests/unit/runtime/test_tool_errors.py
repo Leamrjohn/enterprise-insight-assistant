@@ -17,7 +17,6 @@ TOOL_LAYER = [
     APP.parent / "tool_service" / "server.py",
     APP / "runtime" / "tools" / "mcp_client.py",
     APP / "knowledge" / "tool.py",
-    APP / "knowledge" / "mcp_adapter.py",
     APP / "analysis" / "data" / "sql_tool.py",
     APP / "analysis" / "data" / "template_query.py",
 ]

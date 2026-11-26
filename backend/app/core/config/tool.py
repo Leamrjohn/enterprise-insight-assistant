@@ -13,7 +13,9 @@ class ToolConfig(ConfigDomain):
     # Model-chosen tools inside Data and Knowledge. "allowlist" is the gradual rollout.
     model_tool_mode: Literal["off", "allowlist", "all"] = "off"
     model_tool_company_ids: list[int] = Field(default_factory=list)
-    knowledge_evidence_transport: Literal["local", "mcp_stdio"] = "local"
+    # M2b: run tools registered with transport "mcp" on the agent-tools service.
+    # Off runs them in the worker; on, an outage fails the call, never falls back.
+    tool_service_enabled: bool = True
     # runtime/tool_loop.py LoopLimits; Knowledge uses its own rounds and calls.
     tool_loop_max_rounds: int = 6
     tool_loop_max_tool_calls: int = 8

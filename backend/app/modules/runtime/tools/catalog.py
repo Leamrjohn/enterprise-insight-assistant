@@ -23,6 +23,7 @@ TOOLS: tuple[ToolDefinition, ...] = (
         contract_version="rag_search/v2",
         input_model=RAGSearchInputSchema,
         allowed_roles=ANALYSIS_ROLES,
+        transport="mcp",
         output_model=RAGSearchOutput,
         to_evidence=rag_search_evidence,
     ),

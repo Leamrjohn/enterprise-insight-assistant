@@ -8,6 +8,8 @@ os.environ["MIGRATION_DATABASE_USER"] = "agent_migrator"
 os.environ["LOG_LEVEL"] = "WARNING"
 os.environ["LOG_DIR"] = "./.test-logs"
 os.environ["STORAGE_DIR"] = "./.test-storage"
+# Unit tests run tools in process; the service tests pass a server and turn it on.
+os.environ["TOOL_SERVICE_ENABLED"] = "false"
 
 
 import pytest

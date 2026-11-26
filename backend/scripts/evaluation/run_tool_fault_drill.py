@@ -25,7 +25,6 @@ from app.modules.knowledge.tool_agent import ToolCallingKnowledgeAgent
 from app.modules.runtime.tool_guard import (
     CIRCUIT_OPEN_CODE,
     CircuitBreaker,
-    FallbackTool,
     GuardedTool,
     redis_breaker_store,
 )
@@ -181,103 +180,69 @@ def drill_sql_repeat(_store):
     }
 
 
-def drill_rag_mcp_down(store):
-    """A real circuit around an MCP tool that cannot connect."""
-    from app.modules.knowledge.mcp_adapter import (
-        MCP_RUNTIME_CONTEXT_VERSION,
-        MCP_TOOL_CONTRACT_VERSION,
-        McpEvidenceReadTool,
-        document_scope_sha256,
-    )
-    from mcp import StdioServerParameters
+def drill_rag_service_down(store):
+    """M2b: the tool service refuses the connection; a clear failure, never local."""
+    import time
 
-    context = {
-        "version": MCP_RUNTIME_CONTEXT_VERSION,
-        "tool_contract_version": MCP_TOOL_CONTRACT_VERSION,
-        "task_id": 1,
-        "execution_id": "drill",
-        "actor_id": 1,
-        "actor_auth_version": 1,
-        "authorized_role": "analyst",
-        "company_id": 1,
-        "document_scope_sha256": document_scope_sha256(1, [1]),
-    }
+    from app.modules.runtime.tool_runtime import call_service
+    from app.modules.runtime.tools.context import document_scope_sha256, issue
 
-    class WithRuntimeContext(Tool):
-        """What ToolRuntime attaches before a request crosses to MCP."""
-
-        def __init__(self, tool):
-            self._tool = tool
+    class OnTheService(Tool):
+        """What ToolRuntime runs for rag_search once its own checks passed."""
 
         @property
         def name(self):
-            return self._tool.name
+            return "rag_search"
 
         @property
         def description(self):
-            return self._tool.description
+            return "rag_search on the agent-tools service"
 
         def execute(self, input):
-            return self._tool.execute(
-                ToolInput(
-                    parameters={**input.parameters, "_runtime_mcp_context": context}
-                )
+            context = issue(
+                task_id=1,
+                execution_id="drill",
+                actor_id=1,
+                authorized_role="analyst",
+                company_id=1,
+                document_scope_sha256=document_scope_sha256(
+                    1, input.parameters.get("document_ids")
+                ),
+                now=int(time.time()),
+                ttl_seconds=60,
+            )
+            return call_service(
+                "http://127.0.0.1:9/mcp",
+                self.name,
+                input.parameters,
+                context,
+                key=b"drill-key",
+                timeout_seconds=5.0,
             )
 
-    unreachable = McpEvidenceReadTool(
-        StdioServerParameters(command="definitely-not-a-real-mcp-server")
+    tool = GuardedTool(
+        OnTheService(), _breaker(store), retries=0, sleep=lambda _s: None
     )
-    answer = json.dumps(
-        {"answer": "主管审批", "citations": [{"chunk_id": 7}]}, ensure_ascii=False
-    )
-    local = Faulty(
-        ToolOutput(
-            True,
-            {
-                "status": "ready",
-                "evidences": [
-                    {
-                        "chunk_id": 7,
-                        "document_id": 1,
-                        "content": "退货需要主管审批。",
-                        "score": 0.9,
-                    }
-                ],
-            },
-        ),
-        name="rag_search",
-    )
-    tool = FallbackTool(
-        GuardedTool(unreachable, _breaker(store), retries=0, sleep=lambda _s: None),
-        local,
-    )
-    gateway = Scripted(
-        [ToolChatResponse(None, (ToolCall("c1", "submit_answer", answer),))]
-    )
+    gateway = Scripted()
     question = AgentInput(
         question="退货流程",
         user_id=1,
         context={"company_id": 1, "document_ids": [1]},
     )
-    # Without the authorization context it is a refusal, and a refusal never switches.
-    unauthorized = tool.execute(
-        ToolInput(parameters={"company_id": 1, "document_ids": [1], "question": "q"})
+    started = time.monotonic()
+    output = ToolCallingKnowledgeAgent(rag_tool=tool, gateway=gateway).run(question)
+    seconds = round(time.monotonic() - started, 2)
+    # No local tool exists to switch to: the outage is the answer, within 5 seconds.
+    failed_clearly = (
+        not output.success
+        and output.error_code == "mcp_transport_unavailable"
+        and seconds < 5
+        and gateway.tool_rounds == 0
     )
-    refused_without_switch = (
-        unauthorized.error_code == "mcp_runtime_context_invalid" and local.calls == 0
-    )
-    output = ToolCallingKnowledgeAgent(
-        rag_tool=WithRuntimeContext(tool), gateway=gateway
-    ).run(question)
     return {
-        "action": "switch_tool"
-        if output.attempts.get("switched_from")
-        and local.calls == 1
-        and refused_without_switch
-        else "none",
-        "switched_from": output.attempts.get("switched_from"),
-        "answer_kept": output.success and bool(output.evidence),
-        "refused_without_switch": refused_without_switch,
+        "action": "fail_clear" if failed_clearly else "none",
+        "error_code": output.error_code,
+        "seconds": seconds,
     }
 
 
@@ -417,7 +382,7 @@ DRILLS = {
     "fault-sql-permission": drill_sql_permission,
     "fault-sql-timeout": drill_sql_timeout,
     "fault-sql-repeat": drill_sql_repeat,
-    "fault-rag-mcp-down": drill_rag_mcp_down,
+    "fault-rag-mcp-down": drill_rag_service_down,
     "fault-rerank-timeout": drill_rerank_timeout,
     "fault-circuit-open": drill_circuit_open,
     "fault-budget-exhausted": drill_budget_exhausted,

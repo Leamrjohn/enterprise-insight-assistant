@@ -1,17 +1,16 @@
+from contextlib import nullcontext
 from datetime import date, datetime, timedelta, timezone
+from time import monotonic
 
 import pytest
+from app.core.settings import get_settings
 from app.db.session import set_tenant_scope
 from app.modules.analysis.tool_protocol import Tool, ToolInput, ToolOutput
 from app.modules.documents.models import Documents
 from app.modules.evaluation.observation import observation_from_runtime_tool_rejection
 from app.modules.identity.models import User
-from app.modules.knowledge.mcp_adapter import (
-    McpEvidenceReadTool,
-    create_evidence_mcp_server,
-    document_scope_sha256,
-)
 from app.modules.organizations.models import Company, CompanyMember
+from app.modules.runtime import tool_runtime
 from app.modules.runtime.model_governance import (
     ModelBudgetExceeded,
     ModelCallCancelled,
@@ -21,6 +20,7 @@ from app.modules.workflow.audit.events_models import WorkflowEvent
 from app.modules.workflow.audit.tool_call import ToolCallRecord
 from app.modules.workflow.lifecycle.execution_attempt import TaskExecutionAttempt
 from app.modules.workflow.models import AnalysisTask
+from app.tool_service.server import ServiceTool, check_rag_scope, create_tool_server
 
 
 class _FakeRagTool(Tool):
@@ -116,7 +116,7 @@ class _UnknownTool(Tool):
         return ToolOutput(success=True, data={"status": "ready", "rows": []})
 
 
-def _runtime(db_session):
+def _runtime(db_session, tool_server=None):
     user = User(name="runtime-user", api_key="runtime-key")
     company = Company(name="runtime-company")
     db_session.add_all([user, company])
@@ -161,6 +161,7 @@ def _runtime(db_session):
                 company_id=company.id,
                 allowed_document_ids=frozenset({11}),
             ),
+            tool_server=tool_server,
         ),
         attempt,
         company,
@@ -446,25 +447,51 @@ def test_tool_runtime_denies_document_ids_outside_frozen_scope(db_session) -> No
     assert observation.actual_tool_denial_codes == ["tool_document_scope_denied"]
 
 
-def test_tool_runtime_rejects_the_same_illegal_scope_before_local_or_mcp_call(
-    db_session,
+def _service(db_session, run=None):
+    """An in-process agent-tools server; ran records every search it really ran."""
+    ran: list[dict] = []
+
+    def search(arguments):
+        ran.append(arguments)
+        if run is not None:
+            return run(arguments)
+        return ToolOutput(
+            success=True, data={"status": "ready", "rows": [], "evidences": []}
+        )
+
+    server = create_tool_server(
+        signing_key=get_settings().tool_context_signing_key.get_secret_value().encode(),
+        session_factory=lambda: nullcontext(db_session),
+        tools={"rag_search": ServiceTool(run=search, check=check_rag_scope)},
+    )
+    return server, ran
+
+
+def _turn_service_on(monkeypatch, **overrides) -> None:
+    settings = get_settings().model_copy(
+        update={"tool_service_enabled": True, **overrides}
+    )
+    monkeypatch.setattr(tool_runtime, "runtime_settings", lambda: settings)
+
+
+def test_tool_runtime_rejects_the_same_illegal_scope_in_process_or_on_the_service(
+    db_session, monkeypatch
 ) -> None:
-    runtime, _attempt, company = _runtime(db_session)
+    server, ran = _service(db_session)
+    runtime, _attempt, company = _runtime(db_session, tool_server=server)
     illegal_input = ToolInput(
         parameters={"company_id": company.id, "document_ids": [12], "question": "q"}
     )
     local_reader = _FakeRagTool()
-    mcp_reader = _FakeRagTool()
 
     local_result = runtime.execute(local_reader, illegal_input)
-    mcp_result = runtime.execute(
-        McpEvidenceReadTool(create_evidence_mcp_server(mcp_reader)), illegal_input
-    )
+    _turn_service_on(monkeypatch)
+    service_result = runtime.execute(_FakeRagTool(), illegal_input)
 
     assert local_result.error_code == "tool_document_scope_denied"
-    assert mcp_result.error_code == local_result.error_code
+    assert service_result.error_code == local_result.error_code
     assert local_reader.inputs == []
-    assert mcp_reader.inputs == []
+    assert ran == []
 
 
 def test_tool_runtime_denies_missing_document_scope(db_session) -> None:
@@ -556,10 +583,12 @@ def test_tool_runtime_denies_revoked_user_before_tool_execution(db_session) -> N
     assert event.details == {"error_class": "denied"}
 
 
-def test_tool_runtime_denies_revoked_user_before_mcp_evidence_read(
-    db_session,
+def test_tool_runtime_denies_revoked_user_before_the_service_is_called(
+    db_session, monkeypatch
 ) -> None:
-    runtime, attempt, company = _runtime(db_session)
+    server, ran = _service(db_session)
+    runtime, attempt, company = _runtime(db_session, tool_server=server)
+    _turn_service_on(monkeypatch)
     task = db_session.get(AnalysisTask, attempt.task_id)
     membership = (
         db_session.query(CompanyMember)
@@ -572,10 +601,9 @@ def test_tool_runtime_denies_revoked_user_before_mcp_evidence_read(
     membership.status = "disabled"
     db_session.commit()
     reader = _FakeRagTool()
-    mcp_tool = McpEvidenceReadTool(create_evidence_mcp_server(reader))
 
     result = runtime.execute(
-        mcp_tool,
+        reader,
         ToolInput(
             parameters={"company_id": company.id, "document_ids": [11], "question": "q"}
         ),
@@ -583,6 +611,7 @@ def test_tool_runtime_denies_revoked_user_before_mcp_evidence_read(
 
     assert result.error_code == "tool_current_authorization_denied"
     assert reader.inputs == []
+    assert ran == []
 
 
 def test_tool_runtime_denies_viewer_before_sql_execution(db_session) -> None:
@@ -732,17 +761,6 @@ def test_tool_runtime_injects_frozen_rag_database_timeout(
         "document_ids": [11],
         "question": "q",
         "_runtime_database_timeout_ms": 321,
-        "_runtime_mcp_context": {
-            "version": "agent-evidence-runtime/v1",
-            "tool_contract_version": "evidence_read/v1",
-            "task_id": attempt.task_id,
-            "execution_id": "runtime-execution",
-            "actor_id": db_session.get(AnalysisTask, attempt.task_id).user_id,
-            "actor_auth_version": 0,
-            "authorized_role": "analyst",
-            "company_id": company.id,
-            "document_scope_sha256": document_scope_sha256(company.id, [11]),
-        },
     }
 
 
@@ -790,3 +808,135 @@ def test_tool_runtime_stops_before_call_when_task_budget_is_exhausted(
 
     assert result.error_code == "tool_budget_exhausted"
     assert db_session.query(ToolCallRecord).one().status == "denied"
+
+
+def _search(company) -> ToolInput:
+    return ToolInput(
+        parameters={"company_id": company.id, "document_ids": [11], "question": "退货"}
+    )
+
+
+def test_service_on_sends_rag_search_there_and_never_runs_it_locally(
+    db_session, monkeypatch
+) -> None:
+    server, ran = _service(db_session)
+    runtime, attempt, company = _runtime(db_session, tool_server=server)
+    _turn_service_on(monkeypatch)
+    local = _FakeRagTool()
+
+    result = runtime.execute(local, _search(company))
+
+    assert result.success, result.error_code
+    assert result.evidence == []
+    assert local.inputs == []
+    # The service's own re-check passed: the signed document scope matched.
+    assert ran == [
+        {
+            "company_id": company.id,
+            "document_ids": [11],
+            "question": "退货",
+            "_runtime_database_timeout_ms": 10_000,
+        }
+    ]
+    record = (
+        db_session.query(ToolCallRecord)
+        .filter(ToolCallRecord.execution_attempt_id == attempt.id)
+        .one()
+    )
+    assert record.status == "succeeded"
+
+
+def test_service_and_in_process_return_the_same_result(db_session, monkeypatch) -> None:
+    data = {
+        "status": "ready",
+        "retrieval_policy_id": "paragraph_jieba_rrf_rerank_v1",
+        "degraded": False,
+        "evidences": [
+            {
+                "chunk_id": 7,
+                "document_id": 11,
+                "content": "退货需要主管审批。",
+                "score": 0.8125,
+                "document_name": "退货制度",
+            }
+        ],
+    }
+    tool = _FaultyRagTool(ToolOutput(success=True, data=data))
+    # The service runs the very same tool, so only the transport differs.
+    server, _ran = _service(
+        db_session, run=lambda arguments: tool.execute(ToolInput(parameters=arguments))
+    )
+    runtime, _attempt, company = _runtime(db_session, tool_server=server)
+
+    in_process = runtime.execute(tool, _search(company))
+    _turn_service_on(monkeypatch)
+    via_service = runtime.execute(_FakeRagTool(), _search(company))
+
+    assert in_process.success and via_service.success
+    assert via_service.data == in_process.data
+    assert via_service.evidence == in_process.evidence
+    assert [call.parameters for call in tool.inputs] == [tool.inputs[0].parameters] * 2
+
+
+def test_service_down_fails_clearly_and_never_falls_back(
+    db_session, monkeypatch
+) -> None:
+    runtime, attempt, company = _runtime(
+        db_session, tool_server="http://127.0.0.1:9/mcp"
+    )
+    _turn_service_on(monkeypatch, tool_server_timeout_seconds=2.0)
+    local = _FakeRagTool()
+    started = monotonic()
+
+    result = runtime.execute(local, _search(company))
+
+    assert result.error_code == "mcp_transport_unavailable"
+    assert monotonic() - started < 5
+    assert local.inputs == []
+    record = (
+        db_session.query(ToolCallRecord)
+        .filter(ToolCallRecord.execution_attempt_id == attempt.id)
+        .one()
+    )
+    assert record.status == "failed"
+    assert record.metadata_json["error_class"] == "infra_error"
+
+
+def test_service_off_runs_the_tool_in_process(db_session) -> None:
+    # conftest turns the service off for unit tests.
+    server, ran = _service(db_session)
+    runtime, _attempt, company = _runtime(db_session, tool_server=server)
+    local = _FakeRagTool()
+
+    assert runtime.execute(local, _search(company)).success
+    assert len(local.inputs) == 1
+    assert ran == []
+
+
+def test_an_in_process_tool_never_goes_to_the_service(db_session, monkeypatch) -> None:
+    runtime, _attempt, _company = _runtime(
+        db_session, tool_server="http://127.0.0.1:9/mcp"
+    )
+    _turn_service_on(monkeypatch)
+    sql = _FakeSqlTool()
+
+    result = runtime.execute(sql, ToolInput(parameters={"sql": "SELECT 1"}))
+
+    assert result.success, result.error_code
+    assert len(sql.inputs) == 1
+
+
+def test_a_failure_on_the_service_keeps_its_own_code(db_session, monkeypatch) -> None:
+    server, _ran = _service(
+        db_session,
+        run=lambda arguments: ToolOutput(
+            success=False, error_code="rag_search_unavailable"
+        ),
+    )
+    runtime, _attempt, company = _runtime(db_session, tool_server=server)
+    _turn_service_on(monkeypatch)
+
+    result = runtime.execute(_FakeRagTool(), _search(company))
+
+    assert result.error_code == "rag_search_unavailable"
+    assert result.error == "工具执行暂时不可用。"
