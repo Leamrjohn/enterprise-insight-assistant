@@ -76,10 +76,25 @@ def check_rag_scope(
 
 @lru_cache(maxsize=1)
 def _rag_tool() -> Any:
-    # Built once per process: the embedding and rerank models load on first use.
+    # Built once per process; main() loads its models before the first call.
     from app.modules.knowledge.tool import RAGTool
 
     return RAGTool()
+
+
+def warm_up() -> None:
+    """M2b: load the embedding and rerank models before serving.
+
+    Loading takes longer than the worker's call timeout, so loading on the first
+    call would fail the first search after every restart.
+    """
+    from app.core.settings import get_settings
+    from app.modules.knowledge.rag.embeddings_local import LocalEmbeddingProvider
+    from app.modules.knowledge.rag.reranker import LocalCrossEncoderReranker
+
+    LocalEmbeddingProvider()
+    LocalCrossEncoderReranker(get_settings().reranker_model).score("预热", ["预热"])
+    _rag_tool()
 
 
 def _rag_search(arguments: dict[str, Any]) -> Any:
@@ -182,6 +197,7 @@ def main() -> None:
     from app.core.settings import get_settings
 
     key = get_settings().tool_context_signing_key.get_secret_value().encode()
+    warm_up()  # the port opens, and the health check passes, only once models load
     app = create_tool_server(signing_key=key).streamable_http_app(
         stateless_http=True, json_response=True, host="0.0.0.0"
     )
