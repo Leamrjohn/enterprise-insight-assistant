@@ -1198,3 +1198,9 @@
 - 做了什么：`authorization.documents_still_visible` 从 ToolRuntime 抽出，Worker 和服务端共用；`context.document_scope_sha256` 把公司和文档清单绑进签名；服务端 `ServiceTool(run, check)` + `check_rag_scope`（公司一致、文档清单与签名一致、文档当前可见）后才执行 RAGTool；tools 容器挂载 storage 共用模型缓存（31d49a8）。
 - 验证：服务测试 14 通过（新增 7，越权 5 种情况检索执行 0 次）；全量 2120 通过 40 跳过；pyright 0；导入分层未加例外；容器健康，真实签名被回库复核拒绝、伪造签名被拒；冒烟 m2a-deploy-r1 9 成功 + 混合题待复核（已知），$0.027；审计 rag_search 6、sql_query 4 全部成功。
 - 未验证：容器内真实检索和模型加载（Worker 尚未走服务，M2b 开开关后首次真跑）；RAGTool 在服务端按固定路线设置，重排失败不降级，M2b 接客户端时统一。
+
+## 2026-11-26 M2b 执行阶段按 transport 分发，rag_search 走工具服务（用户批准方案 A、一次提交、演练期望改为明确失败）
+- 做了什么：`ToolRuntime._run` 按登记表 transport 分发（in_process 留给简单本地工具，mcp 走服务）；`call_service` + `_service_context` 签发上下文调用服务，服务失败不回退本地；ToolConfig `tool_service_enabled` 默认开（冻结进任务快照）；rag_search 登记 transport="mcp"；退役 stdio 适配器、`_runtime_mcp_context`、FallbackTool 分支和 7 个 stdio 错误码；故障演练 fault-rag-mcp-down 期望改为 fail_clear（bcc6f28）；服务启动先加载嵌入和重排模型，健康检查宽限期 180 秒（89410b6）。
+- 验证：新增 6 个分发测试（含经服务与本地结果一致、服务停 5 秒内明确失败且本地 0 次）；全量 2113 通过 40 跳过（另 1 个 test_check_pins 失败，原因见遗留）；pyright 0；导入分层未加例外；演练 8/8；冒烟 m2b-deploy-r2 9 成功 + 混合题待复核（已知），$0.027；审计 rag_search 6、sql_query 4 全部成功，tools 收到 18 个 MCP 请求，Worker 未在本地做检索。
+- 遗留：r1 首个知识题因服务首次调用才加载模型超时失败，已由预热修复；项目目录被 Codex Windows 沙箱加了 Low 完整性标签，项目内 venv 的 Python 以 Low 运行，写不了 ~/.cache、系统临时目录、连不上 Docker，PRE_COMMIT_HOME 已改到 LocalLow，冒烟改用系统 Python 运行；模型自选路线在服务端不降级重排、绕过熔断，待 T15/T8 和 T6。
+- 待办：tool_guard.FallbackTool 已无业务调用方（只剩自身测试），T6 决定去留；test_worker_terminal_result 等 9 个测试受本地配置里 CONVERSATION_*_MODE 影响，测试应固定这些开关。
