@@ -5,7 +5,6 @@ import re
 from typing import LiteralString, TypedDict, cast
 
 import psycopg
-from app.core.settings import get_settings
 from app.modules.analysis.catalog.snapshot_catalog import SnapshotCatalog
 from app.modules.analysis.data.sql_validator import _parse_single_select, validate_sql
 from app.modules.organizations.connections import (
@@ -58,16 +57,21 @@ def execute_registered_readonly_query(
     sql: str,
     parameters: dict,
     *,
+    data_source: BusinessDataSource | None,
     timeout_ms: int = 10000,
 ):
-    """执行代码仓库中登记的参数化只读查询，不接受外部 SQL。"""
-    settings = get_settings()
+    """执行代码仓库中登记的参数化只读查询，不接受外部 SQL。
+
+    M3: like execute_readonly_sql, only the company's own source; never the
+    platform's default business database (A11b).
+    """
+    connection = _connection_details(data_source)
     conn = psycopg.connect(
-        host=settings.business_database_host,
-        port=settings.business_database_port,
-        dbname=settings.business_database_name,
-        user=settings.business_database_user,
-        password=settings.business_database_password.get_secret_value(),
+        host=connection["host"],
+        port=connection["port"],
+        dbname=connection["dbname"],
+        user=connection["user"],
+        password=connection["password"],
         options="-c default_transaction_read_only=on",
     )
     cur = conn.cursor()

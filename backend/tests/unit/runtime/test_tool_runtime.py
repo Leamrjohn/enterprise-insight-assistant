@@ -1,26 +1,42 @@
 from contextlib import nullcontext
+from dataclasses import replace
 from datetime import date, datetime, timedelta, timezone
+from decimal import Decimal
 from time import monotonic
 
 import pytest
 from app.core.settings import get_settings
 from app.db.session import set_tenant_scope
+from app.modules.analysis.catalog.snapshot_catalog import SnapshotCatalog
+from app.modules.analysis.data.sql_tool import SQLTool
 from app.modules.analysis.tool_protocol import Tool, ToolInput, ToolOutput
 from app.modules.documents.models import Documents
 from app.modules.evaluation.observation import observation_from_runtime_tool_rejection
 from app.modules.identity.models import User
-from app.modules.organizations.models import Company, CompanyMember
+from app.modules.organizations.models import (
+    BusinessDataSource,
+    Company,
+    CompanyMember,
+    SchemaSnapshot,
+)
 from app.modules.runtime import tool_runtime
 from app.modules.runtime.model_governance import (
     ModelBudgetExceeded,
     ModelCallCancelled,
 )
 from app.modules.runtime.tool_runtime import ToolRuntime, ToolRuntimeContext
+from app.modules.runtime.tools import catalog
+from app.modules.runtime.tools.registry import ToolRegistry
 from app.modules.workflow.audit.events_models import WorkflowEvent
 from app.modules.workflow.audit.tool_call import ToolCallRecord
 from app.modules.workflow.lifecycle.execution_attempt import TaskExecutionAttempt
 from app.modules.workflow.models import AnalysisTask
-from app.tool_service.server import ServiceTool, check_rag_scope, create_tool_server
+from app.tool_service.server import (
+    ServiceTool,
+    check_rag_scope,
+    create_tool_server,
+    prepare_sql_query,
+)
 
 
 class _FakeRagTool(Tool):
@@ -914,6 +930,13 @@ def test_service_off_runs_the_tool_in_process(db_session) -> None:
 
 
 def test_an_in_process_tool_never_goes_to_the_service(db_session, monkeypatch) -> None:
+    # Since M3 every runtime tool is "mcp"; a small local tool would be in_process.
+    local_sql = [
+        replace(d, transport="in_process") if d.name == "sql_query" else d
+        for d in catalog.TOOLS
+    ]
+    registry = ToolRegistry(local_sql)
+    monkeypatch.setattr(tool_runtime, "default_registry", lambda: registry)
     runtime, _attempt, _company = _runtime(
         db_session, tool_server="http://127.0.0.1:9/mcp"
     )
@@ -940,3 +963,93 @@ def test_a_failure_on_the_service_keeps_its_own_code(db_session, monkeypatch) ->
 
     assert result.error_code == "rag_search_unavailable"
     assert result.error == "工具执行暂时不可用。"
+
+
+def _with_data_source(db_session, attempt, company):
+    """Give the task the frozen company data source the service will resolve."""
+    task = db_session.get(AnalysisTask, attempt.task_id)
+    source = BusinessDataSource(
+        company_id=company.id,
+        name="runtime-business",
+        connection_config={"host": "db", "database": "business", "user": "readonly"},
+        credential_env_var="BUSINESS_DATABASE_PASSWORD",
+    )
+    db_session.add(source)
+    db_session.flush()
+    snapshot = SchemaSnapshot(
+        data_source_id=source.id,
+        fingerprint="r" * 64,
+        catalog={"tables": {"sales_orders": [{"name": "region"}]}},
+        discovered_by_user_id=task.user_id,
+    )
+    db_session.add(snapshot)
+    db_session.flush()
+    task.data_source_id, task.schema_snapshot_id = source.id, snapshot.id
+    db_session.commit()
+    return source, snapshot
+
+
+def _sql_service(db_session):
+    return create_tool_server(
+        signing_key=get_settings().tool_context_signing_key.get_secret_value().encode(),
+        session_factory=lambda: nullcontext(db_session),
+        tools={"sql_query": ServiceTool(prepare=prepare_sql_query)},
+    )
+
+
+# What the driver hands SQLTool: tuples of Decimal and date values.
+SQL_ROWS = (
+    ["region", "revenue", "day"],
+    [("华东", Decimal("12.50"), date(2025, 8, 1)), ("华南", Decimal("0.10"), None)],
+)
+
+
+def test_sql_on_the_service_returns_exactly_what_sql_tool_returns(
+    db_session, monkeypatch
+) -> None:
+    monkeypatch.setattr(
+        "app.modules.analysis.data.sql_tool.execute_readonly_sql",
+        lambda sql, allowed_tables, **kwargs: SQL_ROWS,
+    )
+    runtime, attempt, company = _runtime(
+        db_session, tool_server=_sql_service(db_session)
+    )
+    source, snapshot = _with_data_source(db_session, attempt, company)
+    query = ToolInput(parameters={"sql": "SELECT region FROM sales_orders"})
+    local = SQLTool(
+        data_source=source,
+        snapshot_catalog=SnapshotCatalog.from_snapshot(snapshot.catalog),
+    )
+
+    in_process = runtime.execute(local, query)
+    _turn_service_on(monkeypatch)
+    via_service = runtime.execute(_FakeSqlTool(), query)
+
+    assert in_process.success and via_service.success, via_service.error_code
+    assert via_service.data == in_process.data
+    assert via_service.evidence == in_process.evidence
+    assert type(via_service.data["rows"][0][1]) is Decimal
+
+
+def test_a_sql_repair_hint_survives_the_service(db_session, monkeypatch) -> None:
+    def refuse(sql, allowed_tables, **kwargs):
+        raise ValueError("字段不存在：profit")
+
+    monkeypatch.setattr(
+        "app.modules.analysis.data.sql_tool.execute_readonly_sql", refuse
+    )
+    runtime, attempt, company = _runtime(
+        db_session, tool_server=_sql_service(db_session)
+    )
+    _with_data_source(db_session, attempt, company)
+    _turn_service_on(monkeypatch)
+
+    result = runtime.execute(
+        _FakeSqlTool(), ToolInput(parameters={"sql": "SELECT profit FROM sales_orders"})
+    )
+
+    assert (result.error_code, result.error, result.repairable) == (
+        "sql_validation_error",
+        "字段不存在：profit",
+        True,
+    )

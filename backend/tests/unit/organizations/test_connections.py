@@ -191,16 +191,25 @@ def test_sql_tool_reports_a_refused_connection_as_not_repairable(monkeypatch):
     assert "another company" not in (output.error or "")
 
 
-def test_template_query_tool_is_not_wired_into_the_main_chain():
-    # It reads the platform's default business credentials, so it must stay
-    # unreachable until it resolves a company connection (A11b conclusion).
+def test_template_query_only_runs_on_a_company_connection():
+    # A11b: the template path once read the platform's default business
+    # credentials.  Since M3 it resolves the company connection like SQLTool, and
+    # only the tool service builds it, always with the task's own data source.
+    import ast
     from pathlib import Path
 
     app_root = Path(__file__).resolve().parents[3] / "app"
-    users = [
-        path
-        for path in app_root.rglob("*.py")
-        if "TemplateQueryTool(" in path.read_text(encoding="utf-8")
-        and path.name != "template_query.py"
-    ]
-    assert users == []
+    executor = (app_root / "modules/analysis/data/sql_executor.py").read_text(
+        encoding="utf-8"
+    )
+    assert "business_database_" not in executor
+    builders = {}
+    for path in app_root.rglob("*.py"):
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if isinstance(node, ast.Call) and getattr(node.func, "id", "") == (
+                "TemplateQueryTool"
+            ):
+                builders[path.relative_to(app_root).as_posix()] = [
+                    keyword.arg for keyword in node.keywords
+                ]
+    assert builders == {"tool_service/server.py": ["data_source"]}

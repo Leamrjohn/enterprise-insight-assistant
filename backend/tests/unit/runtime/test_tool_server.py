@@ -1,13 +1,19 @@
 import time
 from contextlib import nullcontext
 from dataclasses import replace
+from decimal import Decimal
 
 import pytest
 from app.db.session import set_tenant_scope
 from app.modules.analysis.tool_protocol import ToolOutput
 from app.modules.documents.models import Documents
 from app.modules.identity.models import User
-from app.modules.organizations.models import Company, CompanyMember
+from app.modules.organizations.models import (
+    BusinessDataSource,
+    Company,
+    CompanyMember,
+    SchemaSnapshot,
+)
 from app.modules.runtime.tools.context import (
     RuntimeContext,
     document_scope_sha256,
@@ -15,7 +21,13 @@ from app.modules.runtime.tools.context import (
 )
 from app.modules.runtime.tools.mcp_client import call_tool
 from app.modules.workflow.models import AnalysisTask
-from app.tool_service.server import ServiceTool, check_rag_scope, create_tool_server
+from app.tool_service.server import (
+    ServiceTool,
+    check_rag_scope,
+    create_tool_server,
+    prepare_sql_query,
+    prepare_template_query,
+)
 
 KEY = b"worker-and-tool-service-share-this"
 NOW = 1_800_000_000
@@ -308,3 +320,174 @@ def test_a_tool_failure_comes_back_with_its_own_code(db_session, seeded, documen
     result = _search(server, seeded, [documents["visible"]])
 
     assert result.error_code == "rag_search_unavailable"
+
+
+CATALOG = {"tables": {"sales_orders": [{"name": "region"}, {"name": "revenue"}]}}
+
+
+@pytest.fixture
+def data_context(db_session, seeded):
+    """The task's own data source and schema snapshot, plus another company's."""
+    sources = {}
+    for key, company in (("own", seeded["company"]), ("other", seeded["other"])):
+        set_tenant_scope(db_session, company.id)
+        source = BusinessDataSource(
+            company_id=company.id,
+            name=f"business-{key}",
+            connection_config={"host": "db", "database": key, "user": "readonly"},
+            credential_env_var="BUSINESS_DATABASE_PASSWORD",
+        )
+        db_session.add(source)
+        db_session.flush()
+        snapshot = SchemaSnapshot(
+            data_source_id=source.id,
+            fingerprint=key[0] * 64,
+            catalog=CATALOG,
+            discovered_by_user_id=seeded["user"].id,
+        )
+        db_session.add(snapshot)
+        db_session.flush()
+        sources[key] = (source, snapshot)
+    set_tenant_scope(db_session, seeded["company"].id)
+    task = seeded["task"]
+    task.data_source_id, task.schema_snapshot_id = (
+        sources["own"][0].id,
+        sources["own"][1].id,
+    )
+    db_session.flush()
+    return sources
+
+
+@pytest.fixture
+def sql_runs(monkeypatch):
+    """Every statement that reached the executor, with the source it ran on."""
+    runs = []
+
+    def execute(sql, allowed_tables, **kwargs):
+        runs.append({"sql": sql, "data_source": kwargs["data_source"]})
+        return ["region", "revenue"], [("华东", Decimal("12.50"))]
+
+    monkeypatch.setattr(
+        "app.modules.analysis.data.sql_tool.execute_readonly_sql", execute
+    )
+    return runs
+
+
+@pytest.fixture
+def sql_server(db_session):
+    return create_tool_server(
+        signing_key=KEY,
+        session_factory=lambda: nullcontext(db_session),
+        clock=lambda: NOW,
+        tools={
+            "sql_query": ServiceTool(prepare=prepare_sql_query),
+            "template_query": ServiceTool(prepare=prepare_template_query),
+        },
+    )
+
+
+def _query(server, seeded, arguments, *, name="sql_query"):
+    return call_tool(
+        server, name, arguments, _context(seeded), key=KEY, timeout_seconds=5
+    )
+
+
+def test_sql_runs_on_the_tasks_own_data_source(
+    sql_server, seeded, data_context, sql_runs
+):
+    result = _query(sql_server, seeded, {"sql": "SELECT region FROM sales_orders"})
+
+    assert result.success, result.error_code
+    assert [run["data_source"].id for run in sql_runs] == [data_context["own"][0].id]
+
+
+def test_arguments_cannot_choose_another_data_source(
+    sql_server, seeded, data_context, sql_runs
+):
+    other_source = data_context["other"][0]
+
+    _query(
+        sql_server,
+        seeded,
+        {"sql": "SELECT region FROM sales_orders", "data_source_id": other_source.id},
+    )
+
+    assert [run["data_source"].id for run in sql_runs] == [data_context["own"][0].id]
+
+
+def test_a_task_without_a_data_source_never_runs_sql(
+    db_session, sql_server, seeded, sql_runs
+):
+    result = _query(sql_server, seeded, {"sql": "SELECT region FROM sales_orders"})
+
+    assert result.error_code == "data_source_not_allowed"
+    assert sql_runs == []
+
+
+def test_a_snapshot_of_another_source_never_runs_sql(
+    db_session, sql_server, seeded, data_context, sql_runs
+):
+    seeded["task"].schema_snapshot_id = data_context["other"][1].id
+    db_session.flush()
+
+    result = _query(sql_server, seeded, {"sql": "SELECT region FROM sales_orders"})
+
+    assert result.error_code == "data_source_not_allowed"
+    assert sql_runs == []
+
+
+def test_the_service_validates_sql_before_connecting(sql_server, seeded, data_context):
+    # The real executor: validation fails before any connection is attempted.
+    result = _query(sql_server, seeded, {"sql": "DELETE FROM sales_orders"})
+
+    assert result.error_code == "sql_validation_error"
+    assert result.repairable is True
+    assert result.error
+
+
+def test_a_sql_failure_brings_back_what_a_repair_needs(
+    monkeypatch, sql_server, seeded, data_context
+):
+    def refuse(sql, allowed_tables, **kwargs):
+        raise ValueError("字段不存在：profit")
+
+    monkeypatch.setattr(
+        "app.modules.analysis.data.sql_tool.execute_readonly_sql", refuse
+    )
+
+    result = _query(sql_server, seeded, {"sql": "SELECT profit FROM sales_orders"})
+
+    assert (result.error_code, result.error, result.repairable) == (
+        "sql_validation_error",
+        "字段不存在：profit",
+        True,
+    )
+
+
+def test_template_query_runs_on_the_tasks_own_data_source(
+    monkeypatch, sql_server, seeded, data_context
+):
+    runs = []
+
+    def execute(sql, parameters, *, data_source, **kwargs):
+        runs.append(data_source)
+        return ["region_code"], [("EAST",)]
+
+    monkeypatch.setattr(
+        "app.modules.analysis.data.template_query.execute_registered_readonly_query",
+        execute,
+    )
+
+    result = _query(
+        sql_server,
+        seeded,
+        {
+            "query_id": "regional_revenue_comparison",
+            "current_month": "2025-08-01",
+            "comparison_month": "2025-07-01",
+        },
+        name="template_query",
+    )
+
+    assert result.success, result.error_code
+    assert [source.id for source in runs] == [data_context["own"][0].id]
