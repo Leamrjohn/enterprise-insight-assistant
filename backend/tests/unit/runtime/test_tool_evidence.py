@@ -6,6 +6,7 @@ import pytest
 from app.modules.analysis.tool_protocol import ToolOutput
 from app.modules.runtime.tool_runtime import ToolRuntime
 from app.modules.runtime.tools import catalog
+from app.modules.runtime.tools.definition import ModelText
 from app.modules.runtime.tools.errors import ErrorClass, classify
 from app.modules.runtime.tools.evidence import Evidence
 from app.modules.runtime.tools.registry import validate_definitions
@@ -160,6 +161,10 @@ def test_a_capability_backed_by_a_runtime_tool_is_valid():
         backed_by="sql_query",
         output_model=None,
         to_evidence=None,
+        # T3b-2: a model-facing tool must also say what the model reads.
+        model_text=ModelText(
+            purpose="p", when_to_use="w", when_not_to_use="n", example={}
+        ),
     )
 
     assert validate_definitions((SQL, run_sql)) == []

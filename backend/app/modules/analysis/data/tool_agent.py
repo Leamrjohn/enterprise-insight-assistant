@@ -58,6 +58,8 @@ from app.modules.runtime.tool_loop import (
     ToolSpec,
     run_tool_loop,
 )
+from app.modules.runtime.tools.catalog import ANALYSIS_ROLES
+from app.modules.runtime.tools.definition import ModelText, ToolDefinition
 from pydantic import BaseModel, ConfigDict, Field
 
 MAX_ROWS_SHOWN = 5
@@ -94,57 +96,76 @@ _CONTRACT_EXAMPLE = {
     "metric_definition_ref": "<上面列出的指标引用>",
     "time_scope_column": "sales_orders.order_date",
 }
-DATA_TOOL_SPECS = [
-    ToolSpec(
+DATA_TOOLS: tuple[ToolDefinition, ...] = (
+    ToolDefinition(
         name="describe_table",
-        version="describe_table/v1",
-        purpose="查看业务表的字段、允许的关联和允许的筛选值。不查询任何数据。",
-        when_to_use="写 SQL 前还不知道某张表的字段或筛选值时。",
-        when_not_to_use="提示里已列出该表字段时，不要重复查看。",
-        example={"tables": ["sales_orders", "customers"]},
-        common_errors=("表名不在可用表列表中",),
+        contract_version="describe_table/v1",
         input_model=DescribeTableArgs,
-    ),
-    ToolSpec(
-        name="run_sql",
-        version="run_sql/v1",
-        purpose="提交一条只读 SELECT 查询。代码会先校验再执行，公司范围由系统决定。",
-        when_to_use="已知道所需的表和字段，可以回答问题时。",
-        when_not_to_use="资料类问题，或可用表确实没有所需数据时。",
-        example={
-            "sql": 'SELECT SUM(o.total_amount) AS "销售额" FROM sales_orders o',
-            "purpose": "统计销售额",
-            "query_contract": _CONTRACT_EXAMPLE,
-        },
-        common_errors=(
-            "日期写成 '2025-08'，应写完整日期",
-            "用了未列出的字段",
-            "结果列没有用中文别名",
-            "没有满足指标的固定筛选",
+        allowed_roles=ANALYSIS_ROLES,
+        kind="capability",  # reads the task's schema snapshot; no tool runs
+        model_text=ModelText(
+            purpose="查看业务表的字段、允许的关联和允许的筛选值。不查询任何数据。",
+            when_to_use="写 SQL 前还不知道某张表的字段或筛选值时。",
+            when_not_to_use="提示里已列出该表字段时，不要重复查看。",
+            example={"tables": ["sales_orders", "customers"]},
+            common_errors=("表名不在可用表列表中",),
         ),
+    ),
+    ToolDefinition(
+        name="run_sql",
+        contract_version="run_sql/v1",
         input_model=RunSqlArgs,
+        allowed_roles=ANALYSIS_ROLES,
+        kind="capability",
+        backed_by="sql_query",
+        model_text=ModelText(
+            purpose="提交一条只读 SELECT 查询。代码会先校验再执行，公司范围由系统决定。",
+            when_to_use="已知道所需的表和字段，可以回答问题时。",
+            when_not_to_use="资料类问题，或可用表确实没有所需数据时。",
+            example={
+                "sql": 'SELECT SUM(o.total_amount) AS "销售额" FROM sales_orders o',
+                "purpose": "统计销售额",
+                "query_contract": _CONTRACT_EXAMPLE,
+            },
+            common_errors=(
+                "日期写成 '2025-08'，应写完整日期",
+                "用了未列出的字段",
+                "结果列没有用中文别名",
+                "没有满足指标的固定筛选",
+            ),
+        ),
     ),
-    ToolSpec(
+    ToolDefinition(
         name="submit_result",
-        version="submit_result/v1",
-        purpose="确认用哪一条查询结果回答问题，结束查询。",
-        when_to_use="run_sql 返回了结果，并且你判断它能回答问题时。",
-        when_not_to_use="结果不符合问题时，应修改查询。",
-        example={"evidence_id": "E1"},
-        common_errors=("证据编号不存在",),
+        contract_version="submit_result/v1",
         input_model=SubmitResultArgs,
+        allowed_roles=ANALYSIS_ROLES,
+        kind="control",
+        model_text=ModelText(
+            purpose="确认用哪一条查询结果回答问题，结束查询。",
+            when_to_use="run_sql 返回了结果，并且你判断它能回答问题时。",
+            when_not_to_use="结果不符合问题时，应修改查询。",
+            example={"evidence_id": "E1"},
+            common_errors=("证据编号不存在",),
+        ),
     ),
-    ToolSpec(
+    ToolDefinition(
         name="report_insufficient",
-        version="report_insufficient/v1",
-        purpose="说明可用的表无法回答这个问题，结束查询。",
-        when_to_use="查看表结构后确认缺少所需数据时。",
-        when_not_to_use="只是一次查询失败时，应先根据错误原因修改。",
-        example={"reason": "没有记录客户满意度的表", "missing": ["客户满意度"]},
-        common_errors=("没有查看表结构就下结论",),
+        contract_version="report_insufficient/v1",
         input_model=ReportInsufficientArgs,
+        allowed_roles=ANALYSIS_ROLES,
+        kind="control",
+        model_text=ModelText(
+            purpose="说明可用的表无法回答这个问题，结束查询。",
+            when_to_use="查看表结构后确认缺少所需数据时。",
+            when_not_to_use="只是一次查询失败时，应先根据错误原因修改。",
+            example={"reason": "没有记录客户满意度的表", "missing": ["客户满意度"]},
+            common_errors=("没有查看表结构就下结论",),
+        ),
     ),
-]
+)
+# T3b-2: the model reads exactly what the definitions above declare.
+DATA_TOOL_SPECS = [ToolSpec.from_definition(definition) for definition in DATA_TOOLS]
 
 
 def summarize_rows(
