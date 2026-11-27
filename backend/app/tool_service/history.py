@@ -169,7 +169,7 @@ def report_export(
             repairable=True,
             model_feedback="没有这份可读报告；任务编号请用 report_search 的 task_id 或 memory_search 的 source_task_id。",
         )
-    text = _render(task.result_data["report"])
+    text = _render((task.result_data or {})["report"])  # readable means a report
     return {
         "task_id": task.id,
         "question": task.question,
