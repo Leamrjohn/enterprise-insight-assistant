@@ -1216,3 +1216,8 @@
 - 验证：`git diff d757872..HEAD` 在 analysis/knowledge/nodes 零改动；新增 39 个测试；全量 2171 通过 40 跳过；导入分层未加例外；冒烟 t11a-2026-11-27 9 成功 + 混合题待复核（已知），$0.027；工具说明每轮数据节点 +约 670、知识节点 +约 400 token（cl100k 估算）。
 - 遗留：运行配置 model_tool_mode=off，冒烟走固定路线，真实模型是否会用新工具未验证；doc_read 正文不能作为证据引用；metric_lookup 与提示词里的指标行重复较多。
 - 待办：test_node_toolsets 的假工具留在 tool_catalog 缓存里，换测试顺序会让 test_tool_specs 失败；`business_database_*` 配置待删；worker 入库的嵌入模型可并入工具服务。
+
+## 2026-11-27 修 SQL 校验 CTE 作用域绕过（全仓审查第 1 条，用户批准改 SQL 校验逻辑）
+- 做了什么：`_validate_tables` 原先把整条语句所有 CTE 名收集在一起跳过检查，子查询里的 CTE 能让外层同名真实表绕过快照检查；改为只认包住该表的各层查询定义的 CTE（`_visible_cte_names`）。
+- 验证：先写失败测试复现（嵌套 WITH 同名表“未抛出”），修复后 SQL 校验 13 通过；全量 2173 通过 40 跳过。
+- 遗留：经营库只读账号有 public 下全部表的 SELECT 权限，第二道防线不限表；可考虑按快照只授权已登记的表。
