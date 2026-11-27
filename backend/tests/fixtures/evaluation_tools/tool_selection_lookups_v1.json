@@ -1,0 +1,28 @@
+{
+  "version": "tool-selection-lookups-v1",
+  "status": "draft_pending_user_review",
+  "note": "T11b：节点模型第一轮会调用哪些工具。每题给出节点、问题和可接受的第一轮工具集合（acceptable 里每一项都算对）。数据节点给完整 schema 表名；知识节点模拟系统首轮检索没有找到资料。只看第一轮，不执行工具。",
+  "cases": [
+    {"case_id": "data-recent-month", "split": "baseline", "node": "data", "question": "最近一个月华东区销售额是多少", "acceptable": [["data_freshness"], ["data_freshness", "dimension_list"], ["data_freshness", "metric_lookup"]]},
+    {"case_id": "data-year-to-date", "split": "baseline", "node": "data", "question": "今年以来的费用金额合计是多少", "acceptable": [["data_freshness"], ["data_freshness", "metric_lookup"]]},
+    {"case_id": "data-recent-tickets", "split": "baseline", "node": "data", "question": "近三个月客诉数量的变化趋势", "acceptable": [["data_freshness"], ["data_freshness", "metric_lookup"]]},
+    {"case_id": "data-latest-date", "split": "baseline", "node": "data", "question": "经营数据最新更新到哪一天", "acceptable": [["data_freshness"]]},
+    {"case_id": "data-severity-values", "split": "baseline", "node": "data", "question": "售后工单的严重程度分哪几档", "acceptable": [["dimension_list"]]},
+    {"case_id": "data-tier-values", "split": "baseline", "node": "data", "question": "客户等级有哪几种，库里怎么写", "acceptable": [["dimension_list"]]},
+    {"case_id": "data-gross-profit-definition", "split": "baseline", "node": "data", "question": "毛利这个指标的口径是什么，保留几位小数", "acceptable": [["metric_lookup"]]},
+    {"case_id": "data-target-unit", "split": "baseline", "node": "data", "question": "收入目标的单位和时间列是什么", "acceptable": [["metric_lookup"]]},
+    {"case_id": "data-explicit-month", "split": "baseline", "node": "data", "question": "2025年8月已交付订单的销售额是多少", "acceptable": [["run_sql"], ["describe_table"], ["metric_lookup"]]},
+    {"case_id": "data-explicit-region-expense", "split": "baseline", "node": "data", "question": "2025年7月各费用类别的费用金额", "acceptable": [["run_sql"], ["describe_table"]]},
+    {"case_id": "knowledge-version-diff", "split": "baseline", "node": "knowledge", "question": "退货制度新旧两个版本有什么不同", "acceptable": [["doc_list"]]},
+    {"case_id": "knowledge-which-documents", "split": "baseline", "node": "knowledge", "question": "公司有哪些文档可以参考", "acceptable": [["doc_list"]]},
+    {"case_id": "knowledge-version-change", "split": "baseline", "node": "knowledge", "question": "报销审批是从哪个版本开始改成两级审批的", "acceptable": [["doc_list"], ["search_documents"]]},
+    {"case_id": "knowledge-past-cause", "split": "baseline", "node": "knowledge", "question": "我们以前分析过华东销售额下降的原因吗", "acceptable": [["memory_search"], ["report_search"], ["memory_search", "report_search"]]},
+    {"case_id": "knowledge-past-report", "split": "baseline", "node": "knowledge", "question": "上次那份应收风险分析报告的结论是什么", "acceptable": [["memory_search"], ["report_search"], ["memory_search", "report_search"]]},
+    {"case_id": "knowledge-past-factors", "split": "baseline", "node": "knowledge", "question": "之前得出的毛利下降的两个因素是什么", "acceptable": [["memory_search"], ["report_search"], ["memory_search", "report_search"]]},
+    {"case_id": "knowledge-colleague-report", "split": "baseline", "node": "knowledge", "question": "公司里有没有人分析过西部应收账款的风险", "acceptable": [["report_search"]]},
+    {"case_id": "knowledge-bad-debt", "split": "baseline", "node": "knowledge", "question": "坏账准备的计提比例是多少", "acceptable": [["search_documents"], ["doc_list"]]},
+    {"case_id": "knowledge-quality-process", "split": "baseline", "node": "knowledge", "question": "质量问题批次的处理流程是什么", "acceptable": [["search_documents"], ["doc_list"]]},
+    {"case_id": "knowledge-inventory-turnover", "split": "baseline", "node": "knowledge", "question": "库存周转天数按什么方法计算", "acceptable": [["search_documents"], ["doc_list"]]},
+    {"case_id": "knowledge-weather", "split": "baseline", "node": "knowledge", "question": "明天上海的天气怎么样", "acceptable": [["report_no_evidence"]]}
+  ]
+}

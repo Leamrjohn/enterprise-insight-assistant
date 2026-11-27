@@ -1216,3 +1216,9 @@
 - 验证：`git diff d757872..HEAD` 在 analysis/knowledge/nodes 零改动；新增 39 个测试；全量 2171 通过 40 跳过；导入分层未加例外；冒烟 t11a-2026-11-27 9 成功 + 混合题待复核（已知），$0.027；工具说明每轮数据节点 +约 670、知识节点 +约 400 token（cl100k 估算）。
 - 遗留：运行配置 model_tool_mode=off，冒烟走固定路线，真实模型是否会用新工具未验证；doc_read 正文不能作为证据引用；metric_lookup 与提示词里的指标行重复较多。
 - 待办：test_node_toolsets 的假工具留在 tool_catalog 缓存里，换测试顺序会让 test_tool_specs 失败；`business_database_*` 配置待删；worker 入库的嵌入模型可并入工具服务。
+
+## 2026-11-27 T11b 只读工具第二批（用户定：两个历史工具进规划节点清单、报告引用文档当前全部可见才可读、附件报告仅作者可读、加 report_search、批准超 10 文件和改清单期望）
+- 做了什么：doc_version_diff（同版本组两份可读文档逐行差异）、memory_search（复用 select_planner_memories，只查本人、不计使用）、report_search + report_export（本公司已完成报告，按关键词找、按编号读，都过 report_readable；report_readable 前两项用户写）；ServiceTool read 方式复用；知识节点 9 个工具，规划节点登记 3 个（4d58ccc、d83c4fc）。
+- 验证：全量 2189 通过 40 跳过；导入分层未加例外；analysis/knowledge/nodes 零改动；选择准确率基线（node_lookup，21 题，真实模型一轮 $0.015）16/21=76.2%，数据 8/10、知识 8/11；5 题未对：3 题多调用了一个工具但包含正确工具，2 题选错（天气题没有直接结束、“今年以来”没先查数据范围）；录音在 artifacts/evaluation-20261127-node-lookup。
+- 遗留：工具总数 12（计划 11，缺找报告入口）；规划节点没有工具循环，登记的 3 个工具暂不可用；记忆只按用户隔离，来源文档权限收回后记忆仍可见（R4 M6）；冒烟未跑（工具服务代码变了）。
+- 待办：给规划节点加工具循环（改主链，单独工单，用户希望后期不再定死代码取记忆）；选择准确率只跑 1 轮，无方差。

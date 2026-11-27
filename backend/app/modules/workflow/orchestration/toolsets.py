@@ -32,7 +32,17 @@ from app.modules.workflow.orchestration.state import WorkflowState
 
 NODE_TOOLSETS: Mapping[str, tuple[str, ...]] = {
     "data": ("sql_query", "metric_lookup", "dimension_list", "data_freshness"),
-    "knowledge": ("rag_search", "doc_list", "doc_read"),
+    "knowledge": (
+        "rag_search",
+        "doc_list",
+        "doc_read",
+        "doc_version_diff",
+        "memory_search",
+        "report_search",
+        "report_export",
+    ),
+    # T11b: listed now; the planner's model can call them once it has a tool loop.
+    "planner": ("memory_search", "report_search", "report_export"),
 }
 
 # None: the tool cannot run for this task, so the node's model is not offered it.
@@ -125,6 +135,10 @@ TOOL_FACTORIES: Mapping[str, ToolFactory] = {
     "data_freshness": _service_only("data_freshness"),
     "doc_list": _service_only("doc_list"),
     "doc_read": _service_only("doc_read"),
+    "doc_version_diff": _service_only("doc_version_diff"),
+    "memory_search": _service_only("memory_search"),
+    "report_search": _service_only("report_search"),
+    "report_export": _service_only("report_export"),
 }
 
 
