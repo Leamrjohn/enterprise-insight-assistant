@@ -10,6 +10,7 @@ from app.modules.runtime.schemas import (
     MetricLookupInputSchema,
     RAGSearchInputSchema,
     ReportExportInputSchema,
+    ReportSearchInputSchema,
     SQLQueryInputSchema,
     TemplateQueryInputSchema,
 )
@@ -24,6 +25,7 @@ from app.modules.runtime.tools.evidence import (
     MetricLookupOutput,
     RAGSearchOutput,
     ReportExportOutput,
+    ReportSearchOutput,
     SQLQueryOutput,
     TemplateQueryOutput,
     lookup_evidence,
@@ -178,6 +180,22 @@ TOOLS: tuple[ToolDefinition, ...] = (
         ),
     ),
     ToolDefinition(
+        name="report_search",
+        contract_version="report_search/v1",
+        input_model=ReportSearchInputSchema,
+        allowed_roles=ANALYSIS_ROLES,
+        transport="mcp",
+        output_model=ReportSearchOutput,
+        to_evidence=lookup_evidence,
+        model_text=ModelText(
+            purpose="按关键词找本公司已完成、你有权限读的报告，最多 5 条：任务编号、问题、摘要首句。",
+            when_to_use="想看公司里以前有没有人分析过类似问题时。",
+            when_not_to_use="只找自己以前的结论时，用 memory_search。",
+            example={"query": "应收 风险"},
+            common_errors=("把整段问题原样作为关键词",),
+        ),
+    ),
+    ToolDefinition(
         name="report_export",
         contract_version="report_export/v1",
         input_model=ReportExportInputSchema,
@@ -187,7 +205,7 @@ TOOLS: tuple[ToolDefinition, ...] = (
         to_evidence=lookup_evidence,
         model_text=ModelText(
             purpose="按任务编号读本公司一份已完成报告的正文：摘要、事实、假设、建议、限制。",
-            when_to_use="memory_search 找到相关结论，需要看那份报告的上下文时。",
+            when_to_use="report_search 或 memory_search 给出任务编号，需要看那份报告的全文时。",
             when_not_to_use="不要用旧报告的数字代替这次查询。",
             example={"task_id": 1248},
             common_errors=("编造任务编号",),

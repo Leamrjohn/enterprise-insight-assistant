@@ -47,6 +47,7 @@ def test_every_model_facing_tool_is_in_the_one_registry():
         "doc_read": "runtime",
         "doc_version_diff": "runtime",
         "memory_search": "runtime",
+        "report_search": "runtime",
         "report_export": "runtime",
         "describe_table": "capability",
         "run_sql": "capability",

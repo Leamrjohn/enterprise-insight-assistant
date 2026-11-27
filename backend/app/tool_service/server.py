@@ -192,6 +192,7 @@ DEFAULT_TOOLS: Mapping[str, ToolHandler | ServiceTool] = {
     "doc_read": ServiceTool(read=documents.doc_read),
     "doc_version_diff": ServiceTool(read=documents.doc_version_diff),
     "memory_search": ServiceTool(read=history.memory_search),
+    "report_search": ServiceTool(read=history.report_search),
     "report_export": ServiceTool(read=history.report_export),
 }
 

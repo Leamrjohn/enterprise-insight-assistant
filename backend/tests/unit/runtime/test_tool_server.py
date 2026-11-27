@@ -838,16 +838,25 @@ def test_memory_search_finds_only_the_callers_own_conclusions(
 # --- T11b: report_export reads a finished report only if all it drew on is readable
 
 
-def _report_task(db_session, seeded, *, user, cited, status="completed"):
+def _report_task(
+    db_session,
+    seeded,
+    *,
+    user,
+    cited,
+    status="completed",
+    question="八月华东销售额为何下降",
+    summary="华东销售额下降 12%。",
+):
     task = AnalysisTask(
         user_id=user.id,
         company_id=seeded["company"].id,
-        question="八月华东销售额为何下降",
+        question=question,
         status=status,
         stage="completed",
         result_data={
             "report": {
-                "executive_summary": "华东销售额下降 12%。",
+                "executive_summary": summary,
                 "confirmed_facts": [{"statement": "八月华东销售额 120 万元。"}],
                 "recommendations": [{"action": "复核华东大客户订单。"}],
                 "document_citations": [
@@ -999,3 +1008,40 @@ def test_report_export_returns_the_text_or_one_answer_for_every_refusal(
     assert {(r.error_code, r.error) for r in refusals} == {
         ("tool_arguments_invalid", "没有这份可读报告。")
     }
+
+
+def test_report_search_finds_readable_reports_by_their_words(
+    db_session, seeded, documents, colleague
+):
+    readable = _report_task(
+        db_session, seeded, user=colleague, cited=[documents["visible"]]
+    )
+    _report_task(  # same words, but cites a document above the caller's role
+        db_session, seeded, user=colleague, cited=[documents["admin_only"]]
+    )
+    _report_task(  # readable, but about something else
+        db_session,
+        seeded,
+        user=colleague,
+        cited=[documents["visible"]],
+        question="西部应收账款风险",
+        summary="西部应收逾期增加。",
+    )
+    server = create_tool_server(
+        signing_key=KEY,
+        session_factory=lambda: nullcontext(db_session),
+        clock=lambda: NOW,
+        tools={"report_search": DEFAULT_TOOLS["report_search"]},
+    )
+
+    result = _query(server, seeded, {"query": "华东销售额"}, name="report_search")
+
+    assert result.success, result.error_code
+    assert result.data["reports"] == [
+        {
+            "task_id": readable.id,
+            "question": "八月华东销售额为何下降",
+            "completed_at": None,
+            "summary": "华东销售额下降 12%",
+        }
+    ]

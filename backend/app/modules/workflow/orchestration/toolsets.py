@@ -38,10 +38,11 @@ NODE_TOOLSETS: Mapping[str, tuple[str, ...]] = {
         "doc_read",
         "doc_version_diff",
         "memory_search",
+        "report_search",
         "report_export",
     ),
     # T11b: listed now; the planner's model can call them once it has a tool loop.
-    "planner": ("memory_search", "report_export"),
+    "planner": ("memory_search", "report_search", "report_export"),
 }
 
 # None: the tool cannot run for this task, so the node's model is not offered it.
@@ -136,6 +137,7 @@ TOOL_FACTORIES: Mapping[str, ToolFactory] = {
     "doc_read": _service_only("doc_read"),
     "doc_version_diff": _service_only("doc_version_diff"),
     "memory_search": _service_only("memory_search"),
+    "report_search": _service_only("report_search"),
     "report_export": _service_only("report_export"),
 }
 

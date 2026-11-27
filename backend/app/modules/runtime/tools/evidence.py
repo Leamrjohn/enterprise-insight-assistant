@@ -98,6 +98,15 @@ class MemorySearchOutput(_Output):
     memories: list[_Memory]
 
 
+class _ReportHit(_Output):
+    task_id: int
+    question: str
+
+
+class ReportSearchOutput(_Output):
+    reports: list[_ReportHit]
+
+
 class ReportExportOutput(_Output):
     task_id: int
     question: str

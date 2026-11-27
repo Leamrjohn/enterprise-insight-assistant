@@ -125,6 +125,11 @@ class MemorySearchInputSchema(BaseModel):
     query: str = Field(min_length=1, max_length=200, description="要找的结论关键词")
 
 
+class ReportSearchInputSchema(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    query: str = Field(min_length=1, max_length=200, description="要找的报告关键词")
+
+
 class ReportExportInputSchema(BaseModel):
     model_config = ConfigDict(extra="forbid")
     task_id: int = Field(

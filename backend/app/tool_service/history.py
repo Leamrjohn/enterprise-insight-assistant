@@ -1,9 +1,10 @@
 """T11b: what this company already concluded, read back by a node's model.
 
 memory_search finds only the user's own validated conclusions, through the same
-filters the planner's memory selection uses.  report_export reads one finished
-report of the company, and only when everything that report drew on is readable
-by the caller now: a report must not become a way round document permissions.
+filters the planner's memory selection uses.  report_search finds the company's
+finished reports by keyword and report_export reads one; both show a report
+only when everything it drew on is readable by the caller now: a report must
+not become a way round document permissions.
 """
 
 from typing import Any
@@ -13,7 +14,11 @@ from sqlalchemy.orm import Session
 from app.modules.analysis.tool_protocol import ToolOutput
 from app.modules.documents.models import Documents
 from app.modules.documents.repository import allowed_min_view_roles
-from app.modules.memory.service import select_planner_memories
+from app.modules.memory.service import (
+    MIN_RELEVANCE,
+    memory_relevance,
+    select_planner_memories,
+)
 from app.modules.organizations.models import CompanyMember
 from app.modules.runtime.tools.context import RuntimeContext
 from app.modules.workflow.models import (
@@ -22,6 +27,9 @@ from app.modules.workflow.models import (
 )
 
 MAX_MEMORIES = 5
+MAX_REPORTS = 5
+# Only the newest finished tasks are scanned, so one search stays bounded.
+SCAN_LIMIT = 100
 MAX_REPORT_CHARS = 6000
 FINISHED = frozenset({"completed", "partial"})
 
@@ -92,6 +100,48 @@ def report_readable(db: Session, context: RuntimeContext, task: AnalysisTask) ->
     return used_attachment is None or task.user_id == context.actor_id
 
 
+def _first_sentence(text: str) -> str:
+    return text.split("。", 1)[0][:120]
+
+
+def report_search(
+    db: Session, context: RuntimeContext, arguments: dict[str, Any]
+) -> Any:
+    """The company's finished reports that match the words and the caller may read."""
+    candidates = (
+        db.query(AnalysisTask)
+        .filter(
+            AnalysisTask.company_id == context.company_id,
+            AnalysisTask.status.in_(FINISHED),
+            AnalysisTask.id != context.task_id,
+        )
+        .order_by(AnalysisTask.id.desc())
+        .limit(SCAN_LIMIT)
+        .all()
+    )
+    found = []
+    for task in candidates:
+        summary = ((task.result_data or {}).get("report") or {}).get(
+            "executive_summary", ""
+        )
+        relevance = memory_relevance(arguments["query"], f"{task.question} {summary}")
+        # Cheap words first; the permission check runs only on a match.
+        if relevance >= MIN_RELEVANCE and report_readable(db, context, task):
+            found.append((relevance, task, summary))
+    found.sort(key=lambda item: item[0], reverse=True)  # ties stay newest first
+    return {
+        "reports": [
+            {
+                "task_id": task.id,
+                "question": task.question,
+                "completed_at": task.completed_at,
+                "summary": _first_sentence(summary),
+            }
+            for _relevance, task, summary in found[:MAX_REPORTS]
+        ]
+    }
+
+
 def _render(report: dict[str, Any]) -> str:
     sections = [f"摘要：{report.get('executive_summary', '')}"]
     for title, items, field in (
@@ -117,7 +167,7 @@ def report_export(
             error="没有这份可读报告。",
             error_code="tool_arguments_invalid",
             repairable=True,
-            model_feedback="没有这份可读报告；任务编号请用 memory_search 返回的 source_task_id。",
+            model_feedback="没有这份可读报告；任务编号请用 report_search 的 task_id 或 memory_search 的 source_task_id。",
         )
     text = _render(task.result_data["report"])
     return {

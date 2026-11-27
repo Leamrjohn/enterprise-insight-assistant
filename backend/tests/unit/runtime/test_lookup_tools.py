@@ -22,6 +22,7 @@ KNOWLEDGE_LOOKUPS = (
     "doc_read",
     "doc_version_diff",
     "memory_search",
+    "report_search",
     "report_export",
 )
 
@@ -245,5 +246,5 @@ def test_the_planner_lists_the_history_tools_for_its_model(monkeypatch):
 
     tools = toolsets.build_toolset("planner", {"tool_runtime": _Runtime()})  # type: ignore[typeddict-item]
 
-    assert tools.names() == ("memory_search", "report_export")
+    assert tools.names() == ("memory_search", "report_search", "report_export")
     assert [spec.name for spec in direct_tools(tools)[0]] == list(tools.names())

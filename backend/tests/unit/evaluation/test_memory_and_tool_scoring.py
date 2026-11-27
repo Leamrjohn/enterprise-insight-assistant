@@ -122,3 +122,76 @@ def test_tool_cases_combine_route_labels_and_extra_questions():
     assert len(cases) == 34 + 14
     for case in cases:
         assert case["acceptable"], case["case_id"]
+
+
+# --- T11b: a node's first tool round -------------------------------------------
+
+
+def test_lookup_cases_name_only_tools_their_node_offers():
+    from scripts.evaluation.run_tool_selection_evaluation import (
+        load_lookup_cases,
+        node_tools,
+    )
+
+    offered = {
+        node: {tool["function"]["name"] for tool in node_tools(node)}
+        for node in ("data", "knowledge")
+    }
+    cases = load_lookup_cases()
+
+    assert len(cases) == 21
+    assert len({case["case_id"] for case in cases}) == 21
+    for case in cases:
+        for option in case["acceptable"]:
+            assert option <= offered[case["node"]], case["case_id"]
+    assert {"metric_lookup", "dimension_list", "data_freshness"} <= offered["data"]
+    assert {"doc_version_diff", "memory_search", "report_export"} <= offered[
+        "knowledge"
+    ]
+
+
+def test_node_lookup_scores_the_first_round_per_node():
+    from app.core.gateway.base import ModelGateway, ToolCall, ToolChatResponse
+    from scripts.evaluation.run_tool_selection_evaluation import (
+        evaluate_node_lookups,
+    )
+
+    class Scripted(ModelGateway):
+        def __init__(self, names):
+            self.names = list(names)
+            self.systems = []
+
+        def chat(self, prompt, system_prompt=None, *, json_mode=False):
+            raise AssertionError
+
+        def chat_with_tools(self, messages, tools, *, tool_choice="auto"):
+            self.systems.append(messages[0]["content"])
+            name = self.names.pop(0)
+            return ToolChatResponse(None, (ToolCall("c1", name, "{}"),))
+
+        def count_tokens(self, text):
+            return len(text)
+
+    cases = [
+        {
+            "case_id": "a",
+            "node": "data",
+            "question": "数据到哪天",
+            "acceptable": [frozenset({"data_freshness"})],
+            "forbidden": frozenset(),
+        },
+        {
+            "case_id": "b",
+            "node": "knowledge",
+            "question": "以前的结论",
+            "acceptable": [frozenset({"memory_search"})],
+            "forbidden": frozenset(),
+        },
+    ]
+    gateway = Scripted(["data_freshness", "search_documents"])
+
+    rows = evaluate_node_lookups(gateway, cases)
+
+    assert [row["verdict"] for row in rows] == ["correct", "wrong_tools"]
+    assert summarize_tool_cases(rows)["by_split"] == {"data": 1.0, "knowledge": 0.0}
+    assert gateway.systems[0] != gateway.systems[1]  # each node's own prompt
