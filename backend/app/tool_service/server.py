@@ -104,7 +104,8 @@ def warm_up() -> None:
     from app.modules.knowledge.rag.embeddings_local import LocalEmbeddingProvider
     from app.modules.knowledge.rag.reranker import LocalCrossEncoderReranker
 
-    LocalEmbeddingProvider()
+    # Run each model once too: the first call is slower than loading alone.
+    LocalEmbeddingProvider().embed("预热")
     LocalCrossEncoderReranker(get_settings().reranker_model).score("预热", ["预热"])
     _rag_tool()
 
