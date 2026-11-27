@@ -209,6 +209,6 @@
 - 2026-11-26：M2a 完成（31d49a8）；全量 2120 通过；冒烟 9 成功 + 混合题待复核（已知）；下一个 M2b（按 transport 分发、tool_service_enabled 开关、退役 stdio 适配器）。
 - 2026-11-26：M2b 完成（bcc6f28、89410b6）；rag_search 走工具服务、不回退本地；冒烟 9 成功 + 混合题待复核（已知）；下一个 M3（迁移 sql_query、template_query，改主链需批准）。
 - 2026-11-26：M3 完成（8d76616、6321cfc）；SQL 和模板查询走工具服务、服务端按任务取公司数据源；冒烟 9 成功 + 混合题待复核（已知）；下一个 T11a。
-- 2026-11-27：T11a 第 1 步（本地提交，未推送）：模型可直接调用节点工具集里带 model_text 的运行时工具（runtime/tools/direct.py），登记表禁止这类工具让模型填公司和文档范围；8 个新测试通过；5 个只读工具还没实现。
-- 2026-11-27：T11a 第 2 步（本地提交，未推送）：数据节点加 metric_lookup、dimension_list、data_freshness，只在工具服务执行；analysis/knowledge/nodes 零改动；全量 2161 通过；冒烟未跑；下一步 doc_list、doc_read。
-- 2026-11-27：T11a 第 3 步（本地提交，未推送）：知识节点加 doc_list、doc_read，服务端按冻结范围 ∩ 当前可见过滤（readable_document_ids 由用户写）；ServiceTool 加 read 方式；全量 2171 通过；冒烟未跑。
+- 2026-11-27：文档整理：删除 41 份旧文档（摘要见 docs/history/archive_summary_2026-11-27.md），计划移到 docs/plan/，题目选择移到 docs/evaluation/；链接检查 313 个文件全部通过，受影响测试 77 通过。
+- 2026-11-27：删除 3 个 10 月起无人引用的文件（core/error_handling.py、workflow/api.py、workflow/lifecycle/task_spec.py）；import-linter、ruff、pyright 通过；单元和脚本测试 1986 通过，7 个失败与本机配置有关、改动前后相同。
+- 2026-11-27：T11a 完成（d757872、cf7431a、2bf8686）：数据节点加 metric_lookup、dimension_list、data_freshness，知识节点加 doc_list、doc_read，只在工具服务执行；analysis/knowledge/nodes 零改动；全量 2171 通过；冒烟 9 成功 + 混合题待复核（已知）；model_tool_mode=off，真实模型是否使用新工具未验证。

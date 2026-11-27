@@ -6,11 +6,11 @@
 
 本项目目标是全模块符合明确适用范围的生产级设计与工程要求，并在单电脑与存储服务环境完成真实验证，不要求上线。当前实现尚未通过整体生产级验收；目标与进度分开记录。
 
-**当前执行从 [计划总览](docs/roadmap/00_overview.md) 开始，进度与验证见 [工作日志](docs/worklog.md)。每次只读当前工单；其他资料见 [文档索引](docs/README.md)。**
+**当前执行以 [完整改造计划](docs/plan/complete_plan_2026-11-07.md) 为准，进度见 [状态记录](docs/STATUS.md) 和 [工作日志](docs/worklog.md)。其他资料见 [文档索引](docs/README.md)。**
 
 ## 已有模块与能力基础
 
-以下是实现构成，不代表各项已通过完整生产级门禁；当前缺口与验证范围见 [项目审计](docs/audits/project_core_audit_20260915.md)。
+以下是实现构成，不代表各项已通过完整生产级门禁；当前进度和缺口见 [完整改造计划](docs/plan/complete_plan_2026-11-07.md)。
 
 - 公司级身份与权限：JWT 登录、成员角色、资源隔离和管理审批。
 - 文档知识库：TXT、Markdown、PDF 上传，异步解析、分块、向量化和 pgvector 检索。
@@ -192,22 +192,21 @@ backend/
   requirements/         依赖输入（base.txt、ml.txt）和带哈希的 Linux 锁文件（*.lock，用 scripts/ops/update-locks.ps1 生成）
 frontend/src/           React 工作台
 data/business_knowledge_base/  可复现演示语料
-docs/                   计划、架构、设计稿、运维、审计、证据（见 docs/README.md）
-scripts/ops/            备份、恢复、队列和权限检查
+docs/                   计划、模块设计、评测、运维、记录、学习材料（见 docs/README.md）
+ops/observability/      Prometheus、Grafana、Tempo、告警和 Collector 配置
+scripts/ops/            启停、备份、恢复、队列和权限检查（PowerShell）
 docker-compose.yml      本地服务编排
 ```
 
-完整说明见 [目录结构与模块边界](docs/architecture/modular_monolith_structure.md)。
+文档的目录说明见 [文档索引](docs/README.md)；代码的依赖方向由 import-linter（`backend/.importlinter`）强制。
 
 ## 项目文档
 
 - [文档索引](docs/README.md)
-- [当前执行计划：阶段 0～9 总览](docs/roadmap/00_overview.md)
-- [当前工单：阶段 0～2](docs/roadmap/01_stages_0-2.md)
-- [工作日志](docs/worklog.md)
-- [目录结构与模块边界](docs/architecture/modular_monolith_structure.md)
-- [历史证据（冻结）](docs/history/evidence.md)
-- [历史设计范围路线图（仅供查询）](docs/history/plans/single_node_production_style_ai_application_roadmap.md)
+- [完整改造计划](docs/plan/complete_plan_2026-11-07.md)
+- [状态记录](docs/STATUS.md) 和 [工作日志](docs/worklog.md)
+- [模块实现设计](docs/design/enterprise/00_task_runtime_walkthrough.md)
+- [历史证据（冻结）](docs/history/evidence.md) 和 [旧文档归档摘要](docs/history/archive_summary_2026-11-27.md)
 - [产品定义与边界](PRODUCT.md)
 - [前端设计系统](DESIGN.md)
 - [单机运行与故障恢复](docs/operations/single_node_runbook.md)
