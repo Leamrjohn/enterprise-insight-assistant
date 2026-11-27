@@ -81,6 +81,39 @@ class DocReadOutput(_DocumentInfo):
     next_offset: int | None  # None: this part ends the document
 
 
+class DocVersionDiffOutput(_Output):
+    document_id: int
+    other_document_id: int
+    diff: list[str]
+    truncated: bool
+
+
+class _Memory(_Output):
+    memory_id: int
+    source_task_id: int
+    content: dict[str, Any]
+
+
+class MemorySearchOutput(_Output):
+    memories: list[_Memory]
+
+
+class _ReportHit(_Output):
+    task_id: int
+    question: str
+
+
+class ReportSearchOutput(_Output):
+    reports: list[_ReportHit]
+
+
+class ReportExportOutput(_Output):
+    task_id: int
+    question: str
+    text: str
+    truncated: bool
+
+
 class Evidence(BaseModel):
     """One piece of evidence: a result table, or one passage of a document."""
 

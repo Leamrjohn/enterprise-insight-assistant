@@ -6,6 +6,7 @@ that set gets the same answer whether it does not exist, belongs to another
 company or is above the user's role, so the answer reveals nothing.
 """
 
+import difflib
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -18,6 +19,7 @@ from app.modules.runtime.tools.context import RuntimeContext
 from app.modules.workflow.models import AnalysisTaskDocument
 
 PART_CHARS = 4000
+MAX_DIFF_LINES = 200
 
 
 def readable_document_ids(db: Session, context: RuntimeContext) -> set[int]:
@@ -94,14 +96,7 @@ def doc_read(db: Session, context: RuntimeContext, arguments: dict[str, Any]) ->
     readable = {document.id: document for document in _readable(db, context)}
     document = readable.get(arguments["document_id"])
     if document is None:
-        return ToolOutput(
-            success=False,
-            error="没有这份可读文档。",
-            error_code="tool_arguments_invalid",
-            repairable=True,
-            model_feedback="没有这份可读文档。可读编号："
-            + ("、".join(str(key) for key in readable) or "无"),
-        )
+        return _no_document(readable)
     content = document.content or ""
     offset = arguments.get("offset", 0)
     end = offset + PART_CHARS
@@ -111,4 +106,50 @@ def doc_read(db: Session, context: RuntimeContext, arguments: dict[str, Any]) ->
         "content": content[offset:end],
         "offset": offset,
         "next_offset": end if end < len(content) else None,
+    }
+
+
+def _no_document(readable: dict[int, Documents]) -> ToolOutput:
+    return ToolOutput(
+        success=False,
+        error="没有这份可读文档。",
+        error_code="tool_arguments_invalid",
+        repairable=True,
+        model_feedback="没有这份可读文档。可读编号："
+        + ("、".join(str(key) for key in readable) or "无"),
+    )
+
+
+def doc_version_diff(
+    db: Session, context: RuntimeContext, arguments: dict[str, Any]
+) -> Any:
+    """T11b: two readable versions of one document; the model names both."""
+    readable = {document.id: document for document in _readable(db, context)}
+    old = readable.get(arguments["document_id"])
+    new = readable.get(arguments["other_document_id"])
+    if old is None or new is None:
+        return _no_document(readable)
+    if old.version_group is None or old.version_group != new.version_group:
+        return ToolOutput(
+            success=False,
+            error="这两份文档不是同一份文档的不同版本。",
+            error_code="tool_arguments_invalid",
+            repairable=True,
+            model_feedback="这两份文档不是同一份文档的不同版本；"
+            "先用 doc_list 查看版本号相同名称的文档。",
+        )
+    lines = list(
+        difflib.unified_diff(
+            (old.content or "").splitlines(),
+            (new.content or "").splitlines(),
+            fromfile=f"{old.name} v{old.version_number}",
+            tofile=f"{new.name} v{new.version_number}",
+            lineterm="",
+        )
+    )
+    return {
+        "document_id": old.id,
+        "other_document_id": new.id,
+        "diff": lines[:MAX_DIFF_LINES],
+        "truncated": len(lines) > MAX_DIFF_LINES,
     }

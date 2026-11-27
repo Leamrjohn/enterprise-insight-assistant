@@ -5,6 +5,10 @@ replay: cassettes only; a missing recording fails instead of calling a model.
 
 Later strategies (model-chosen tools) are scored on the same cases so the fixed
 route stays the number to beat.
+
+T11b: node_lookup scores a node's first tool round with its real system prompt
+and its real tool list (agent tools plus the lookups its toolset lists), on the
+cases in tool_selection_lookups_v1.json.
 """
 
 from __future__ import annotations
@@ -30,6 +34,7 @@ from scripts.evaluation.run_planner_route_evaluation import (
 FIXTURES = Path(__file__).resolve().parents[2] / "tests" / "fixtures"
 ROUTE_LABELS = FIXTURES / "evaluation_routing" / "planner_routes_v1.json"
 EXTRA_CASES = FIXTURES / "evaluation_tools" / "tool_selection_extra_v1.json"
+LOOKUP_CASES = FIXTURES / "evaluation_tools" / "tool_selection_lookups_v1.json"
 
 
 def load_cases(
@@ -139,6 +144,99 @@ def evaluate_model_choice(gateway: ModelGateway, cases: list[dict]) -> list[dict
     return rows
 
 
+def load_lookup_cases(path: Path = LOOKUP_CASES) -> list[dict]:
+    return [
+        {
+            **case,
+            "acceptable": [frozenset(item) for item in case["acceptable"]],
+            "forbidden": frozenset(case.get("forbidden", [])),
+        }
+        for case in json.loads(path.read_text(encoding="utf-8"))["cases"]
+    ]
+
+
+class _ListedNames:
+    """A toolset that only names its tools: selection never runs one."""
+
+    def __init__(self, names: tuple[str, ...]) -> None:
+        self._names = names
+
+    def names(self) -> tuple[str, ...]:
+        return self._names
+
+    def call(self, name: str, parameters: dict) -> None:
+        raise AssertionError("tool selection never runs a tool")
+
+
+def node_tools(node: str) -> list[dict]:
+    """Exactly what the node's model is offered: its agent tools, then its lookups."""
+    from app.modules.analysis.data.tool_agent import DATA_TOOL_SPECS
+    from app.modules.knowledge.tool_agent import KNOWLEDGE_TOOL_SPECS
+    from app.modules.runtime.tools.direct import direct_tools
+    from app.modules.workflow.orchestration.toolsets import NODE_TOOLSETS
+
+    agent = {"data": DATA_TOOL_SPECS, "knowledge": KNOWLEDGE_TOOL_SPECS}[node]
+    lookups, _handlers = direct_tools(_ListedNames(NODE_TOOLSETS[node]))
+    return [spec.to_openai() for spec in [*agent, *lookups]]
+
+
+def node_prompts(node: str, question: str) -> tuple[str, str]:
+    """The node's own system prompt; knowledge starts after an empty first search."""
+    if node == "data":
+        from app.modules.analysis.catalog.semantic_catalog import BUSINESS_TABLES
+        from app.modules.analysis.catalog.snapshot_catalog import SnapshotCatalog
+        from app.modules.analysis.data.tool_agent import build_data_tool_prompt
+
+        catalog = SnapshotCatalog(
+            tables={name: table.columns for name, table in BUSINESS_TABLES.items()},
+            joins=frozenset(),
+        )
+        return build_data_tool_prompt(catalog), f"<question>\n{question}\n</question>\n"
+    from app.modules.knowledge.tool_agent import SYSTEM_PROMPT
+
+    first = json.dumps({"status": "insufficient_evidence", "evidences": []})
+    return SYSTEM_PROMPT, (
+        f"<question>\n{question}\n</question>\n"
+        f"系统已按问题检索一次，结果如下：\n<search_result>\n{first}\n</search_result>\n"
+    )
+
+
+def evaluate_node_lookups(gateway: ModelGateway, cases: list[dict]) -> list[dict]:
+    """Which tools does each node's model call first, given its whole list?"""
+    tools = {node: node_tools(node) for node in {case["node"] for case in cases}}
+    rows = []
+    for case in cases:
+        system_prompt, user_prompt = node_prompts(case["node"], case["question"])
+        try:
+            response = gateway.chat_with_tools(
+                [
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ],
+                tools[case["node"]],
+            )
+            called = frozenset(call.name for call in response.tool_calls)
+            label = "+".join(sorted(called)) or "no_tool"
+        except BudgetGuardExceeded:
+            raise
+        except Exception as exc:  # noqa: BLE001 - one bad case must not hide the rest
+            called, label = None, "error"
+            print(f"{case['case_id']}: {type(exc).__name__}", file=sys.stderr)
+        rows.append(
+            {
+                "case_id": case["case_id"],
+                "split": case["node"],  # summarised per node
+                "decision": label,
+                **score_tool_case(
+                    called=called,
+                    acceptable=case["acceptable"],
+                    forbidden=case["forbidden"],
+                ),
+            }
+        )
+    return rows
+
+
 def evaluate(gateway: ModelGateway, cases: list[dict]) -> list[dict]:
     from app.modules.analysis.planner.planning import PlanningService
 
@@ -177,7 +275,7 @@ def main() -> None:
     parser.add_argument("--report", type=Path)
     parser.add_argument(
         "--strategy",
-        choices=("fixed_planner_route", "model_choice"),
+        choices=("fixed_planner_route", "model_choice", "node_lookup"),
         default="fixed_planner_route",
     )
     args = parser.parse_args()
@@ -195,8 +293,11 @@ def main() -> None:
 
     stopped, rows = None, []
     try:
-        run = evaluate_model_choice if args.strategy == "model_choice" else evaluate
-        rows = run(gateway, load_cases())
+        if args.strategy == "node_lookup":
+            rows = evaluate_node_lookups(gateway, load_lookup_cases())
+        else:
+            run = evaluate_model_choice if args.strategy == "model_choice" else evaluate
+            rows = run(gateway, load_cases())
     except BudgetGuardExceeded as exc:
         stopped = str(exc)
     report = {

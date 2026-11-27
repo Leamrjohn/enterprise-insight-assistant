@@ -17,6 +17,14 @@ from app.tool_service.lookups import (
 )
 
 LOOKUPS = ("metric_lookup", "dimension_list", "data_freshness")
+KNOWLEDGE_LOOKUPS = (
+    "doc_list",
+    "doc_read",
+    "doc_version_diff",
+    "memory_search",
+    "report_search",
+    "report_export",
+)
 
 # This company has orders and customers but no tickets, expenses or budgets.
 CATALOG = SnapshotCatalog(
@@ -229,5 +237,14 @@ def test_the_knowledge_model_is_offered_the_document_tools(monkeypatch):
     tools = toolsets.build_toolset("knowledge", {"tool_runtime": _Runtime()})  # type: ignore[typeddict-item]
     specs, _handlers = direct_tools(tools)
 
-    assert tools.names() == ("rag_search", "doc_list", "doc_read")
-    assert [spec.name for spec in specs] == ["doc_list", "doc_read"]
+    assert tools.names() == ("rag_search", *KNOWLEDGE_LOOKUPS)
+    assert [spec.name for spec in specs] == list(KNOWLEDGE_LOOKUPS)
+
+
+def test_the_planner_lists_the_history_tools_for_its_model(monkeypatch):
+    _service(monkeypatch, enabled=True)
+
+    tools = toolsets.build_toolset("planner", {"tool_runtime": _Runtime()})  # type: ignore[typeddict-item]
+
+    assert tools.names() == ("memory_search", "report_search", "report_export")
+    assert [spec.name for spec in direct_tools(tools)[0]] == list(tools.names())
