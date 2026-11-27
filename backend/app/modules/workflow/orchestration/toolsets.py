@@ -18,6 +18,7 @@ from app.core.config.snapshot import runtime_settings
 from app.modules.analysis.catalog.snapshot_catalog import SnapshotCatalog
 from app.modules.analysis.data.sql_tool import SQLTool
 from app.modules.analysis.data.tool_agent import DATA_TOOLS
+from app.modules.analysis.planner.tool_agent import PLANNER_TOOLS
 from app.modules.analysis.tool_protocol import Tool, ToolInput, ToolOutput, Toolset
 from app.modules.knowledge.tool import RAGTool
 from app.modules.knowledge.tool_agent import KNOWLEDGE_TOOLS
@@ -145,7 +146,7 @@ TOOL_FACTORIES: Mapping[str, ToolFactory] = {
 @lru_cache(maxsize=1)
 def tool_catalog() -> ToolRegistry:
     """Every declared tool, runtime and model-facing alike; a bad one fails here."""
-    return ToolRegistry((*catalog.TOOLS, *DATA_TOOLS, *KNOWLEDGE_TOOLS))
+    return ToolRegistry((*catalog.TOOLS, *DATA_TOOLS, *KNOWLEDGE_TOOLS, *PLANNER_TOOLS))
 
 
 def build_toolset(node: str, state: WorkflowState) -> Toolset:

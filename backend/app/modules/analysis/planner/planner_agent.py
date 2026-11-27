@@ -16,6 +16,22 @@ from app.modules.runtime.model_governance import ModelBudgetExceeded
 logger = logging.getLogger(__name__)
 
 
+def planning_kwargs(input: AgentInput) -> dict:
+    """What a planning call reads from the node's context, besides the question."""
+    kwargs = {"conversation_context": input.context.get("conversation_context")}
+    if input.context.get("feedback") is not None:
+        kwargs["feedback"] = input.context["feedback"]
+    if input.context.get("retry_context") is not None:
+        kwargs["retry_context"] = input.context["retry_context"]
+    if input.context.get("planner_memory"):
+        kwargs["planner_memory"] = input.context["planner_memory"]
+    if input.context.get("attachment_context"):
+        kwargs["attachment_context"] = input.context["attachment_context"]
+    if input.context.get("history_summary"):
+        kwargs["history_summary"] = input.context["history_summary"]
+    return kwargs
+
+
 class PlannerAgent(Agent):
     """调用 LLM 生成工作流决策，但不生成最终业务结论。"""
 
@@ -39,18 +55,9 @@ class PlannerAgent(Agent):
             self._planning_service = PlanningService()
 
         try:
-            kwargs = {"conversation_context": input.context.get("conversation_context")}
-            if input.context.get("feedback") is not None:
-                kwargs["feedback"] = input.context["feedback"]
-            if input.context.get("retry_context") is not None:
-                kwargs["retry_context"] = input.context["retry_context"]
-            if input.context.get("planner_memory"):
-                kwargs["planner_memory"] = input.context["planner_memory"]
-            if input.context.get("attachment_context"):
-                kwargs["attachment_context"] = input.context["attachment_context"]
-            if input.context.get("history_summary"):
-                kwargs["history_summary"] = input.context["history_summary"]
-            decision = self._planning_service.decide(input.question, **kwargs)
+            decision = self._planning_service.decide(
+                input.question, **planning_kwargs(input)
+            )
         except ModelBudgetExceeded:
             raise
         except RetryableModelError as error:

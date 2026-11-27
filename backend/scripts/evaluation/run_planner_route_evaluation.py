@@ -172,18 +172,75 @@ def score_with_routing_labels(results: list[dict], label_doc: dict) -> dict:
     }
 
 
-def evaluate(gateway: ModelGateway, cases: list[dict]) -> list[dict]:
+def _empty_lookups():
+    """T11e: the planner's lookups, each finding nothing, so no database is needed."""
+    from app.modules.analysis.tool_protocol import Tool, ToolOutput, Toolset
+    from app.modules.workflow.orchestration.toolsets import NODE_TOOLSETS
+
+    found = {"memory_search": {"memories": []}, "report_search": {"reports": []}}
+
+    class EmptyLookup(Tool):
+        def __init__(self, name: str) -> None:
+            self._name = name
+
+        @property
+        def name(self) -> str:
+            return self._name
+
+        @property
+        def description(self) -> str:
+            return self._name
+
+        def execute(self, input) -> ToolOutput:
+            if self._name in found:
+                return ToolOutput(success=True, data=found[self._name])
+            return ToolOutput(
+                success=False,
+                error="没有这份可读报告。",
+                error_code="tool_arguments_invalid",
+                repairable=True,
+            )
+
+    return Toolset.of(*(EmptyLookup(name) for name in NODE_TOOLSETS["planner"]))
+
+
+def _plan_with_tool_loop(gateway: ModelGateway, question: str) -> tuple[dict, dict]:
+    from app.modules.analysis.agent_protocol import AgentInput
+    from app.modules.analysis.planner.planning import PlanningService
+    from app.modules.analysis.planner.tool_agent import ToolCallingPlannerAgent
+
+    agent = ToolCallingPlannerAgent(
+        tools=_empty_lookups(),
+        planning_service=PlanningService(gateway=gateway, sleeper=lambda _s: None),
+    )
+    output = agent.run(AgentInput(question=question, user_id=0, context={}))
+    if not output.success or output.plan is None:
+        raise RuntimeError(output.error_code or "planner_failed")
+    return output.plan, output.attempts or {}
+
+
+def evaluate(
+    gateway: ModelGateway, cases: list[dict], planner: str = "fixed"
+) -> list[dict]:
     from app.modules.analysis.planner.planning import PlanningService
 
     results = []
     for case in cases:
         service = PlanningService(gateway=gateway, sleeper=lambda _seconds: None)
         resolved = None
+        loop: dict = {}
         try:
-            decision = service.decide(case["question"])
-            actual = f"{decision.action}/{decision.route}"
-            # The plan rules read this question online (B2j), so keep it for them.
-            resolved = decision.resolved_question
+            if planner == "tool_loop":
+                plan, attempts = _plan_with_tool_loop(gateway, case["question"])
+                actual = f"{plan['action']}/{plan['route']}"
+                resolved = plan["resolved_question"]
+                loop = attempts.get("tool_loop") or {}
+                service.model_attempts = attempts.get("model_attempts", 0)
+            else:
+                decision = service.decide(case["question"])
+                actual = f"{decision.action}/{decision.route}"
+                # The plan rules read this question online (B2j), so keep it for them.
+                resolved = decision.resolved_question
         except BudgetGuardExceeded:
             raise
         except Exception as exc:  # noqa: BLE001 - one bad case must not hide the rest
@@ -199,6 +256,11 @@ def evaluate(gateway: ModelGateway, cases: list[dict]) -> list[dict]:
                 "correct": actual == expected,
                 "model_attempts": service.model_attempts,
                 "resolved_question": resolved,
+                **(
+                    {"tool_trace": [step["tool"] for step in loop.get("trace", [])]}
+                    if planner == "tool_loop"
+                    else {}
+                ),
             }
         )
     return results
@@ -215,6 +277,12 @@ def main() -> None:
     )
     parser.add_argument(
         "--cases", type=Path, help="take questions from this label set instead"
+    )
+    parser.add_argument(
+        "--planner",
+        choices=("fixed", "tool_loop"),
+        default="fixed",
+        help="tool_loop: the T11e planner, with lookups that find nothing",
     )
     args = parser.parse_args()
 
@@ -241,7 +309,7 @@ def main() -> None:
         cases = load_route_cases()
     stopped = None
     try:
-        results = evaluate(gateway, cases)
+        results = evaluate(gateway, cases, args.planner)
     except BudgetGuardExceeded as exc:
         stopped, results = str(exc), []
     report = {
