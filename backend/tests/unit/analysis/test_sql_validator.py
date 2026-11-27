@@ -95,6 +95,33 @@ def test_rejects_explicit_schema() -> None:
         validate("SELECT t.question FROM evaluation.scenario_truth AS t")
 
 
+def test_a_cte_name_hides_a_table_only_where_the_cte_is_visible() -> None:
+    # The CTE lives inside the subquery; the outer business_documents is the real table.
+    with pytest.raises(ValueError, match="不在业务目录"):
+        validate(
+            """
+            SELECT o.id, d.* FROM sales_orders AS o
+            CROSS JOIN (
+                WITH business_documents AS (SELECT 1 AS x)
+                SELECT x FROM business_documents
+            ) AS inner_scope
+            CROSS JOIN business_documents AS d
+            """
+        )
+
+
+def test_a_later_cte_may_read_an_earlier_one() -> None:
+    validate(
+        """
+        WITH delivered AS (
+            SELECT id FROM sales_orders WHERE status = 'delivered'
+        ),
+        recent AS (SELECT id FROM delivered)
+        SELECT COUNT(*) FROM recent
+        """
+    )
+
+
 def test_rejects_out_of_scope_table_inside_a_cte() -> None:
     with pytest.raises(ValueError, match="不在业务目录"):
         validate(
