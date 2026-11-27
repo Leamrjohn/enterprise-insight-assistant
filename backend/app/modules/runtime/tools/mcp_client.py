@@ -10,6 +10,7 @@ from dataclasses import asdict, dataclass
 from typing import Any
 
 from app.modules.runtime.tools.context import RuntimeContext, sign
+from app.modules.runtime.tools.wire import decode
 from mcp import Client
 from mcp.server import MCPServer
 from mcp_types import TextContent
@@ -22,6 +23,10 @@ class ServiceReply:
     success: bool
     data: Any = None
     error_code: str | None = None
+    # M3: what a SQL repair needs; the tool already kept other companies out of it.
+    error: str | None = None
+    repairable: bool = False
+    model_feedback: str | None = None
 
 
 _UNAVAILABLE = ServiceReply(success=False, error_code="mcp_transport_unavailable")
@@ -80,8 +85,23 @@ async def _call(
     if not isinstance(payload, dict) or not isinstance(payload.get("success"), bool):
         return _MALFORMED
     if payload["success"]:
-        return ServiceReply(success=True, data=payload.get("data"))
+        try:
+            return ServiceReply(success=True, data=decode(payload.get("data")))
+        except (KeyError, TypeError, ValueError):
+            return _MALFORMED
     code = payload.get("error_code")
-    if not isinstance(code, str):
+    error = payload.get("error")
+    feedback = payload.get("model_feedback")
+    if (
+        not isinstance(code, str)
+        or not isinstance(error, str | None)
+        or not isinstance(feedback, str | None)
+    ):
         return _MALFORMED
-    return ServiceReply(success=False, error_code=code)
+    return ServiceReply(
+        success=False,
+        error_code=code,
+        error=error,
+        repairable=payload.get("repairable") is True,
+        model_feedback=feedback,
+    )

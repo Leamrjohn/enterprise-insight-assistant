@@ -30,6 +30,7 @@ from app.modules.runtime.tools.context import (
     document_scope_sha256,
     verify,
 )
+from app.modules.runtime.tools.wire import encode
 from app.modules.workflow.models import AnalysisTask
 
 SERVER_NAME = "agent-tools"
@@ -38,14 +39,25 @@ SERVER_PORT = 8090
 
 ToolHandler = Callable[[dict[str, Any]], Any]
 ScopeCheck = Callable[[Session, RuntimeContext, dict[str, Any]], None]
+Prepare = Callable[[Session, RuntimeContext], ToolHandler]
 
 
 @dataclass(frozen=True)
 class ServiceTool:
-    """run returns plain data or a ToolOutput; check raises ContextRejected."""
+    """A handler returns plain data or a ToolOutput; check raises ContextRejected.
 
-    run: ToolHandler
+    M3: prepare builds the handler from what the task holds, such as its company
+    data source, so nothing in the arguments can choose it.  check and prepare
+    run inside the database session; the handler runs after it closes.
+    """
+
+    run: ToolHandler | None = None
     check: ScopeCheck | None = None
+    prepare: Prepare | None = None
+
+    def __post_init__(self) -> None:
+        if (self.run is None) == (self.prepare is None):
+            raise ValueError("a service tool needs exactly one of run and prepare")
 
 
 def _echo(arguments: dict[str, Any]) -> dict[str, Any]:
@@ -92,7 +104,8 @@ def warm_up() -> None:
     from app.modules.knowledge.rag.embeddings_local import LocalEmbeddingProvider
     from app.modules.knowledge.rag.reranker import LocalCrossEncoderReranker
 
-    LocalEmbeddingProvider()
+    # Run each model once too: the first call is slower than loading alone.
+    LocalEmbeddingProvider().embed("预热")
     LocalCrossEncoderReranker(get_settings().reranker_model).score("预热", ["预热"])
     _rag_tool()
 
@@ -103,9 +116,56 @@ def _rag_search(arguments: dict[str, Any]) -> Any:
     return _rag_tool().execute(ToolInput(parameters=arguments))
 
 
+def task_data_source(db: Session, context: RuntimeContext) -> Any:
+    """M3: the company data source and schema the task froze at admission.
+
+    The same checks the worker makes before it builds SQLTool (workflow/tasks.py).
+    """
+    from app.modules.organizations.models import BusinessDataSource, SchemaSnapshot
+
+    task = db.get(AnalysisTask, context.task_id)
+    if task is None or task.data_source_id is None or task.schema_snapshot_id is None:
+        raise ContextRejected("data_source_not_allowed")
+    source = db.get(BusinessDataSource, task.data_source_id)
+    snapshot = db.get(SchemaSnapshot, task.schema_snapshot_id)
+    if (
+        source is None
+        or snapshot is None
+        or snapshot.data_source_id != source.id
+        or source.company_id != context.company_id
+    ):
+        raise ContextRejected("data_source_not_allowed")
+    # Load the connection row now: the query runs after this session closes.
+    _ = source.connection
+    return source, snapshot.catalog
+
+
+def prepare_sql_query(db: Session, context: RuntimeContext) -> ToolHandler:
+    from app.modules.analysis.catalog.snapshot_catalog import SnapshotCatalog
+    from app.modules.analysis.data.sql_tool import SQLTool
+    from app.modules.analysis.tool_protocol import ToolInput
+
+    source, catalog = task_data_source(db, context)
+    tool = SQLTool(
+        data_source=source, snapshot_catalog=SnapshotCatalog.from_snapshot(catalog)
+    )
+    return lambda arguments: tool.execute(ToolInput(parameters=arguments))
+
+
+def prepare_template_query(db: Session, context: RuntimeContext) -> ToolHandler:
+    from app.modules.analysis.data.template_query import TemplateQueryTool
+    from app.modules.analysis.tool_protocol import ToolInput
+
+    source, _catalog = task_data_source(db, context)
+    tool = TemplateQueryTool(data_source=source)
+    return lambda arguments: tool.execute(ToolInput(parameters=arguments))
+
+
 DEFAULT_TOOLS: Mapping[str, ToolHandler | ServiceTool] = {
     "echo": _echo,
     "rag_search": ServiceTool(run=_rag_search, check=check_rag_scope),
+    "sql_query": ServiceTool(prepare=prepare_sql_query),
+    "template_query": ServiceTool(prepare=prepare_template_query),
 }
 
 
@@ -113,10 +173,17 @@ def _reply(result: Any) -> dict[str, Any]:
     from app.modules.analysis.tool_protocol import ToolOutput
 
     if not isinstance(result, ToolOutput):
-        return {"success": True, "data": result}
+        return {"success": True, "data": encode(result)}
     if result.success:
-        return {"success": True, "data": result.data}
-    return {"success": False, "error_code": result.error_code}
+        # M3: Decimal, date and tuple values cross as marked JSON (wire.py).
+        return {"success": True, "data": encode(result.data)}
+    return {
+        "success": False,
+        "error_code": result.error_code,
+        "error": result.error,
+        "repairable": result.repairable,
+        "model_feedback": result.model_feedback,
+    }
 
 
 def _parse_context(raw: Any) -> RuntimeContext:
@@ -177,9 +244,15 @@ def create_tool_server(
                     )
                     if tool.check is not None:
                         tool.check(db, trusted, arguments)
+                    handler = (
+                        tool.prepare(db, trusted)
+                        if tool.prepare is not None
+                        else tool.run
+                    )
                 except ContextRejected as rejected:
                     return {"success": False, "error_code": rejected.code}
-            return _reply(tool.run(arguments))
+            assert handler is not None, "ServiceTool requires run or prepare"
+            return _reply(handler(arguments))
 
     for name, tool in tools.items():
         register(name, tool if isinstance(tool, ServiceTool) else ServiceTool(run=tool))

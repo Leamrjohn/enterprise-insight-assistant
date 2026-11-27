@@ -73,8 +73,13 @@ def call_service(
     if reply.success:
         return ToolOutput(success=True, data=reply.data)
     code = reply.error_code or "mcp_response_malformed"
+    # A tool's own failure brings its message; a refusal by the service does not.
     return ToolOutput(
-        success=False, error=DENY_MESSAGES.get(code, _FAILED_MESSAGE), error_code=code
+        success=False,
+        error=reply.error or DENY_MESSAGES.get(code, _FAILED_MESSAGE),
+        error_code=code,
+        repairable=reply.repairable,
+        model_feedback=reply.model_feedback,
     )
 
 

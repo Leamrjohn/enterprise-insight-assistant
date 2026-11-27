@@ -15,7 +15,8 @@ def valid_parameters() -> dict:
 def test_template_query_tool_executes_registered_parameterized_query(monkeypatch):
     captured = {}
 
-    def fake_execute(sql: str, parameters: dict):
+    def fake_execute(sql: str, parameters: dict, *, data_source):
+        captured["data_source"] = data_source
         captured["sql"] = sql
         captured["parameters"] = parameters
         return ["region_code", "revenue_change"], [("EAST", -166405.92)]
@@ -70,3 +71,26 @@ def test_template_query_tool_hides_database_exception(monkeypatch):
     assert result.success is False
     assert result.error == "经营数据查询暂时无法完成。"
     assert result.error_code == "template_query_execution_failed"
+
+
+def test_template_query_tool_queries_only_its_company_source(monkeypatch):
+    source = object()
+    seen = []
+    monkeypatch.setattr(
+        "app.modules.analysis.data.template_query.execute_registered_readonly_query",
+        lambda sql, parameters, *, data_source: seen.append(data_source) or ([], []),
+    )
+
+    TemplateQueryTool(data_source=source).execute(  # type: ignore[arg-type]
+        ToolInput(parameters=valid_parameters())
+    )
+
+    assert seen == [source]
+
+
+def test_template_query_tool_without_a_company_source_never_connects():
+    # M3 (A11b): no silent fallback to the platform's default business database.
+    result = TemplateQueryTool().execute(ToolInput(parameters=valid_parameters()))
+
+    assert result.success is False
+    assert result.error_code == "data_source_not_allowed"

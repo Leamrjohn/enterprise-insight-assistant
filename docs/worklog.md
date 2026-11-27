@@ -1204,3 +1204,9 @@
 - 验证：新增 6 个分发测试（含经服务与本地结果一致、服务停 5 秒内明确失败且本地 0 次）；全量 2113 通过 40 跳过（另 1 个 test_check_pins 失败，原因见遗留）；pyright 0；导入分层未加例外；演练 8/8；冒烟 m2b-deploy-r2 9 成功 + 混合题待复核（已知），$0.027；审计 rag_search 6、sql_query 4 全部成功，tools 收到 18 个 MCP 请求，Worker 未在本地做检索。
 - 遗留：r1 首个知识题因服务首次调用才加载模型超时失败，已由预热修复；项目目录被 Codex Windows 沙箱加了 Low 完整性标签，项目内 venv 的 Python 以 Low 运行，写不了 ~/.cache、系统临时目录、连不上 Docker，PRE_COMMIT_HOME 已改到 LocalLow，冒烟改用系统 Python 运行；模型自选路线在服务端不降级重排、绕过熔断，待 T15/T8 和 T6。
 - 待办：tool_guard.FallbackTool 已无业务调用方（只剩自身测试），T6 决定去留；test_worker_terminal_result 等 9 个测试受本地配置里 CONVERSATION_*_MODE 影响，测试应固定这些开关。
+
+## 2026-11-26 M3 sql_query、template_query 走工具服务（用户批准服务端按任务取数据源、类型标记、一次提交、换新防线）
+- 做了什么：服务端 `task_data_source` 按签名里的 task_id 取任务冻结的数据源和 Schema 快照（快照属于该数据源、数据源属于该公司，否则 data_source_not_allowed），`ServiceTool(prepare=...)` 在会话内构造 SQLTool/TemplateQueryTool，参数无法选数据源；`wire.encode/decode` 用 `__type__` 标记 Decimal/date/datetime/tuple 跨进程还原；回复带回 error、repairable、model_feedback；template_query 改用公司数据源、删去平台默认经营库路径（A11b）（8d76616）。tools 容器内存上限 3G 且不使用交换区，预热时跑一次嵌入（6321cfc）。
+- 验证：wire 9 条、服务端 21 条、执行阶段（含经服务与本地 SQL 逐值相同、修复提示经服务保留）通过；全量 2128 通过 40 跳过（另 6 个仅本机环境失败：子进程用系统 Python）；pyright 0；导入分层未加例外；演练 8/8；冒烟 m3-deploy-r3 9 成功 + 混合题待复核（已知），$0.027；审计 sql_query 5、rag_search 6 全部成功，首个检索 1.9 秒。
+- 遗留：r1、r2 首个或长文档检索超 5 秒失败（共 $0.032），根因是 Docker 虚拟机 6G 内存、交换区已满，tools 进程约 500MB 被换出，闲置后首次检索要换回，由 6321cfc 修复。
+- 待办：`business_database_*` 配置已无应用代码使用，确认后删除；worker 仍为文档入库单独加载一份嵌入模型，可并入工具服务以省内存。

@@ -15,14 +15,13 @@ Needs the compose demo database (host port 5435/5436) and the
 from __future__ import annotations
 
 import os
-from types import SimpleNamespace
+from functools import partial
 
 import psycopg
 import pytest
 from app.modules.analysis.data import sql_executor
 from app.modules.organizations.models import BusinessDataSource, PlatformDataConnection
 from psycopg import errors
-from pydantic import SecretStr
 
 CREDENTIAL_ENV = "ACME_DEMO_DATABASE_PASSWORD"
 HOST = os.environ.get("BUSINESS_SECURITY_TEST_HOST", "localhost")
@@ -227,20 +226,11 @@ def test_connection_lands_on_the_acme_tenant(unvalidated):
 
 
 @pytest.fixture
-def registered_query(monkeypatch):
-    """Point the template-query path at the demo database under the same contract."""
-    monkeypatch.setattr(
-        sql_executor,
-        "get_settings",
-        lambda: SimpleNamespace(
-            business_database_host=HOST,
-            business_database_port=ACME_PORT,
-            business_database_name="acme_business",
-            business_database_user=ROLE,
-            business_database_password=SecretStr(os.environ[CREDENTIAL_ENV]),
-        ),
+def registered_query():
+    """The template-query path on the demo database, through the company source."""
+    return partial(
+        sql_executor.execute_registered_readonly_query, data_source=_source()
     )
-    return sql_executor.execute_registered_readonly_query
 
 
 def test_registered_query_runs_in_a_read_only_transaction(registered_query):
