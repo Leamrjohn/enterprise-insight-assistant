@@ -32,6 +32,7 @@ from app.modules.runtime.tools.context import (
 )
 from app.modules.runtime.tools.wire import encode
 from app.modules.workflow.models import AnalysisTask
+from app.tool_service import documents, lookups
 
 SERVER_NAME = "agent-tools"
 SERVER_VERSION = "1.0.0"
@@ -40,6 +41,7 @@ SERVER_PORT = 8090
 ToolHandler = Callable[[dict[str, Any]], Any]
 ScopeCheck = Callable[[Session, RuntimeContext, dict[str, Any]], None]
 Prepare = Callable[[Session, RuntimeContext], ToolHandler]
+Read = Callable[[Session, RuntimeContext, dict[str, Any]], Any]
 
 
 @dataclass(frozen=True)
@@ -49,15 +51,18 @@ class ServiceTool:
     M3: prepare builds the handler from what the task holds, such as its company
     data source, so nothing in the arguments can choose it.  check and prepare
     run inside the database session; the handler runs after it closes.
+    T11a: read is for a tool whose whole work is reading this database; it runs
+    inside the session and sees the arguments.
     """
 
     run: ToolHandler | None = None
     check: ScopeCheck | None = None
     prepare: Prepare | None = None
+    read: Read | None = None
 
     def __post_init__(self) -> None:
-        if (self.run is None) == (self.prepare is None):
-            raise ValueError("a service tool needs exactly one of run and prepare")
+        if sum(way is not None for way in (self.run, self.prepare, self.read)) != 1:
+            raise ValueError("a service tool needs exactly one of run, prepare, read")
 
 
 def _echo(arguments: dict[str, Any]) -> dict[str, Any]:
@@ -161,11 +166,30 @@ def prepare_template_query(db: Session, context: RuntimeContext) -> ToolHandler:
     return lambda arguments: tool.execute(ToolInput(parameters=arguments))
 
 
+def on_task_data(
+    build: Callable[[Any, Any], ToolHandler],
+) -> Prepare:
+    """T11a: build a lookup from the task's own data source and schema snapshot."""
+
+    def prepare(db: Session, context: RuntimeContext) -> ToolHandler:
+        from app.modules.analysis.catalog.snapshot_catalog import SnapshotCatalog
+
+        source, catalog = task_data_source(db, context)
+        return build(source, SnapshotCatalog.from_snapshot(catalog))
+
+    return prepare
+
+
 DEFAULT_TOOLS: Mapping[str, ToolHandler | ServiceTool] = {
     "echo": _echo,
     "rag_search": ServiceTool(run=_rag_search, check=check_rag_scope),
     "sql_query": ServiceTool(prepare=prepare_sql_query),
     "template_query": ServiceTool(prepare=prepare_template_query),
+    "metric_lookup": ServiceTool(prepare=on_task_data(lookups.metric_lookup)),
+    "dimension_list": ServiceTool(prepare=on_task_data(lookups.dimension_list)),
+    "data_freshness": ServiceTool(prepare=on_task_data(lookups.data_freshness)),
+    "doc_list": ServiceTool(read=documents.doc_list),
+    "doc_read": ServiceTool(read=documents.doc_read),
 }
 
 
@@ -244,6 +268,8 @@ def create_tool_server(
                     )
                     if tool.check is not None:
                         tool.check(db, trusted, arguments)
+                    if tool.read is not None:
+                        return _reply(tool.read(db, trusted, arguments))
                     handler = (
                         tool.prepare(db, trusted)
                         if tool.prepare is not None

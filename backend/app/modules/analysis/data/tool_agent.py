@@ -60,6 +60,7 @@ from app.modules.runtime.tool_loop import (
 )
 from app.modules.runtime.tools.catalog import ANALYSIS_ROLES
 from app.modules.runtime.tools.definition import ModelText, ToolDefinition
+from app.modules.runtime.tools.direct import direct_tools
 from pydantic import BaseModel, ConfigDict, Field
 
 MAX_ROWS_SHOWN = 5
@@ -547,14 +548,16 @@ class ToolCallingDataAgent(DataAgent):
         if input.context.get("feedback") or self._snapshot_catalog is None:
             return super().run(input)
         session = _DataToolSession(self, input)
+        # T11a: lookups listed in the node's toolset need no handler here.
+        direct_specs, direct_handlers = direct_tools(self._tools)
         loop = run_tool_loop(
             self._gateway or get_model_gateway(),
             system_prompt=build_data_tool_prompt(
                 self._snapshot_catalog, seeded=self._seeded_tables(input, session)
             ),
             user_prompt=self._user_prompt(input, session),
-            specs=DATA_TOOL_SPECS,
-            handlers=session.handlers,
+            specs=[*DATA_TOOL_SPECS, *direct_specs],
+            handlers={**session.handlers, **direct_handlers},
             limits=self._limits,
         )
         session.attempts["model_attempts"] = loop.rounds

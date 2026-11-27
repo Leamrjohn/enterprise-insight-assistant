@@ -1,7 +1,13 @@
 """Frozen, machine-enforced contracts for workflow tool access."""
 
 from app.modules.analysis.data.data_request import DataRequest
-from pydantic import BaseModel, Field, field_validator, model_serializer
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    field_validator,
+    model_serializer,
+)
 
 
 class RAGSearchInputSchema(BaseModel):
@@ -25,6 +31,34 @@ class SQLQueryInputSchema(BaseModel):
 
 class TemplateQueryInputSchema(DataRequest):
     """Runtime contract for the registered-query tool."""
+
+
+# T11a: lookups the data model calls itself; the task's own source is implied.
+class MetricLookupInputSchema(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    name: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=50,
+        description="指标中文名或编号，如 销售额、revenue/v1；不填返回全部指标",
+    )
+
+
+class DimensionListInputSchema(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    field: str = Field(
+        min_length=3, max_length=80, description="表名.列名，如 customers.region_code"
+    )
+
+
+class DataFreshnessInputSchema(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    metric: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=50,
+        description="指标中文名或编号；不填返回全部指标",
+    )
 
 
 def _registered_tool_names() -> tuple[str, ...]:
@@ -67,3 +101,13 @@ class ToolBudget(BaseModel):
 class ToolBudgetUsage(BaseModel):
     calls: int = Field(default=0, ge=0)
     calls_by_tool: dict[str, int] = Field(default_factory=dict)
+
+
+class DocListInputSchema(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+class DocReadInputSchema(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    document_id: int = Field(ge=1, description="doc_list 返回的文档编号")
+    offset: int = Field(default=0, ge=0, description="从第几个字开始读，首次为 0")

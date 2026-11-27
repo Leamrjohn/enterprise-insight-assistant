@@ -1210,3 +1210,9 @@
 - 验证：wire 9 条、服务端 21 条、执行阶段（含经服务与本地 SQL 逐值相同、修复提示经服务保留）通过；全量 2128 通过 40 跳过（另 6 个仅本机环境失败：子进程用系统 Python）；pyright 0；导入分层未加例外；演练 8/8；冒烟 m3-deploy-r3 9 成功 + 混合题待复核（已知），$0.027；审计 sql_query 5、rag_search 6 全部成功，首个检索 1.9 秒。
 - 遗留：r1、r2 首个或长文档检索超 5 秒失败（共 $0.032），根因是 Docker 虚拟机 6G 内存、交换区已满，tools 进程约 500MB 被换出，闲置后首次检索要换回，由 6321cfc 修复。
 - 待办：`business_database_*` 配置已无应用代码使用，确认后删除；worker 仍为文档入库单独加载一份嵌入模型，可并入工具服务以省内存。
+
+## 2026-11-27 T11a 加 5 个只读工具只改 4 处（用户选方案 A、批准超 10 文件和两次改工具清单期望；readable_document_ids 用户写）
+- 做了什么：节点模型可直接调用工具集里带 model_text 的运行时工具，登记表禁止这类工具暴露 company_id、document_ids（d757872）；数据节点加 metric_lookup、dimension_list、data_freshness，服务端按任务数据源由代码拼 SQL、仍过校验和只读执行（cf7431a）；知识节点加 doc_list、doc_read，只读冻结范围 ∩ 当前可见文档，ServiceTool 加 read 方式（2bf8686）。工具服务没开时不向模型展示这 5 个工具。
+- 验证：`git diff d757872..HEAD` 在 analysis/knowledge/nodes 零改动；新增 39 个测试；全量 2171 通过 40 跳过；导入分层未加例外；冒烟 t11a-2026-11-27 9 成功 + 混合题待复核（已知），$0.027；工具说明每轮数据节点 +约 670、知识节点 +约 400 token（cl100k 估算）。
+- 遗留：运行配置 model_tool_mode=off，冒烟走固定路线，真实模型是否会用新工具未验证；doc_read 正文不能作为证据引用；metric_lookup 与提示词里的指标行重复较多。
+- 待办：test_node_toolsets 的假工具留在 tool_catalog 缓存里，换测试顺序会让 test_tool_specs 失败；`business_database_*` 配置待删；worker 入库的嵌入模型可并入工具服务。
