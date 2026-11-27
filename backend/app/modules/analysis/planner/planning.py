@@ -215,6 +215,12 @@ _SECTIONS = {
 }
 
 
+def finalize_decision(question: str, decision: PlannerDecision) -> PlannerDecision:
+    """The corrections every validated decision gets, on any planning route."""
+    decision = _canonical_symmetric_month_scope(question, decision)
+    return enforce_explicit_document_evidence_contract(question, decision)
+
+
 def context_too_long_decision() -> PlannerDecision:
     """Asked back without calling the model: nothing is reserved or charged."""
     return PlannerDecision.model_validate(
@@ -385,6 +391,37 @@ class PlanningService:
         self._sleeper = sleeper or sleep
         self.model_attempts = 0
 
+    @property
+    def gateway(self) -> ModelGateway:
+        return self._gateway
+
+    def prepare(
+        self, question: str, **context
+    ) -> tuple[str, ContextManifest | None] | PlannerDecision:
+        """T11e: the user prompt and manifest decide() sends; a decision if none fits."""
+        given = PlannerInputs(*(context.get(name) for name in PlannerInputs._fields))
+        prepared = self._prepare(question, given)
+        if isinstance(prepared, PlannerDecision):
+            return prepared
+        _inputs, manifest, prompt = prepared
+        return prompt, manifest
+
+    def _prepare(
+        self, question: str, given: "PlannerInputs"
+    ) -> tuple["PlannerInputs", ContextManifest | None, str] | PlannerDecision:
+        try:
+            inputs, manifest = planner_context(question, given)
+        except ContextBudgetExceeded as exceeded:
+            logger.info(
+                "Planner context does not fit; asking the user to narrow it",
+                extra={
+                    "context_policy": exceeded.build.manifest.policy,
+                    "context_tokens": exceeded.build.tokens,
+                },
+            )
+            return context_too_long_decision()
+        return inputs, manifest, build_planning_user_prompt(question, *inputs)
+
     def decide(
         self,
         question: str,
@@ -397,27 +434,20 @@ class PlanningService:
         history_summary: list[str] | None = None,
     ) -> PlannerDecision:
         self.model_attempts = 0
-        try:
-            inputs, manifest = planner_context(
-                question,
-                PlannerInputs(
-                    conversation_context,
-                    feedback,
-                    planner_memory,
-                    retry_context,
-                    attachment_context,
-                    history_summary,
-                ),
-            )
-        except ContextBudgetExceeded as exceeded:
-            logger.info(
-                "Planner context does not fit; asking the user to narrow it",
-                extra={
-                    "context_policy": exceeded.build.manifest.policy,
-                    "context_tokens": exceeded.build.tokens,
-                },
-            )
-            return context_too_long_decision()
+        prepared = self._prepare(
+            question,
+            PlannerInputs(
+                conversation_context,
+                feedback,
+                planner_memory,
+                retry_context,
+                attachment_context,
+                history_summary,
+            ),
+        )
+        if isinstance(prepared, PlannerDecision):
+            return prepared
+        inputs, manifest, prompt = prepared
         # From here on, every prompt (a repair included) uses what was kept.
         (
             conversation_context,
@@ -427,15 +457,6 @@ class PlanningService:
             attachment_context,
             history_summary,
         ) = inputs
-        prompt = build_planning_user_prompt(
-            question,
-            conversation_context,
-            feedback,
-            planner_memory,
-            retry_context,
-            attachment_context,
-            history_summary,
-        )
 
         last_failure: ValidationError | RetryableModelError | None = None
         last_raw_output = ""
@@ -522,8 +543,7 @@ class PlanningService:
 
             try:
                 decision = PlannerDecision.model_validate_json(raw_output)
-                decision = _canonical_symmetric_month_scope(question, decision)
-                return enforce_explicit_document_evidence_contract(question, decision)
+                return finalize_decision(question, decision)
             except ValidationError as error:
                 last_failure = error
                 logger.warning(

@@ -14,6 +14,7 @@ from app.modules.analysis.planner.planner_agent import PlannerAgent
 from app.modules.analysis.planner.planner_decision import (
     enforce_explicit_document_evidence_contract,
 )
+from app.modules.analysis.planner.tool_agent import ToolCallingPlannerAgent
 from app.modules.conversations.state import STATE_SNAPSHOT_KEY
 from app.modules.conversations.summary import SUMMARY_SNAPSHOT_KEY
 from app.modules.reporting.semantic_review_service import SemanticReviewService
@@ -23,11 +24,13 @@ from app.modules.workflow.orchestration.node_outcome import NodeOutcome
 from app.modules.workflow.orchestration.node_runner import NodeStep, run_node
 from app.modules.workflow.orchestration.nodes._common import (
     _next_after_plan,
+    model_tools_enabled,
 )
 from app.modules.workflow.orchestration.router import (
     build_scope_fingerprint,
 )
 from app.modules.workflow.orchestration.state import WorkflowState
+from app.modules.workflow.orchestration.toolsets import build_toolset
 
 _CLARIFICATION_SLOT_LABELS = {
     "metric": "需要查询的经营指标",
@@ -99,7 +102,13 @@ def _planner_node(state: WorkflowState) -> NodeStep:
     读 state["question"] 和 state["user_id"]，
     写 state["plan"]。
     """
-    agent = PlannerAgent()
+    # T11e: with model tools on, the planner's model may look things up first.
+    agent = (
+        ToolCallingPlannerAgent(tools=build_toolset("planner", state))
+        if state.get("tool_runtime") is not None
+        and model_tools_enabled(state.get("company_id"))
+        else PlannerAgent()
+    )
     history_summary = _planner_history_summary(state)
     with model_node_scope("planner"):
         result = agent.run(

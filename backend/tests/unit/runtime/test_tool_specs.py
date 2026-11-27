@@ -56,6 +56,7 @@ def test_every_model_facing_tool_is_in_the_one_registry():
         "report_insufficient": "control",
         "submit_answer": "control",
         "report_no_evidence": "control",
+        "submit_plan": "control",
     }
 
 
