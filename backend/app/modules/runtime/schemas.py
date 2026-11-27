@@ -101,3 +101,13 @@ class ToolBudget(BaseModel):
 class ToolBudgetUsage(BaseModel):
     calls: int = Field(default=0, ge=0)
     calls_by_tool: dict[str, int] = Field(default_factory=dict)
+
+
+class DocListInputSchema(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+
+class DocReadInputSchema(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    document_id: int = Field(ge=1, description="doc_list 返回的文档编号")
+    offset: int = Field(default=0, ge=0, description="从第几个字开始读，首次为 0")

@@ -43,6 +43,8 @@ def test_every_model_facing_tool_is_in_the_one_registry():
         "metric_lookup": "runtime",
         "dimension_list": "runtime",
         "data_freshness": "runtime",
+        "doc_list": "runtime",
+        "doc_read": "runtime",
         "describe_table": "capability",
         "run_sql": "capability",
         "search_documents": "capability",

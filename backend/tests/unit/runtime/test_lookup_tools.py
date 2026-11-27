@@ -1,4 +1,4 @@
-"""T11a: three data lookups added in the four declared places only."""
+"""T11a: five lookups added in the four declared places only."""
 
 from datetime import date
 
@@ -221,3 +221,13 @@ def test_the_worker_never_runs_a_lookup_itself():
     assert Toolset.of(named).call("metric_lookup", {}).error_code == (
         "mcp_transport_unavailable"
     )
+
+
+def test_the_knowledge_model_is_offered_the_document_tools(monkeypatch):
+    _service(monkeypatch, enabled=True)
+
+    tools = toolsets.build_toolset("knowledge", {"tool_runtime": _Runtime()})  # type: ignore[typeddict-item]
+    specs, _handlers = direct_tools(tools)
+
+    assert tools.names() == ("rag_search", "doc_list", "doc_read")
+    assert [spec.name for spec in specs] == ["doc_list", "doc_read"]

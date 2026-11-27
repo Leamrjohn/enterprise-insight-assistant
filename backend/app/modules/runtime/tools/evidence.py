@@ -66,6 +66,21 @@ class DataFreshnessOutput(_Output):
     metrics: list[_Coverage]
 
 
+class _DocumentInfo(_Output):
+    document_id: int
+    name: str
+
+
+class DocListOutput(_Output):
+    documents: list[_DocumentInfo]
+
+
+class DocReadOutput(_DocumentInfo):
+    content: str
+    offset: int
+    next_offset: int | None  # None: this part ends the document
+
+
 class Evidence(BaseModel):
     """One piece of evidence: a result table, or one passage of a document."""
 

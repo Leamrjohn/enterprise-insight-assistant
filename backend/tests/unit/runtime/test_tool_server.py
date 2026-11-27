@@ -21,7 +21,8 @@ from app.modules.runtime.tools.context import (
     issue,
 )
 from app.modules.runtime.tools.mcp_client import call_tool
-from app.modules.workflow.models import AnalysisTask
+from app.modules.workflow.models import AnalysisTask, AnalysisTaskDocument
+from app.tool_service import documents as document_tools
 from app.tool_service import lookups
 from app.tool_service.server import (
     DEFAULT_TOOLS,
@@ -565,3 +566,122 @@ def test_a_task_without_a_data_source_never_runs_a_lookup(
 
     assert result.error_code == "data_source_not_allowed"
     assert sql_runs == []
+
+
+# --- T11a: doc_list and doc_read read only what the task froze and the user sees --
+
+
+def _freeze(db_session, seeded, *document_ids):
+    db_session.add_all(
+        AnalysisTaskDocument(task_id=seeded["task"].id, document_id=document_id)
+        for document_id in document_ids
+    )
+    db_session.flush()
+
+
+def _readable(db_session, seeded, **overrides):
+    return document_tools.readable_document_ids(
+        db_session, _context(seeded, **overrides)
+    )
+
+
+def test_readable_documents_are_the_frozen_ones_the_user_may_see(
+    db_session, seeded, documents
+):
+    _freeze(db_session, seeded, documents["visible"], documents["admin_only"])
+
+    assert _readable(db_session, seeded) == {documents["visible"]}
+
+
+def test_a_visible_document_the_task_did_not_freeze_is_not_readable(
+    db_session, seeded, documents
+):
+    _freeze(db_session, seeded, documents["admin_only"])
+
+    assert _readable(db_session, seeded) == set()
+
+
+def test_another_companys_document_is_never_readable_even_if_frozen(
+    db_session, seeded, documents
+):
+    _freeze(db_session, seeded, documents["visible"], documents["other_company"])
+
+    assert _readable(db_session, seeded) == {documents["visible"]}
+
+
+def test_readability_follows_the_role_in_the_database_now(
+    db_session, seeded, documents
+):
+    _freeze(db_session, seeded, documents["visible"], documents["admin_only"])
+    seeded["member"].role = "admin"
+    db_session.flush()
+    assert _readable(db_session, seeded) == {
+        documents["visible"],
+        documents["admin_only"],
+    }
+
+    seeded["member"].role = "analyst"  # lowered after the worker signed as admin
+    db_session.flush()
+    assert _readable(db_session, seeded, authorized_role="admin") == {
+        documents["visible"]
+    }
+
+
+@pytest.fixture
+def doc_server(db_session, seeded, documents):
+    for key, text in (("visible", "退货需要主管审批。" * 500), ("admin_only", "机密")):
+        db_session.get(Documents, documents[key]).content = text
+    _freeze(db_session, seeded, documents["visible"], documents["admin_only"])
+    return create_tool_server(
+        signing_key=KEY,
+        session_factory=lambda: nullcontext(db_session),
+        clock=lambda: NOW,
+        tools={name: DEFAULT_TOOLS[name] for name in ("doc_list", "doc_read")},
+    )
+
+
+def test_doc_list_shows_only_the_readable_documents(doc_server, seeded, documents):
+    result = _query(doc_server, seeded, {}, name="doc_list")
+
+    assert result.success, result.error_code
+    assert [d["document_id"] for d in result.data["documents"]] == [
+        documents["visible"]
+    ]
+    assert result.data["documents"][0]["name"] == "制度.txt"
+
+
+def test_doc_read_returns_one_part_and_where_the_next_one_starts(
+    doc_server, seeded, documents
+):
+    first = _query(
+        doc_server, seeded, {"document_id": documents["visible"]}, name="doc_read"
+    )
+    last = _query(
+        doc_server,
+        seeded,
+        {"document_id": documents["visible"], "offset": 4000},
+        name="doc_read",
+    )
+
+    assert len(first.data["content"]) == document_tools.PART_CHARS
+    assert first.data["next_offset"] == 4000
+    assert len(last.data["content"]) == 500  # 4500 characters in all
+    assert last.data["next_offset"] is None
+
+
+@pytest.mark.parametrize("which", ["admin_only", "other_company", "missing"])
+def test_an_unreadable_document_looks_the_same_as_a_missing_one(
+    doc_server, seeded, documents, which
+):
+    document_id = documents.get(which, 999_999)
+
+    result = _query(doc_server, seeded, {"document_id": document_id}, name="doc_read")
+
+    assert (result.error_code, result.error, result.repairable) == (
+        "tool_arguments_invalid",
+        "没有这份可读文档。",
+        True,
+    )
+    assert (
+        result.model_feedback == f"没有这份可读文档。可读编号：{documents['visible']}"
+    )

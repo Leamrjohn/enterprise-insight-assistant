@@ -211,3 +211,4 @@
 - 2026-11-26：M3 完成（8d76616、6321cfc）；SQL 和模板查询走工具服务、服务端按任务取公司数据源；冒烟 9 成功 + 混合题待复核（已知）；下一个 T11a。
 - 2026-11-27：T11a 第 1 步（本地提交，未推送）：模型可直接调用节点工具集里带 model_text 的运行时工具（runtime/tools/direct.py），登记表禁止这类工具让模型填公司和文档范围；8 个新测试通过；5 个只读工具还没实现。
 - 2026-11-27：T11a 第 2 步（本地提交，未推送）：数据节点加 metric_lookup、dimension_list、data_freshness，只在工具服务执行；analysis/knowledge/nodes 零改动；全量 2161 通过；冒烟未跑；下一步 doc_list、doc_read。
+- 2026-11-27：T11a 第 3 步（本地提交，未推送）：知识节点加 doc_list、doc_read，服务端按冻结范围 ∩ 当前可见过滤（readable_document_ids 由用户写）；ServiceTool 加 read 方式；全量 2171 通过；冒烟未跑。

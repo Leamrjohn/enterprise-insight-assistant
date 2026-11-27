@@ -32,7 +32,7 @@ from app.modules.workflow.orchestration.state import WorkflowState
 
 NODE_TOOLSETS: Mapping[str, tuple[str, ...]] = {
     "data": ("sql_query", "metric_lookup", "dimension_list", "data_freshness"),
-    "knowledge": ("rag_search",),
+    "knowledge": ("rag_search", "doc_list", "doc_read"),
 }
 
 # None: the tool cannot run for this task, so the node's model is not offered it.
@@ -123,6 +123,8 @@ TOOL_FACTORIES: Mapping[str, ToolFactory] = {
     "metric_lookup": _service_only("metric_lookup"),
     "dimension_list": _service_only("dimension_list"),
     "data_freshness": _service_only("data_freshness"),
+    "doc_list": _service_only("doc_list"),
+    "doc_read": _service_only("doc_read"),
 }
 
 

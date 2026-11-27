@@ -32,7 +32,7 @@ from app.modules.runtime.tools.context import (
 )
 from app.modules.runtime.tools.wire import encode
 from app.modules.workflow.models import AnalysisTask
-from app.tool_service import lookups
+from app.tool_service import documents, lookups
 
 SERVER_NAME = "agent-tools"
 SERVER_VERSION = "1.0.0"
@@ -41,6 +41,7 @@ SERVER_PORT = 8090
 ToolHandler = Callable[[dict[str, Any]], Any]
 ScopeCheck = Callable[[Session, RuntimeContext, dict[str, Any]], None]
 Prepare = Callable[[Session, RuntimeContext], ToolHandler]
+Read = Callable[[Session, RuntimeContext, dict[str, Any]], Any]
 
 
 @dataclass(frozen=True)
@@ -50,15 +51,18 @@ class ServiceTool:
     M3: prepare builds the handler from what the task holds, such as its company
     data source, so nothing in the arguments can choose it.  check and prepare
     run inside the database session; the handler runs after it closes.
+    T11a: read is for a tool whose whole work is reading this database; it runs
+    inside the session and sees the arguments.
     """
 
     run: ToolHandler | None = None
     check: ScopeCheck | None = None
     prepare: Prepare | None = None
+    read: Read | None = None
 
     def __post_init__(self) -> None:
-        if (self.run is None) == (self.prepare is None):
-            raise ValueError("a service tool needs exactly one of run and prepare")
+        if sum(way is not None for way in (self.run, self.prepare, self.read)) != 1:
+            raise ValueError("a service tool needs exactly one of run, prepare, read")
 
 
 def _echo(arguments: dict[str, Any]) -> dict[str, Any]:
@@ -184,6 +188,8 @@ DEFAULT_TOOLS: Mapping[str, ToolHandler | ServiceTool] = {
     "metric_lookup": ServiceTool(prepare=on_task_data(lookups.metric_lookup)),
     "dimension_list": ServiceTool(prepare=on_task_data(lookups.dimension_list)),
     "data_freshness": ServiceTool(prepare=on_task_data(lookups.data_freshness)),
+    "doc_list": ServiceTool(read=documents.doc_list),
+    "doc_read": ServiceTool(read=documents.doc_read),
 }
 
 
@@ -262,6 +268,8 @@ def create_tool_server(
                     )
                     if tool.check is not None:
                         tool.check(db, trusted, arguments)
+                    if tool.read is not None:
+                        return _reply(tool.read(db, trusted, arguments))
                     handler = (
                         tool.prepare(db, trusted)
                         if tool.prepare is not None

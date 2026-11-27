@@ -3,6 +3,8 @@
 from app.modules.runtime.schemas import (
     DataFreshnessInputSchema,
     DimensionListInputSchema,
+    DocListInputSchema,
+    DocReadInputSchema,
     MetricLookupInputSchema,
     RAGSearchInputSchema,
     SQLQueryInputSchema,
@@ -12,6 +14,8 @@ from app.modules.runtime.tools.definition import ModelText, ToolDefinition
 from app.modules.runtime.tools.evidence import (
     DataFreshnessOutput,
     DimensionListOutput,
+    DocListOutput,
+    DocReadOutput,
     MetricLookupOutput,
     RAGSearchOutput,
     SQLQueryOutput,
@@ -99,6 +103,39 @@ TOOLS: tuple[ToolDefinition, ...] = (
             when_not_to_use="问题已给出明确日期范围时。",
             example={"metric": "销售额"},
             common_errors=("以为数据一定截止到今天",),
+        ),
+    ),
+    # T11a: the knowledge model browses the task's documents itself.
+    ToolDefinition(
+        name="doc_list",
+        contract_version="doc_list/v1",
+        input_model=DocListInputSchema,
+        allowed_roles=ANALYSIS_ROLES,
+        transport="mcp",
+        output_model=DocListOutput,
+        to_evidence=lookup_evidence,
+        model_text=ModelText(
+            purpose="列出本任务可读的文档：编号、名称、类型、版本、生效日期、适用范围。",
+            when_to_use="想知道有哪些文档，或要按名称挑一份文档细读时。",
+            when_not_to_use="检索结果已经够回答时。",
+            example={},
+            common_errors=(),
+        ),
+    ),
+    ToolDefinition(
+        name="doc_read",
+        contract_version="doc_read/v1",
+        input_model=DocReadInputSchema,
+        allowed_roles=ANALYSIS_ROLES,
+        transport="mcp",
+        output_model=DocReadOutput,
+        to_evidence=lookup_evidence,
+        model_text=ModelText(
+            purpose="按编号读一份文档的正文，每次最多 4000 字；没读完时返回下一段的起点。",
+            when_to_use="检索片段太短，需要看上下文时。",
+            when_not_to_use="不要用它代替检索；回答只能引用检索到的 chunk_id。",
+            example={"document_id": 12, "offset": 0},
+            common_errors=("使用 doc_list 没有列出的编号",),
         ),
     ),
 )

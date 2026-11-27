@@ -54,6 +54,8 @@ def test_real_catalog_is_valid_and_keeps_todays_order():
         "metric_lookup",
         "dimension_list",
         "data_freshness",
+        "doc_list",
+        "doc_read",
     )
 
 
