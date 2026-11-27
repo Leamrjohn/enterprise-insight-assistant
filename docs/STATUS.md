@@ -210,3 +210,4 @@
 - 2026-11-26：M2b 完成（bcc6f28、89410b6）；rag_search 走工具服务、不回退本地；冒烟 9 成功 + 混合题待复核（已知）；下一个 M3（迁移 sql_query、template_query，改主链需批准）。
 - 2026-11-26：M3 完成（8d76616、6321cfc）；SQL 和模板查询走工具服务、服务端按任务取公司数据源；冒烟 9 成功 + 混合题待复核（已知）；下一个 T11a。
 - 2026-11-27：文档整理：删除 41 份旧文档（摘要见 docs/history/archive_summary_2026-11-27.md），计划移到 docs/plan/，题目选择移到 docs/evaluation/；链接检查 313 个文件全部通过，受影响测试 77 通过。
+- 2026-11-27：删除 3 个 10 月起无人引用的文件（core/error_handling.py、workflow/api.py、workflow/lifecycle/task_spec.py）；import-linter、ruff、pyright 通过；单元和脚本测试 1986 通过，7 个失败与本机配置有关、改动前后相同。
