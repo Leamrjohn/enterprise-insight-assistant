@@ -142,3 +142,52 @@ def test_evaluate_keeps_the_planners_resolved_question(monkeypatch) -> None:
     [result] = evaluate(None, [case])
 
     assert result["resolved_question"] == "q!"
+
+
+def test_the_tool_loop_planner_is_scored_on_the_same_cases() -> None:
+    import json
+
+    from app.core.gateway.base import ToolCall, ToolChatResponse
+    from scripts.evaluation.run_planner_route_evaluation import evaluate
+
+    plan = {
+        "action": "analyze",
+        "route": "data_only",
+        "reason": "查数据",
+        "clarification_question": None,
+        "response_message": None,
+        "resolved_question": "八月华东销售额",
+    }
+
+    class Scripted(ModelGateway):
+        def __init__(self):
+            self.responses = [
+                ToolChatResponse(
+                    None, (ToolCall("c1", "memory_search", '{"query": "华东"}'),)
+                ),
+                ToolChatResponse(
+                    None, (ToolCall("c2", "submit_plan", json.dumps(plan)),)
+                ),
+            ]
+
+        def chat(self, prompt, system_prompt=None, *, json_mode=False):
+            raise AssertionError("the tool loop plans this case")
+
+        def chat_with_tools(self, messages, tools, *, tool_choice="auto"):
+            return self.responses.pop(0)
+
+        def count_tokens(self, text):
+            return len(text)
+
+    case = {
+        "case_id": "c",
+        "split": "heldout",
+        "question": "八月华东销售额是多少",
+        "expected": ["analyze", "data_only"],
+    }
+
+    (row,) = evaluate(Scripted(), [case], planner="tool_loop")
+
+    assert row["correct"] is True
+    assert row["tool_trace"] == ["memory_search", "submit_plan"]
+    assert row["model_attempts"] == 2

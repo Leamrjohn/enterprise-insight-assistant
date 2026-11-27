@@ -140,3 +140,14 @@ def test_feedback_is_planned_on_the_fixed_route():
 
     assert output.success
     assert gateway.offered == []  # no tool round at all
+
+
+def test_a_plan_written_as_text_passes_the_same_checks_in_one_call():
+    gateway = _Scripted([ToolChatResponse(json.dumps(PLAN, ensure_ascii=False), ())])
+
+    output = _run(_agent(gateway))
+
+    assert output.success
+    assert output.plan["route"] == "data_only"
+    assert "switched_to_fixed" not in output.attempts
+    assert gateway.chat_outputs == []  # the fixed route never ran

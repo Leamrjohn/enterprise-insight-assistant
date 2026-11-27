@@ -23,6 +23,7 @@ from app.modules.runtime.tool_loop import LoopLimits, ToolReply, ToolSpec, run_t
 from app.modules.runtime.tools.catalog import ANALYSIS_ROLES
 from app.modules.runtime.tools.definition import ModelText, ToolDefinition
 from app.modules.runtime.tools.direct import direct_tools
+from pydantic import ValidationError
 
 PLANNER_TOOL_CATALOG_VERSION = "planner-tools/v1"
 PLANNER_TOOLS: tuple[ToolDefinition, ...] = (
@@ -114,6 +115,15 @@ class ToolCallingPlannerAgent(PlannerAgent):
             "rounds": loop.rounds,
             "trace": loop.trace,
         }
+        if session.plan is None and loop.stop_reason == "answered_in_text":
+            # The planner prompt asks for JSON, so a model may write the plan
+            # instead of calling submit_plan: the same checks still decide.
+            try:
+                session.submit_plan(
+                    PlannerDecision.model_validate_json(loop.text or "")
+                )
+            except ValidationError:
+                pass
         if session.plan is not None:
             return AgentOutput(
                 success=True,
