@@ -3,7 +3,8 @@
 Adding a read-only tool to a node takes four edits and none in nodes/ or the
 agents: declare it in runtime/tools/catalog.py, implement it, give it an
 output model and to_evidence, and list its name in NODE_TOOLSETS below with a
-factory in TOOL_FACTORIES.
+factory in TOOL_FACTORIES.  T11a: declared with model_text, the node's model
+calls it by name (runtime/tools/direct.py); without, only the agent calls it.
 
 T3b-2: the capability and control tools a model calls are declared next to the
 agents that handle them; tool_catalog() puts them and the runtime tools into

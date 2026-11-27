@@ -7,6 +7,7 @@ from functools import lru_cache
 from app.modules.runtime.tools.definition import ALLOWED_TRANSPORTS, ToolDefinition
 
 _CONTRACT_VERSION = re.compile(r"^(?P<name>[a-z_]+)/v[1-9][0-9]*$")
+_SCOPE_FIELDS = frozenset({"company_id", "document_ids"})
 
 
 class ToolRegistryError(ValueError):
@@ -25,7 +26,9 @@ def validate_definitions(definitions: Iterable[ToolDefinition]) -> list[str]:
     6. a runtime tool declares output_model and to_evidence, and no backed_by;
     7. a capability's backed_by, when set, is a declared runtime tool;
     8. a control tool has no backed_by;
-    9. capability and control tools carry model_text.
+    9. capability and control tools carry model_text;
+    10. a runtime tool with model_text, which the model calls directly (T11a),
+        takes no scope field: the company and documents come from the context.
     """
     definitions = tuple(definitions)
     kinds = {definition.name: definition.kind for definition in definitions}
@@ -72,6 +75,10 @@ def validate_definitions(definitions: Iterable[ToolDefinition]) -> list[str]:
             problems.append(f"{name}: a control tool has no backed_by")
         if definition.kind != "runtime" and definition.model_text is None:
             problems.append(f"{name}: a {definition.kind} tool needs model_text")
+        if definition.kind == "runtime" and definition.model_text is not None:
+            scope = sorted(_SCOPE_FIELDS & set(definition.input_model.model_fields))
+            if scope:
+                problems.append(f"{name}: the model must not set {', '.join(scope)}")
     return problems
 
 

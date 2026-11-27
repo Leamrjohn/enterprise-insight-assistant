@@ -31,6 +31,7 @@ from app.modules.runtime.tool_loop import (
 )
 from app.modules.runtime.tools.catalog import ANALYSIS_ROLES
 from app.modules.runtime.tools.definition import ModelText, ToolDefinition
+from app.modules.runtime.tools.direct import direct_tools
 from pydantic import BaseModel, ConfigDict, Field
 
 MAX_SEARCHES = 3
@@ -263,13 +264,15 @@ class ToolCallingKnowledgeAgent(KnowledgeAgent):
                 error=first.error or "RAGTool failed",
                 error_code=first.error_code,
             )
+        # T11a: lookups listed in the node's toolset need no handler here.
+        direct_specs, direct_handlers = direct_tools(self._tools)
         loop = run_tool_loop(
             gateway,
             system_prompt=SYSTEM_PROMPT
             + (CONFIRMED_FACTS_RULES if session.facts else ""),
             user_prompt=self._user_prompt(input, session, first),
-            specs=KNOWLEDGE_TOOL_SPECS,
-            handlers=session.handlers,
+            specs=[*KNOWLEDGE_TOOL_SPECS, *direct_specs],
+            handlers={**session.handlers, **direct_handlers},
             limits=self._limits,
         )
         tool_loop = {
