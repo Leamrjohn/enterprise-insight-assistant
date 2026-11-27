@@ -1,6 +1,6 @@
 # 完整改造计划审核记录（2026-11-07）
 
-**审核对象：** [完整改造计划](../design/complete_plan_2026-11-07.md)（未提交版本）、[AGENTS.md](../../AGENTS.md)、[ADR-0001](../design/adr/0001-gateway-observability-build-or-buy.md)。
+**审核对象：** [完整改造计划](../plan/complete_plan_2026-11-07.md)（未提交版本）、[AGENTS.md](../../AGENTS.md)、[ADR-0001](../design/adr/0001-gateway-observability-build-or-buy.md)。
 **来源：** 两份独立审核。A 是 Claude 第二轮通读审核；B 是 Codex 只读审核，含离线规则评测。
 **状态：** 2026-11-07 已按本记录修改完整计划、学习路线、AGENTS.md、ADR-0001、网关设计和总计划（未提交）。A10 按推荐写法改了 AGENTS.md，等用户确认。ADR-0001 第 7 节用户写的“最多超出一次”这条理由没有改原文，只加了审核提示。
 

@@ -1,6 +1,6 @@
 # 贡献指南
 
-> 项目规则见 [AGENTS.md](AGENTS.md)，当前执行顺序与学习验收以 [计划总览](docs/roadmap/00_overview.md) 及对应阶段工单为准，实际验证记录见 [工作日志](docs/worklog.md)。旧计划仅作历史参考，冲突时遵循 AGENTS.md。本文只说明协作流程。
+> 项目规则见 [AGENTS.md](AGENTS.md)，执行计划和验收以 [完整改造计划](docs/plan/complete_plan_2026-11-07.md) 为准，实际验证记录见 [工作日志](docs/worklog.md)。冲突时遵循 AGENTS.md。本文只说明协作流程。
 
 ## 开始前
 

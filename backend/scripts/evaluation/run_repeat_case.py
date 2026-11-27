@@ -195,7 +195,7 @@ def main(argv=None):
     ).strip():
         raise ValueError("Commit backend changes before an experiment run")
     selection = json.loads(
-        (root / "docs/design/development_case_selection.json").read_text(
+        (root / "docs/evaluation/development_case_selection.json").read_text(
             encoding="utf-8"
         )
     )
