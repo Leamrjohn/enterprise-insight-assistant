@@ -97,13 +97,27 @@ def _validate_no_side_effects(statement: exp.Select) -> None:
                     raise ValueError(f"函数 {name} 不允许在业务查询中使用")
 
 
+def _visible_cte_names(table: exp.Table) -> set[str]:
+    """CTE names this table can refer to: only those of the queries around it.
+
+    A CTE inside a subquery must not hide a real table of the same name outside it.
+    """
+    names: set[str] = set()
+    node = table.parent
+    while node is not None:
+        with_ = node.args.get("with_")
+        if isinstance(with_, exp.With):
+            names.update(cte.alias_or_name for cte in with_.expressions)
+        node = node.parent
+    return names
+
+
 def _validate_tables(
     statement: exp.Select,
     allowed_tables: set[str],
     catalog: SnapshotCatalog | None,
 ) -> None:
     """Treat CTE names as local aliases; validate every physical table."""
-    cte_names = {cte.alias_or_name for cte in statement.find_all(exp.CTE)}
     physical_table_count = 0
 
     for table_node in statement.find_all(exp.Table):
@@ -111,7 +125,7 @@ def _validate_tables(
             raise ValueError("不允许指定数据库或Schema")
 
         table_name = table_node.name
-        if table_name in cte_names:
+        if table_name in _visible_cte_names(table_node):
             continue
 
         physical_table_count += 1
