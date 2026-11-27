@@ -1483,7 +1483,7 @@ def test_selected_knowledge_cases_require_source_qualifications(
 ) -> None:
     root = Path(__file__).resolve().parents[4]
     selection = json.loads(
-        (root / "docs/design/development_case_selection.json").read_text(
+        (root / "docs/evaluation/development_case_selection.json").read_text(
             encoding="utf-8"
         )
     )

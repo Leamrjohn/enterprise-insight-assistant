@@ -12,7 +12,7 @@ argument-hint: <工单号，例如 B2i>
 ## 1. 读规则和工单（只读这些）
 
 1. `AGENTS.md`（如果本会话已经加载过，不要重读）。
-2. `docs/design/complete_plan_2026-11-07.md`：第 2 节，以及第 5 节里包含工单 `$ARGUMENTS` 的那一段。用 Grep 找到 `| $ARGUMENTS ` 所在的行和它所在的段，不要通读全文。
+2. `docs/plan/complete_plan_2026-11-07.md`：第 2 节，以及第 5 节里包含工单 `$ARGUMENTS` 的那一段。用 Grep 找到 `| $ARGUMENTS ` 所在的行和它所在的段，不要通读全文。
 3. `docs/design/enterprise/` 里对应模块的设计，只读和 `$ARGUMENTS` 有关的段落（用 Grep 定位）。
 4. `docs/STATUS.md` 最后 10 行，`docs/worklog.md` 里和这个工单或它的前置有关的记录（用 Grep）。
 

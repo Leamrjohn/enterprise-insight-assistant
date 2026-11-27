@@ -232,7 +232,7 @@ def main():
     sys.path.insert(0, str(root / "backend"))
     from scripts.evaluation.smoke_runtime_identity import collect_runtime_identity
 
-    selection = json.loads((root / "docs/design/development_case_selection.json").read_text(encoding="utf-8"))
+    selection = json.loads((root / "docs/evaluation/development_case_selection.json").read_text(encoding="utf-8"))
     payload = {"selected": [], "documents": {}, "date": datetime.now(ZoneInfo("America/New_York")).date().isoformat(),
                    "git": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()}
     corpus = root / "data/business_knowledge_base"

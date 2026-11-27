@@ -7,7 +7,7 @@ from app.modules.evaluation.business_schemas import EvaluationFixture
 def test_development_selection_has_23_unique_cases_with_matching_sources() -> None:
     root = Path(__file__).resolve().parents[4]
     selection = json.loads(
-        (root / "docs/design/development_case_selection.json").read_text(
+        (root / "docs/evaluation/development_case_selection.json").read_text(
             encoding="utf-8"
         )
     )
