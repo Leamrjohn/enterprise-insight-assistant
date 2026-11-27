@@ -32,6 +32,7 @@ from app.modules.runtime.tools.context import (
 )
 from app.modules.runtime.tools.wire import encode
 from app.modules.workflow.models import AnalysisTask
+from app.tool_service import lookups
 
 SERVER_NAME = "agent-tools"
 SERVER_VERSION = "1.0.0"
@@ -161,11 +162,28 @@ def prepare_template_query(db: Session, context: RuntimeContext) -> ToolHandler:
     return lambda arguments: tool.execute(ToolInput(parameters=arguments))
 
 
+def on_task_data(
+    build: Callable[[Any, Any], ToolHandler],
+) -> Prepare:
+    """T11a: build a lookup from the task's own data source and schema snapshot."""
+
+    def prepare(db: Session, context: RuntimeContext) -> ToolHandler:
+        from app.modules.analysis.catalog.snapshot_catalog import SnapshotCatalog
+
+        source, catalog = task_data_source(db, context)
+        return build(source, SnapshotCatalog.from_snapshot(catalog))
+
+    return prepare
+
+
 DEFAULT_TOOLS: Mapping[str, ToolHandler | ServiceTool] = {
     "echo": _echo,
     "rag_search": ServiceTool(run=_rag_search, check=check_rag_scope),
     "sql_query": ServiceTool(prepare=prepare_sql_query),
     "template_query": ServiceTool(prepare=prepare_template_query),
+    "metric_lookup": ServiceTool(prepare=on_task_data(lookups.metric_lookup)),
+    "dimension_list": ServiceTool(prepare=on_task_data(lookups.dimension_list)),
+    "data_freshness": ServiceTool(prepare=on_task_data(lookups.data_freshness)),
 }
 
 

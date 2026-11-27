@@ -18,7 +18,7 @@ from app.core.config.snapshot import runtime_settings
 from app.modules.analysis.catalog.snapshot_catalog import SnapshotCatalog
 from app.modules.analysis.data.sql_tool import SQLTool
 from app.modules.analysis.data.tool_agent import DATA_TOOLS
-from app.modules.analysis.tool_protocol import Tool, Toolset
+from app.modules.analysis.tool_protocol import Tool, ToolInput, ToolOutput, Toolset
 from app.modules.knowledge.tool import RAGTool
 from app.modules.knowledge.tool_agent import KNOWLEDGE_TOOLS
 from app.modules.runtime.tool_guard import (
@@ -31,11 +31,12 @@ from app.modules.runtime.tools.registry import ToolRegistry
 from app.modules.workflow.orchestration.state import WorkflowState
 
 NODE_TOOLSETS: Mapping[str, tuple[str, ...]] = {
-    "data": ("sql_query",),
+    "data": ("sql_query", "metric_lookup", "dimension_list", "data_freshness"),
     "knowledge": ("rag_search",),
 }
 
-ToolFactory = Callable[[WorkflowState], Tool]
+# None: the tool cannot run for this task, so the node's model is not offered it.
+ToolFactory = Callable[[WorkflowState], Tool | None]
 
 
 def model_tools_enabled(company_id: int | None) -> bool:
@@ -82,9 +83,46 @@ def _rag_search(state: WorkflowState) -> Tool:
     )
 
 
+class _ServiceOnly(Tool):
+    """T11a: names a tool that runs only on the tool service; never runs here."""
+
+    def __init__(self, name: str) -> None:
+        self._name = name
+
+    @property
+    def name(self) -> str:
+        return self._name
+
+    @property
+    def description(self) -> str:
+        return f"agent-tools: {self._name}"
+
+    def execute(self, input: ToolInput) -> ToolOutput:
+        return ToolOutput(
+            success=False,
+            error="工具服务不可用。",
+            error_code="mcp_transport_unavailable",
+        )
+
+
+def _service_only(name: str) -> ToolFactory:
+    def build(state: WorkflowState) -> Tool | None:
+        # Without the runtime the call would never reach the service.
+        if state.get("tool_runtime") is None or not (
+            runtime_settings().tool_service_enabled
+        ):
+            return None
+        return _ServiceOnly(name)
+
+    return build
+
+
 TOOL_FACTORIES: Mapping[str, ToolFactory] = {
     "sql_query": _sql_query,
     "rag_search": _rag_search,
+    "metric_lookup": _service_only("metric_lookup"),
+    "dimension_list": _service_only("dimension_list"),
+    "data_freshness": _service_only("data_freshness"),
 }
 
 
@@ -98,7 +136,8 @@ def build_toolset(node: str, state: WorkflowState) -> Toolset:
     """Build the node's tools; with a runtime, every call goes through its gateway."""
     tool_catalog()  # the first task refuses to run on a broken declaration
     runtime = state.get("tool_runtime")
-    tools = [TOOL_FACTORIES[name](state) for name in NODE_TOOLSETS[node]]
+    built = (TOOL_FACTORIES[name](state) for name in NODE_TOOLSETS[node])
+    tools = [tool for tool in built if tool is not None]
     if runtime is not None:
         tools = [runtime.wrap(tool) for tool in tools]
     return Toolset.of(*tools)

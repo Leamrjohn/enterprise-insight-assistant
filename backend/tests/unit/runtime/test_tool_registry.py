@@ -47,7 +47,14 @@ def fake_in_catalog(monkeypatch):
 
 def test_real_catalog_is_valid_and_keeps_todays_order():
     assert validate_definitions(catalog.TOOLS) == []
-    assert default_registry().names() == ("rag_search", "sql_query", "template_query")
+    assert default_registry().names() == (
+        "rag_search",
+        "sql_query",
+        "template_query",
+        "metric_lookup",
+        "dimension_list",
+        "data_freshness",
+    )
 
 
 def test_new_tool_is_picked_up_everywhere_from_catalog_alone(fake_in_catalog):

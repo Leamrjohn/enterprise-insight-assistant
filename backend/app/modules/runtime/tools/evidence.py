@@ -36,6 +36,36 @@ class RAGSearchOutput(_Output):
     evidences: list[_Chunk]
 
 
+class _Metric(_Output):
+    reference: str
+    name: str
+
+
+class MetricLookupOutput(_Output):
+    metrics: list[_Metric]
+
+
+class _Value(_Output):
+    value: Any
+    meaning: str | None = None
+
+
+class DimensionListOutput(_Output):
+    field: str
+    values: list[_Value]
+    truncated: bool
+
+
+class _Coverage(_Metric):
+    time_column: str
+    earliest: Any
+    latest: Any
+
+
+class DataFreshnessOutput(_Output):
+    metrics: list[_Coverage]
+
+
 class Evidence(BaseModel):
     """One piece of evidence: a result table, or one passage of a document."""
 
@@ -85,3 +115,8 @@ def rag_search_evidence(output: RAGSearchOutput) -> list[Evidence]:
         )
         for chunk in output.evidences
     ]
+
+
+def lookup_evidence(_output: BaseModel) -> list[Evidence]:
+    """T11a: a lookup only guides the model; the report cites the query it led to."""
+    return []

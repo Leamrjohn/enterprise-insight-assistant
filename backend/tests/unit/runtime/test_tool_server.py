@@ -1,6 +1,7 @@
 import time
 from contextlib import nullcontext
 from dataclasses import replace
+from datetime import date
 from decimal import Decimal
 
 import pytest
@@ -21,10 +22,13 @@ from app.modules.runtime.tools.context import (
 )
 from app.modules.runtime.tools.mcp_client import call_tool
 from app.modules.workflow.models import AnalysisTask
+from app.tool_service import lookups
 from app.tool_service.server import (
+    DEFAULT_TOOLS,
     ServiceTool,
     check_rag_scope,
     create_tool_server,
+    on_task_data,
     prepare_sql_query,
     prepare_template_query,
 )
@@ -491,3 +495,73 @@ def test_template_query_runs_on_the_tasks_own_data_source(
 
     assert result.success, result.error_code
     assert [source.id for source in runs] == [data_context["own"][0].id]
+
+
+# --- T11a: lookups run on the task's own source, like sql_query ----------------
+
+
+@pytest.fixture
+def lookup_server(db_session, data_context):
+    snapshot = data_context["own"][1]
+    snapshot.catalog = {
+        "tables": {
+            "sales_orders": [
+                {"name": name}
+                for name in ("id", "total_amount", "order_date", "status")
+            ]
+        }
+    }
+    db_session.flush()
+    return create_tool_server(
+        signing_key=KEY,
+        session_factory=lambda: nullcontext(db_session),
+        clock=lambda: NOW,
+        tools={
+            name: ServiceTool(prepare=on_task_data(build))
+            for name, build in (
+                ("dimension_list", lookups.dimension_list),
+                ("data_freshness", lookups.data_freshness),
+            )
+        },
+    )
+
+
+def test_every_lookup_is_served_from_the_tasks_data():
+    for name in ("metric_lookup", "dimension_list", "data_freshness"):
+        tool = DEFAULT_TOOLS[name]
+        assert isinstance(tool, ServiceTool) and tool.prepare is not None
+
+
+def test_a_lookup_queries_only_the_tasks_own_data_source(
+    monkeypatch, lookup_server, seeded, data_context
+):
+    runs = []
+
+    def execute(sql, allowed_tables, **kwargs):
+        runs.append(kwargs["data_source"].id)
+        return ["earliest", "latest"], [(date(2024, 1, 1), date(2025, 9, 30))]
+
+    monkeypatch.setattr(
+        "app.modules.analysis.data.sql_tool.execute_readonly_sql", execute
+    )
+
+    result = _query(lookup_server, seeded, {"metric": "销售额"}, name="data_freshness")
+
+    assert result.success, result.error_code
+    assert runs == [data_context["own"][0].id]
+    # Dates cross the service boundary as dates, not as text.
+    assert result.data["metrics"][0]["latest"] == date(2025, 9, 30)
+
+
+def test_a_task_without_a_data_source_never_runs_a_lookup(
+    db_session, lookup_server, seeded, sql_runs
+):
+    seeded["task"].data_source_id = None
+    db_session.flush()
+
+    result = _query(
+        lookup_server, seeded, {"field": "sales_orders.status"}, name="dimension_list"
+    )
+
+    assert result.error_code == "data_source_not_allowed"
+    assert sql_runs == []
