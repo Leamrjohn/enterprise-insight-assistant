@@ -212,3 +212,4 @@
 - 2026-11-27：文档整理：删除 41 份旧文档（摘要见 docs/history/archive_summary_2026-11-27.md），计划移到 docs/plan/，题目选择移到 docs/evaluation/；链接检查 313 个文件全部通过，受影响测试 77 通过。
 - 2026-11-27：删除 3 个 10 月起无人引用的文件（core/error_handling.py、workflow/api.py、workflow/lifecycle/task_spec.py）；import-linter、ruff、pyright 通过；单元和脚本测试 1986 通过，7 个失败与本机配置有关、改动前后相同。
 - 2026-11-27：T11a 完成（d757872、cf7431a、2bf8686）：数据节点加 metric_lookup、dimension_list、data_freshness，知识节点加 doc_list、doc_read，只在工具服务执行；analysis/knowledge/nodes 零改动；全量 2171 通过；冒烟 9 成功 + 混合题待复核（已知）；model_tool_mode=off，真实模型是否使用新工具未验证。
+- 2026-11-27：T11b 第 1 步（本地提交，未推送）：加 doc_version_diff、memory_search、report_export，知识节点可用，规划节点已登记（待工具循环）；报告须本公司已完成、引用文档当前全部可见、用过附件仅作者可读；全量 2186 通过；冒烟和选择准确率基线未做。

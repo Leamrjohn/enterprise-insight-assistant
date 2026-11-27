@@ -32,7 +32,7 @@ from app.modules.runtime.tools.context import (
 )
 from app.modules.runtime.tools.wire import encode
 from app.modules.workflow.models import AnalysisTask
-from app.tool_service import documents, lookups
+from app.tool_service import documents, history, lookups
 
 SERVER_NAME = "agent-tools"
 SERVER_VERSION = "1.0.0"
@@ -190,6 +190,9 @@ DEFAULT_TOOLS: Mapping[str, ToolHandler | ServiceTool] = {
     "data_freshness": ServiceTool(prepare=on_task_data(lookups.data_freshness)),
     "doc_list": ServiceTool(read=documents.doc_list),
     "doc_read": ServiceTool(read=documents.doc_read),
+    "doc_version_diff": ServiceTool(read=documents.doc_version_diff),
+    "memory_search": ServiceTool(read=history.memory_search),
+    "report_export": ServiceTool(read=history.report_export),
 }
 
 

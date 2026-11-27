@@ -9,6 +9,8 @@ from app.db.session import set_tenant_scope
 from app.modules.analysis.tool_protocol import ToolOutput
 from app.modules.documents.models import Documents
 from app.modules.identity.models import User
+from app.modules.input_artifacts.models import InputArtifact, InputArtifactVersion
+from app.modules.memory.models import AnalysisMemory, MemorySource
 from app.modules.organizations.models import (
     BusinessDataSource,
     Company,
@@ -21,9 +23,13 @@ from app.modules.runtime.tools.context import (
     issue,
 )
 from app.modules.runtime.tools.mcp_client import call_tool
-from app.modules.workflow.models import AnalysisTask, AnalysisTaskDocument
+from app.modules.workflow.models import (
+    AnalysisTask,
+    AnalysisTaskDocument,
+    AnalysisTaskInputArtifactVersion,
+)
 from app.tool_service import documents as document_tools
-from app.tool_service import lookups
+from app.tool_service import history, lookups
 from app.tool_service.server import (
     DEFAULT_TOOLS,
     ServiceTool,
@@ -685,3 +691,311 @@ def test_an_unreadable_document_looks_the_same_as_a_missing_one(
     assert (
         result.model_feedback == f"没有这份可读文档。可读编号：{documents['visible']}"
     )
+
+
+# --- T11b: doc_version_diff compares two readable versions of one document -------
+
+
+@pytest.fixture
+def versions(db_session, seeded, documents):
+    old = db_session.get(Documents, documents["visible"])
+    old.version_group, old.version_number = "退货制度", 1
+    old.content = "第一条 退货需主管审批。\n第二条 七日内办理。"
+    new = Documents(
+        uploaded_by_user_id=seeded["user"].id,
+        company_id=seeded["company"].id,
+        name="制度.txt",
+        source="test",
+        min_view_role="any",
+        version_group="退货制度",
+        version_number=2,
+        content="第一条 退货需主管审批。\n第二条 十五日内办理。",
+    )
+    db_session.add(new)
+    db_session.flush()
+    _freeze(db_session, seeded, old.id, new.id, documents["admin_only"])
+    return {"old": old.id, "new": new.id, "admin_only": documents["admin_only"]}
+
+
+@pytest.fixture
+def diff(db_session, seeded):
+    server = create_tool_server(
+        signing_key=KEY,
+        session_factory=lambda: nullcontext(db_session),
+        clock=lambda: NOW,
+        tools={"doc_version_diff": DEFAULT_TOOLS["doc_version_diff"]},
+    )
+    return lambda old, new: _query(
+        server,
+        seeded,
+        {"document_id": old, "other_document_id": new},
+        name="doc_version_diff",
+    )
+
+
+def test_doc_version_diff_shows_what_changed_between_versions(diff, versions):
+    result = diff(versions["old"], versions["new"])
+
+    assert result.success, result.error_code
+    assert "-第二条 七日内办理。" in result.data["diff"]
+    assert "+第二条 十五日内办理。" in result.data["diff"]
+    assert result.data["truncated"] is False
+
+
+def test_doc_version_diff_refuses_documents_of_different_groups(
+    db_session, diff, versions
+):
+    db_session.get(Documents, versions["new"]).version_group = "报销制度"
+    db_session.flush()
+
+    result = diff(versions["old"], versions["new"])
+
+    assert (result.error_code, result.repairable) == ("tool_arguments_invalid", True)
+    assert result.error == "这两份文档不是同一份文档的不同版本。"
+
+
+def test_doc_version_diff_never_compares_an_unreadable_document(diff, versions):
+    result = diff(versions["old"], versions["admin_only"])
+
+    assert result.error == "没有这份可读文档。"
+
+
+# --- T11b: memory_search finds only the caller's own conclusions -----------------
+
+
+def _memory(db_session, *, company, user, statement):
+    task = AnalysisTask(
+        user_id=user.id,
+        company_id=company.id,
+        question="以前的问题",
+        status="completed",
+        stage="completed",
+    )
+    db_session.add(task)
+    db_session.flush()
+    source = MemorySource(
+        company_id=company.id,
+        source_task_id=task.id,
+        source_type="validated_report",
+        idempotency_key=f"tool-server-memory:{task.id}",
+    )
+    db_session.add(source)
+    db_session.flush()
+    memory = AnalysisMemory(
+        company_id=company.id,
+        user_id=user.id,
+        source_task_id=task.id,
+        memory_source_id=source.id,
+        memory_type="validated_report_facts",
+        content={"confirmed_facts": [{"statement": statement}]},
+    )
+    db_session.add(memory)
+    db_session.flush()
+    return memory
+
+
+@pytest.fixture
+def colleague(db_session, seeded):
+    user = User(name="tool-server-colleague", api_key="tool-server-colleague-key")
+    db_session.add(user)
+    db_session.flush()
+    db_session.add(
+        CompanyMember(company_id=seeded["company"].id, user_id=user.id, role="admin")
+    )
+    db_session.flush()
+    return user
+
+
+def test_memory_search_finds_only_the_callers_own_conclusions(
+    db_session, seeded, colleague
+):
+    mine = _memory(
+        db_session,
+        company=seeded["company"],
+        user=seeded["user"],
+        statement="华东销售额八月下降",
+    )
+    _memory(
+        db_session,
+        company=seeded["company"],
+        user=colleague,
+        statement="华东销售额八月上升",
+    )
+    server = create_tool_server(
+        signing_key=KEY,
+        session_factory=lambda: nullcontext(db_session),
+        clock=lambda: NOW,
+        tools={"memory_search": DEFAULT_TOOLS["memory_search"]},
+    )
+
+    result = _query(server, seeded, {"query": "华东销售额"}, name="memory_search")
+
+    assert result.success, result.error_code
+    assert [m["memory_id"] for m in result.data["memories"]] == [mine.id]
+    assert db_session.get(AnalysisMemory, mine.id).use_count == 0
+
+
+# --- T11b: report_export reads a finished report only if all it drew on is readable
+
+
+def _report_task(db_session, seeded, *, user, cited, status="completed"):
+    task = AnalysisTask(
+        user_id=user.id,
+        company_id=seeded["company"].id,
+        question="八月华东销售额为何下降",
+        status=status,
+        stage="completed",
+        result_data={
+            "report": {
+                "executive_summary": "华东销售额下降 12%。",
+                "confirmed_facts": [{"statement": "八月华东销售额 120 万元。"}],
+                "recommendations": [{"action": "复核华东大客户订单。"}],
+                "document_citations": [
+                    {
+                        "chunk_id": index + 1,
+                        "document_id": document_id,
+                        "excerpt": "摘录",
+                    }
+                    for index, document_id in enumerate(cited)
+                ],
+            }
+        },
+    )
+    db_session.add(task)
+    db_session.flush()
+    return task
+
+
+def _readable_report(db_session, seeded, task, **overrides):
+    return history.report_readable(db_session, _context(seeded, **overrides), task)
+
+
+def test_a_colleagues_report_on_visible_documents_is_readable(
+    db_session, seeded, documents, colleague
+):
+    task = _report_task(
+        db_session, seeded, user=colleague, cited=[documents["visible"]]
+    )
+
+    assert _readable_report(db_session, seeded, task) is True
+
+
+def test_a_report_citing_a_document_above_the_callers_role_is_not_readable(
+    db_session, seeded, documents, colleague
+):
+    task = _report_task(
+        db_session,
+        seeded,
+        user=colleague,
+        cited=[documents["visible"], documents["admin_only"]],
+    )
+    assert _readable_report(db_session, seeded, task) is False
+
+    seeded["member"].role = "admin"  # the same check, with the role as it is now
+    db_session.flush()
+    assert _readable_report(db_session, seeded, task) is True
+
+
+def test_a_report_citing_another_companys_document_is_not_readable(
+    db_session, seeded, documents, colleague
+):
+    task = _report_task(
+        db_session, seeded, user=colleague, cited=[documents["other_company"]]
+    )
+
+    assert _readable_report(db_session, seeded, task) is False
+
+
+def test_a_citation_that_names_no_document_denies(db_session, seeded, colleague):
+    task = _report_task(db_session, seeded, user=colleague, cited=[None])
+
+    assert _readable_report(db_session, seeded, task) is False
+
+
+@pytest.mark.parametrize("status", ["running", "awaiting_review", "failed"])
+def test_an_unfinished_report_is_not_readable(
+    db_session, seeded, documents, colleague, status
+):
+    task = _report_task(
+        db_session, seeded, user=colleague, cited=[documents["visible"]], status=status
+    )
+
+    assert _readable_report(db_session, seeded, task) is False
+
+
+def test_another_companys_report_is_never_readable(
+    db_session, seeded, documents, colleague
+):
+    task = _report_task(
+        db_session, seeded, user=colleague, cited=[documents["visible"]]
+    )
+
+    assert (
+        _readable_report(db_session, seeded, task, company_id=seeded["other"].id)
+        is False
+    )
+
+
+def test_a_report_that_used_an_attachment_is_readable_only_by_its_author(
+    db_session, seeded, documents, colleague
+):
+    task = _report_task(
+        db_session, seeded, user=colleague, cited=[documents["visible"]]
+    )
+    upload = InputArtifact(
+        company_id=seeded["company"].id,
+        uploaded_by_user_id=colleague.id,
+        kind="attachment",
+    )
+    db_session.add(upload)
+    db_session.flush()
+    version = InputArtifactVersion(
+        artifact_id=upload.id,
+        version_number=1,
+        original_filename="附件.txt",
+        raw_object_key=f"quarantine/{seeded['company'].id}/t11b",
+        byte_size=12,
+        sha256="b" * 64,
+        status="ready",
+    )
+    db_session.add(version)
+    db_session.flush()
+    db_session.add(
+        AnalysisTaskInputArtifactVersion(
+            task_id=task.id, artifact_version_id=version.id, position=0
+        )
+    )
+    db_session.flush()
+
+    assert _readable_report(db_session, seeded, task) is False
+    assert _readable_report(db_session, seeded, task, actor_id=colleague.id) is True
+
+
+def test_report_export_returns_the_text_or_one_answer_for_every_refusal(
+    db_session, seeded, documents, colleague
+):
+    readable = _report_task(
+        db_session, seeded, user=colleague, cited=[documents["visible"]]
+    )
+    forbidden = _report_task(
+        db_session, seeded, user=colleague, cited=[documents["admin_only"]]
+    )
+    server = create_tool_server(
+        signing_key=KEY,
+        session_factory=lambda: nullcontext(db_session),
+        clock=lambda: NOW,
+        tools={"report_export": DEFAULT_TOOLS["report_export"]},
+    )
+
+    result = _query(server, seeded, {"task_id": readable.id}, name="report_export")
+    refusals = [
+        _query(server, seeded, {"task_id": task_id}, name="report_export")
+        for task_id in (forbidden.id, 999_999)
+    ]
+
+    assert result.success, result.error_code
+    assert "华东销售额下降 12%" in result.data["text"]
+    assert "- 复核华东大客户订单。" in result.data["text"]
+    assert {(r.error_code, r.error) for r in refusals} == {
+        ("tool_arguments_invalid", "没有这份可读报告。")
+    }

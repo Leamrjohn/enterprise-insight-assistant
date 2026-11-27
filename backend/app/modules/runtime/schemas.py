@@ -111,3 +111,22 @@ class DocReadInputSchema(BaseModel):
     model_config = ConfigDict(extra="forbid")
     document_id: int = Field(ge=1, description="doc_list 返回的文档编号")
     offset: int = Field(default=0, ge=0, description="从第几个字开始读，首次为 0")
+
+
+# T11b: the second batch; a version, a memory or a report is named, never a scope.
+class DocVersionDiffInputSchema(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    document_id: int = Field(ge=1, description="较早版本的文档编号")
+    other_document_id: int = Field(ge=1, description="较新版本的文档编号")
+
+
+class MemorySearchInputSchema(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    query: str = Field(min_length=1, max_length=200, description="要找的结论关键词")
+
+
+class ReportExportInputSchema(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    task_id: int = Field(
+        ge=1, description="报告所属任务编号，如 memory_search 的 source_task_id"
+    )
