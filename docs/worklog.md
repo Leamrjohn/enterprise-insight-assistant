@@ -1243,4 +1243,5 @@
 ## 2026-11-28 T5 超时和结果大小（用户选方案 A、结果大小记进 metadata_json；fit_rows 用户让我补全）
 - 做了什么：ToolDefinition 加 timeout_ms / max_result_tokens / on_overflow，登记表规则 11；工作进程等服务按工具超时（sql/template 12 s、rag 15 s，盖过冻结的 10 s 数据库超时，其余沿用 5 s）；耗时超 1.5 倍写 tool_timeout_overrun；成功结果数 token，超限时 sql/template 用 fit_rows 二分截断行并标 truncated，其余返回 tool_result_too_large（CALLER，带缩小范围的提示，不重试）；每条记录 metadata 写 result_tokens、result_truncated。
 - 验证：5000 行截断、超大检索拒绝 1 次、慢工具告警、按工具等待时间均有测试；全量 2212 通过 40 跳过、pyright 0。
-- 遗留：上限按各工具自身截断估算，待用冒烟实测 result_tokens 校准；冻结超时可设到 60 s，而等待时间固定 12/15 s；服务/依赖分开报健康归 T6。
+- 冒烟 t5-2026-11-28（$0.0273）：9 题成功、混合题待复核（回到基线）；实测 result_tokens：sql 14～40、rag 740～918、长文档 rag 4548～5140（上限 8000）；无截断、无超时告警；knowledge-quality-batch-evidence 的 rag 首次调用耗时 5057 ms，旧的 5 s 等待会把它判成服务不可用（T4 冒烟正是这题重试），新的 15 s 下一次成功。
+- 遗留：查询类工具默认 4000 未被冒烟覆盖；冻结超时可设到 60 s，而等待时间固定 12/15 s；服务/依赖分开报健康归 T6。
