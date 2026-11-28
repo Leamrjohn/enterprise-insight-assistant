@@ -1237,4 +1237,5 @@
 ## 2026-11-28 T4 每次执行写审计（用户选方案 A、批准加 3 列迁移和改主链；重试循环用户让我补全）
 - 做了什么：重试从 GuardedTool 挪到 ToolRuntime._stage_execute：生成 logical_call_id，INFRA 失败（熔断打开除外）退避重试 1 次，每次尝试由 _execute_once 写一条 tool_call_records（logical_call_id、attempt_no、error_class）；服务路线也重试，ID 放进签名上下文，服务端验签后写日志；迁移 b0c1d2e3f4a5 只加 3 列和索引。
 - 验证：注入 1 次 INFRA 失败得 2 条记录、同一逻辑 ID、配额扣 1 次；全量 2202 通过 40 跳过、pyright 0；开发库迁移已升级。3 个测试期望随方案 A 改变（GuardedTool 不再重试、服务停止和意外异常各 2 条记录）。
+- 冒烟 t4-2026-11-28（$0.0275）：9 题成功；knowledge-quality-batch-evidence 真实出现一次 rag_search mcp_transport_unavailable→重试成功，2 条记录同一逻辑 ID；混合题 partial（判结果错误），两个工具都首次成功、无重试，与本工单无关，历史 88 次中 3 次 partial，属模型波动。
 - 遗留：熔断器改为按每次尝试记成败；评测 tool_calls 计数变为实际执行次数；拒绝记录无 logical_call_id；设计中另 4 列留给 T5 等。
