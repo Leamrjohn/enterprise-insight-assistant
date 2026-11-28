@@ -29,6 +29,7 @@ def validate_definitions(definitions: Iterable[ToolDefinition]) -> list[str]:
     9. capability and control tools carry model_text;
     10. a runtime tool with model_text, which the model calls directly (T11a),
         takes no scope field: the company and documents come from the context.
+    11. timeout_ms, when set, and max_result_tokens are positive (T5).
     """
     definitions = tuple(definitions)
     kinds = {definition.name: definition.kind for definition in definitions}
@@ -79,6 +80,12 @@ def validate_definitions(definitions: Iterable[ToolDefinition]) -> list[str]:
             scope = sorted(_SCOPE_FIELDS & set(definition.input_model.model_fields))
             if scope:
                 problems.append(f"{name}: the model must not set {', '.join(scope)}")
+        if (definition.timeout_ms is not None and definition.timeout_ms <= 0) or (
+            definition.max_result_tokens <= 0
+        ):
+            problems.append(
+                f"{name}: timeout_ms and max_result_tokens must be positive"
+            )
     return problems
 
 

@@ -14,6 +14,7 @@ SideEffect = Literal["read", "write"]
 # the runtime tool it is backed_by (or, without one, by code reading only what the
 # task already holds); a control tool only ends a tool loop.
 ToolKind = Literal["runtime", "capability", "control"]
+OnOverflow = Literal["reject", "truncate_rows"]
 # "in_process" runs the tool object inside the worker, for small fast tools;
 # "mcp" runs it on the agent-tools service (M2b), which re-checks the signed context.
 ALLOWED_TRANSPORTS = frozenset({"in_process", "mcp"})
@@ -47,3 +48,10 @@ class ToolDefinition:
     to_evidence: "Callable[[Any], list[Evidence]] | None" = None
     # Required for capability and control tools: the model only knows them by it.
     model_text: ModelText | None = None
+    # T5: how long the worker waits for one execution; None uses
+    # tool_server_timeout_seconds.  An execution far past it writes an overrun event.
+    timeout_ms: int | None = None
+    # T5: a successful result larger than this is rejected, or for row results
+    # cut to the rows that fit (truncate_rows) and marked truncated.
+    max_result_tokens: int = 4_000
+    on_overflow: OnOverflow = "reject"

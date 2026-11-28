@@ -95,6 +95,7 @@ def _context(seeded, **overrides) -> RuntimeContext:
         issue(
             task_id=seeded["task"].id,
             execution_id="exec-1",
+            logical_call_id="call-1",
             actor_id=seeded["user"].id,
             authorized_role="analyst",
             company_id=seeded["company"].id,

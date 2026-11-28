@@ -1,4 +1,6 @@
-"""What protects a tool from its own outages: retries, a circuit breaker, a switch.
+"""What protects a tool from its own outages: a circuit breaker and a switch.
+
+Retries live in ToolRuntime (T4), so every attempt leaves an audit record.
 
 A breaker counts only infrastructure failures.  A model's bad SQL says nothing
 about the database, so it must never open the circuit.  None of this decides
@@ -8,8 +10,6 @@ permissions: every guarded tool still sits behind ToolRuntime.
 from __future__ import annotations
 
 import logging
-import random
-import time
 from collections.abc import Callable
 from typing import Literal, Protocol, cast
 
@@ -129,22 +129,11 @@ class CircuitBreaker:
 
 
 class GuardedTool(Tool):
-    """Retry outages with backoff, and stop calling a tool that keeps failing."""
+    """Stop calling a tool that keeps failing; ToolRuntime retries each attempt."""
 
-    def __init__(
-        self,
-        tool: Tool,
-        breaker: CircuitBreaker,
-        *,
-        retries: int = 1,
-        backoff_seconds: float = 0.5,
-        sleep: Callable[[float], None] = time.sleep,
-    ) -> None:
+    def __init__(self, tool: Tool, breaker: CircuitBreaker) -> None:
         self._tool = tool
         self._breaker = breaker
-        self._retries = retries
-        self._backoff = backoff_seconds
-        self._sleep = sleep
 
     @property
     def name(self) -> str:
@@ -162,11 +151,6 @@ class GuardedTool(Tool):
                 error_code=CIRCUIT_OPEN_CODE,
             )
         output = self._tool.execute(input)
-        for attempt in range(self._retries):
-            if not is_infrastructure_failure(output):
-                break
-            self._sleep(self._backoff * (2**attempt) * random.uniform(0.8, 1.2))
-            output = self._tool.execute(input)
         if is_infrastructure_failure(output):
             self._breaker.record_failure()
         else:
