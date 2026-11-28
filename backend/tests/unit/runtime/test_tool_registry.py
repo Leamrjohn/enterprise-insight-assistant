@@ -94,6 +94,8 @@ def test_unregistered_tool_keeps_todays_fallbacks():
         ((replace(FAKE, contract_version="other_tool/v1"),), "version of another"),
         ((replace(FAKE, transport="mcp_magic"),), "unknown transport"),
         ((replace(FAKE, allowed_roles=frozenset()),), "no roles"),
+        ((replace(FAKE, timeout_ms=0),), "zero timeout"),
+        ((replace(FAKE, max_result_tokens=0),), "zero result limit"),
     ],
 )
 def test_each_broken_rule_stops_startup(broken, why):

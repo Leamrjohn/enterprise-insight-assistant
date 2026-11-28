@@ -11,6 +11,7 @@ _NOT_DENIAL_CODES = {
     "tool_completed",
     "tool_failed",
     "tool_denied",
+    "tool_timeout_overrun",
     "tool_runtime_unexpected_error",
     "tool_contract_version",
 }

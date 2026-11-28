@@ -36,9 +36,13 @@ from app.modules.runtime.tools.evidence import (
 
 ANALYSIS_ROLES = frozenset({"owner", "admin", "analyst"})
 
+# T5: the 12-15 s waits outlast the frozen 10 s database timeouts (schemas.py), so a
+# slow query comes back with its own code instead of looking like a service outage.
 TOOLS: tuple[ToolDefinition, ...] = (
     ToolDefinition(
         name="rag_search",
+        timeout_ms=15_000,
+        max_result_tokens=8_000,
         contract_version="rag_search/v2",
         input_model=RAGSearchInputSchema,
         allowed_roles=ANALYSIS_ROLES,
@@ -48,6 +52,9 @@ TOOLS: tuple[ToolDefinition, ...] = (
     ),
     ToolDefinition(
         name="sql_query",
+        timeout_ms=12_000,
+        max_result_tokens=8_000,
+        on_overflow="truncate_rows",
         contract_version="sql_query/v1",
         input_model=SQLQueryInputSchema,
         allowed_roles=ANALYSIS_ROLES,
@@ -57,6 +64,9 @@ TOOLS: tuple[ToolDefinition, ...] = (
     ),
     ToolDefinition(
         name="template_query",
+        timeout_ms=12_000,
+        max_result_tokens=8_000,
+        on_overflow="truncate_rows",
         contract_version="template_query/v1",
         input_model=TemplateQueryInputSchema,
         allowed_roles=ANALYSIS_ROLES,
@@ -132,6 +142,7 @@ TOOLS: tuple[ToolDefinition, ...] = (
     ),
     ToolDefinition(
         name="doc_read",
+        max_result_tokens=6_000,
         contract_version="doc_read/v1",
         input_model=DocReadInputSchema,
         allowed_roles=ANALYSIS_ROLES,
@@ -149,6 +160,7 @@ TOOLS: tuple[ToolDefinition, ...] = (
     # T11b: the second batch.
     ToolDefinition(
         name="doc_version_diff",
+        max_result_tokens=8_000,
         contract_version="doc_version_diff/v1",
         input_model=DocVersionDiffInputSchema,
         allowed_roles=ANALYSIS_ROLES,
@@ -197,6 +209,7 @@ TOOLS: tuple[ToolDefinition, ...] = (
     ),
     ToolDefinition(
         name="report_export",
+        max_result_tokens=8_000,
         contract_version="report_export/v1",
         input_model=ReportExportInputSchema,
         allowed_roles=ANALYSIS_ROLES,

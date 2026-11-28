@@ -2,7 +2,7 @@ from contextlib import nullcontext
 from dataclasses import replace
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
-from time import monotonic
+from time import monotonic, sleep
 
 import pytest
 from app.core.settings import get_settings
@@ -1126,3 +1126,108 @@ def test_the_service_logs_the_logical_call_id(db_session, monkeypatch, caplog) -
 
     (record,) = _records(db_session, attempt)
     assert f"logical_call_id={record.logical_call_id}" in caplog.text
+
+
+class _BigSqlTool(_FakeSqlTool):
+    def execute(self, input: ToolInput) -> ToolOutput:
+        self.inputs.append(input)
+        rows = [["华东", 1000 + i] for i in range(5000)]
+        return ToolOutput(
+            success=True,
+            data={"status": "ready", "columns": ["region", "revenue"], "rows": rows},
+        )
+
+
+def test_a_5000_row_sql_result_is_cut_to_its_limit_and_marked(db_session) -> None:
+    runtime, attempt, _company = _runtime(db_session)
+
+    result = runtime.execute(_BigSqlTool(), ToolInput(parameters={"sql": "SELECT 1"}))
+
+    assert result.success, result.error_code
+    assert result.data["truncated"] is True
+    assert 0 < len(result.data["rows"]) < 5000
+    (record,) = _records(db_session, attempt)
+    assert record.metadata_json["result_truncated"] is True
+    assert record.metadata_json["result_tokens"] <= 8_000
+    assert record.metadata_json["row_count"] == len(result.data["rows"])
+
+
+class _HugeRagTool(_FakeRagTool):
+    def execute(self, input: ToolInput) -> ToolOutput:
+        self.inputs.append(input)
+        chunk = {"chunk_id": 1, "document_id": 11, "content": "退货政策。" * 5000}
+        return ToolOutput(
+            success=True, data={"status": "ready", "rows": [], "evidences": [chunk]}
+        )
+
+
+def test_an_oversized_result_of_a_reject_tool_is_refused_once(db_session) -> None:
+    runtime, attempt, company = _runtime(db_session)
+    sleeps: list[float] = []
+    runtime._sleep = sleeps.append
+    tool = _HugeRagTool()
+
+    result = runtime.execute(tool, _search(company))
+
+    assert result.error_code == "tool_result_too_large"
+    assert result.model_feedback and "8000" in result.model_feedback
+    assert len(tool.inputs) == 1 and sleeps == []
+    (record,) = _records(db_session, attempt)
+    assert record.error_class == "caller_error"
+    assert record.metadata_json["result_tokens"] > 8_000
+
+
+def test_a_small_result_records_its_size(db_session) -> None:
+    runtime, attempt, company = _runtime(db_session)
+
+    assert runtime.execute(_FakeRagTool(), _search(company)).success
+
+    (record,) = _records(db_session, attempt)
+    assert record.metadata_json["result_truncated"] is False
+    assert 0 < record.metadata_json["result_tokens"] < 100
+
+
+def test_a_tool_far_past_its_timeout_keeps_its_answer_and_warns(
+    db_session, monkeypatch
+) -> None:
+    runtime, attempt, company = _runtime(db_session)
+    monkeypatch.setattr(ToolRuntime, "_timeout_ms", staticmethod(lambda tool: 1))
+
+    class _Slow(_FakeRagTool):
+        def execute(self, input: ToolInput) -> ToolOutput:
+            sleep(0.01)
+            return super().execute(input)
+
+    assert runtime.execute(_Slow(), _search(company)).success
+    (event,) = (
+        db_session.query(WorkflowEvent)
+        .filter(
+            WorkflowEvent.execution_attempt_id == attempt.id,
+            WorkflowEvent.event_type == "tool_timeout_overrun",
+        )
+        .all()
+    )
+    assert event.details["timeout_ms"] == 1
+    assert event.details["duration_ms"] >= 10
+
+
+def test_the_worker_waits_for_each_tool_as_long_as_it_declares(
+    db_session, monkeypatch
+) -> None:
+    runtime, _attempt, _company = _runtime(db_session, tool_server="unused")
+    _turn_service_on(monkeypatch)
+    waits: list[float] = []
+
+    def fake_call_service(*args, timeout_seconds, **kwargs):
+        waits.append(timeout_seconds)
+        return ToolOutput(
+            success=True, data={"status": "ready", "columns": [], "rows": []}
+        )
+
+    monkeypatch.setattr(tool_runtime, "call_service", fake_call_service)
+
+    assert runtime.execute(
+        _FakeSqlTool(), ToolInput(parameters={"sql": "SELECT 1"})
+    ).success
+    # Longer than the frozen 10 s statement timeout, so that code comes back itself.
+    assert waits == [12.0]

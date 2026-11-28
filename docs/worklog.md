@@ -1239,3 +1239,8 @@
 - 验证：注入 1 次 INFRA 失败得 2 条记录、同一逻辑 ID、配额扣 1 次；全量 2202 通过 40 跳过、pyright 0；开发库迁移已升级。3 个测试期望随方案 A 改变（GuardedTool 不再重试、服务停止和意外异常各 2 条记录）。
 - 冒烟 t4-2026-11-28（$0.0275）：9 题成功；knowledge-quality-batch-evidence 真实出现一次 rag_search mcp_transport_unavailable→重试成功，2 条记录同一逻辑 ID；混合题 partial（判结果错误），两个工具都首次成功、无重试，与本工单无关，历史 88 次中 3 次 partial，属模型波动。
 - 遗留：熔断器改为按每次尝试记成败；评测 tool_calls 计数变为实际执行次数；拒绝记录无 logical_call_id；设计中另 4 列留给 T5 等。
+
+## 2026-11-28 T5 超时和结果大小（用户选方案 A、结果大小记进 metadata_json；fit_rows 用户让我补全）
+- 做了什么：ToolDefinition 加 timeout_ms / max_result_tokens / on_overflow，登记表规则 11；工作进程等服务按工具超时（sql/template 12 s、rag 15 s，盖过冻结的 10 s 数据库超时，其余沿用 5 s）；耗时超 1.5 倍写 tool_timeout_overrun；成功结果数 token，超限时 sql/template 用 fit_rows 二分截断行并标 truncated，其余返回 tool_result_too_large（CALLER，带缩小范围的提示，不重试）；每条记录 metadata 写 result_tokens、result_truncated。
+- 验证：5000 行截断、超大检索拒绝 1 次、慢工具告警、按工具等待时间均有测试；全量 2212 通过 40 跳过、pyright 0。
+- 遗留：上限按各工具自身截断估算，待用冒烟实测 result_tokens 校准；冻结超时可设到 60 s，而等待时间固定 12/15 s；服务/依赖分开报健康归 T6。

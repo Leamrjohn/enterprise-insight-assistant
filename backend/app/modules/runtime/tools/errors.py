@@ -29,6 +29,7 @@ ERROR_CLASSES: dict[str, ErrorClass] = {
     "tool_input_schema_invalid": ErrorClass.CALLER,
     "tool_arguments_not_json": ErrorClass.CALLER,
     "tool_arguments_invalid": ErrorClass.CALLER,
+    "tool_result_too_large": ErrorClass.CALLER,
     "tool_unknown": ErrorClass.CALLER,
     "sql_input_missing": ErrorClass.CALLER,
     "sql_validation_error": ErrorClass.CALLER,
