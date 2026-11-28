@@ -31,6 +31,7 @@ from app.modules.workflow.audit.events_models import WorkflowEvent
 from app.modules.workflow.audit.tool_call import ToolCallRecord
 from app.modules.workflow.lifecycle.execution_attempt import TaskExecutionAttempt
 from app.modules.workflow.models import AnalysisTask
+from app.tool_service import server as server_module
 from app.tool_service.server import (
     ServiceTool,
     check_rag_scope,
@@ -385,16 +386,15 @@ def test_tool_runtime_degrades_exception_and_malformed_result_without_leaking_de
         .order_by(WorkflowEvent.sequence)
         .all()
     )
-    assert [event.event_type for event in events] == ["tool_started", "tool_failed"]
+    # T4: tool_runtime_unexpected_error is INFRA, so it is retried once.
+    assert [event.event_type for event in events] == ["tool_started", "tool_failed"] * 2
     assert "secret document text" not in str(events)
-    record = (
-        db_session.query(ToolCallRecord)
-        .filter(ToolCallRecord.execution_attempt_id == attempt.id)
-        .one()
-    )
-    assert record.status == "failed"
-    assert record.error_code == "tool_runtime_unexpected_error"
-    persisted = repr([vars(event) for event in events] + [vars(record)])
+    records = _records(db_session, attempt)
+    assert [record.attempt_no for record in records] == [1, 2]
+    for record in records:
+        assert record.status == "failed"
+        assert record.error_code == "tool_runtime_unexpected_error"
+    persisted = repr([vars(event) for event in events] + [vars(r) for r in records])
     assert "private-driver-detail-must-not-persist" not in persisted
     assert "secret document text" not in persisted
     assert "private-driver-detail-must-not-persist" not in repr(result)
@@ -909,13 +909,12 @@ def test_service_down_fails_clearly_and_never_falls_back(
     assert result.error_code == "mcp_transport_unavailable"
     assert monotonic() - started < 5
     assert local.inputs == []
-    record = (
-        db_session.query(ToolCallRecord)
-        .filter(ToolCallRecord.execution_attempt_id == attempt.id)
-        .one()
-    )
-    assert record.status == "failed"
-    assert record.metadata_json["error_class"] == "infra_error"
+    # T4: the outage is retried once on the service; both tries are audited.
+    first, second = _records(db_session, attempt)
+    assert first.logical_call_id == second.logical_call_id
+    for record in (first, second):
+        assert record.status == "failed"
+        assert record.error_class == "infra_error"
 
 
 def test_service_off_runs_the_tool_in_process(db_session) -> None:
@@ -1053,3 +1052,77 @@ def test_a_sql_repair_hint_survives_the_service(db_session, monkeypatch) -> None
         "字段不存在：profit",
         True,
     )
+
+
+class _FlakyRagTool(_FakeRagTool):
+    """Fails with the given codes first, then answers like _FakeRagTool."""
+
+    def __init__(self, *codes: str) -> None:
+        super().__init__()
+        self.codes = list(codes)
+
+    def execute(self, input: ToolInput) -> ToolOutput:
+        if self.codes:
+            self.inputs.append(input)
+            return ToolOutput(success=False, error_code=self.codes.pop(0))
+        return super().execute(input)
+
+
+def _records(db_session, attempt) -> list[ToolCallRecord]:
+    return (
+        db_session.query(ToolCallRecord)
+        .filter(ToolCallRecord.execution_attempt_id == attempt.id)
+        .order_by(ToolCallRecord.id)
+        .all()
+    )
+
+
+def test_an_outage_retry_writes_two_records_with_one_logical_id(db_session) -> None:
+    """T4 acceptance: one injected outage -> 2 records, one logical_call_id."""
+    runtime, attempt, company = _runtime(db_session)
+    sleeps: list[float] = []
+    runtime._sleep = sleeps.append
+    tool = _FlakyRagTool("rag_search_unavailable")
+
+    result = runtime.execute(tool, _search(company))
+
+    assert result.success, result.error_code
+    assert len(tool.inputs) == 2
+    first, second = _records(db_session, attempt)
+    assert first.logical_call_id is not None
+    assert first.logical_call_id == second.logical_call_id
+    assert [first.attempt_no, second.attempt_no] == [1, 2]
+    assert [first.status, second.status] == ["failed", "succeeded"]
+    assert [first.error_class, second.error_class] == ["infra_error", None]
+    assert len(sleeps) == 1
+    # The budget stage ran once: a retry is not a second call.
+    task = db_session.get(AnalysisTask, attempt.task_id)
+    assert task.tool_budget_usage["calls"] == 1
+
+
+@pytest.mark.parametrize("code", ["rag_input_missing", "tool_circuit_open"])
+def test_a_caller_error_or_an_open_circuit_is_not_retried(db_session, code) -> None:
+    runtime, attempt, company = _runtime(db_session)
+    sleeps: list[float] = []
+    runtime._sleep = sleeps.append
+    tool = _FlakyRagTool(code)
+
+    assert runtime.execute(tool, _search(company)).error_code == code
+    assert len(tool.inputs) == 1
+    assert sleeps == []
+    (record,) = _records(db_session, attempt)
+    assert record.attempt_no == 1
+
+
+def test_the_service_logs_the_logical_call_id(db_session, monkeypatch, caplog) -> None:
+    server, _ran = _service(db_session)
+    runtime, attempt, company = _runtime(db_session, tool_server=server)
+    _turn_service_on(monkeypatch)
+    # Alembic's fileConfig in the test setup disables loggers created before it.
+    monkeypatch.setattr(server_module.logger, "disabled", False)
+
+    with caplog.at_level("INFO", logger="app.tool_service.server"):
+        assert runtime.execute(_FakeRagTool(), _search(company)).success
+
+    (record,) = _records(db_session, attempt)
+    assert f"logical_call_id={record.logical_call_id}" in caplog.text

@@ -1233,3 +1233,8 @@
 - 验证：全量 2196 通过、pyright 0；开关关闭回放 36/43、门禁通过；开关打开真跑 43 题 $0.075，首轮发现模型 37/44 轮把计划写成正文、全部回退（实测仍是固定路线），修正后用同一录音回放 38/43、错误 0、42 题 1 次调用；录音在 artifacts/evaluation-20261127-planner-tool-loop。
 - 遗留：评测题不涉及历史结论，模型是否主动查记忆未测到；系统提示词仍要求“输出 JSON”，要让模型调工具需改提示词并重录门禁录音；只跑 1 轮。
 - 待办：R4 用“有无代码注入记忆”的对照决定是否撤掉注入；冒烟 t11e-2026-11-27 的 data-east-delivered-revenue-2025-08 判“结果错误”，数值 1847604.72 与以往相同，原因是规划模型这次把能力写成一条，`_canonical_columns`（evaluation/result_fingerprint.py:16）用唯一概念名替换列名导致指纹变化，属评测指纹对模型措辞敏感，非本工单引入（门禁回放证明提示词逐字不变）。
+
+## 2026-11-28 T4 每次执行写审计（用户选方案 A、批准加 3 列迁移和改主链；重试循环用户让我补全）
+- 做了什么：重试从 GuardedTool 挪到 ToolRuntime._stage_execute：生成 logical_call_id，INFRA 失败（熔断打开除外）退避重试 1 次，每次尝试由 _execute_once 写一条 tool_call_records（logical_call_id、attempt_no、error_class）；服务路线也重试，ID 放进签名上下文，服务端验签后写日志；迁移 b0c1d2e3f4a5 只加 3 列和索引。
+- 验证：注入 1 次 INFRA 失败得 2 条记录、同一逻辑 ID、配额扣 1 次；全量 2202 通过 40 跳过、pyright 0；开发库迁移已升级。3 个测试期望随方案 A 改变（GuardedTool 不再重试、服务停止和意外异常各 2 条记录）。
+- 遗留：熔断器改为按每次尝试记成败；评测 tool_calls 计数变为实际执行次数；拒绝记录无 logical_call_id；设计中另 4 列留给 T5 等。

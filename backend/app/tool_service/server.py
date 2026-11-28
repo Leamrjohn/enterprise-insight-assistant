@@ -6,6 +6,7 @@ A forged request never reaches the database, and a signed one for a user who
 has since lost access never reaches the tool.
 """
 
+import logging
 import time
 from collections.abc import Callable, Mapping
 from contextlib import AbstractContextManager
@@ -37,6 +38,8 @@ from app.tool_service import documents, history, lookups
 SERVER_NAME = "agent-tools"
 SERVER_VERSION = "1.0.0"
 SERVER_PORT = 8090
+
+logger = logging.getLogger(__name__)
 
 ToolHandler = Callable[[dict[str, Any]], Any]
 ScopeCheck = Callable[[Session, RuntimeContext, dict[str, Any]], None]
@@ -269,6 +272,12 @@ def create_tool_server(
                 try:
                     trusted = authorize(
                         db, context, signature, key=signing_key, now=int(clock())
+                    )
+                    logger.info(
+                        "tool_call tool=%s task_id=%s logical_call_id=%s",
+                        name,
+                        trusted.task_id,
+                        trusted.logical_call_id,
                     )
                     if tool.check is not None:
                         tool.check(db, trusted, arguments)

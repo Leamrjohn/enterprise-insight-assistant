@@ -86,26 +86,24 @@ def _breaker(store, **kwargs):
 
 
 def _guard(tool, store, **kwargs):
-    return GuardedTool(
-        tool, _breaker(store), retries=0, sleep=lambda _s: None, **kwargs
-    )
+    return GuardedTool(tool, _breaker(store, **kwargs))
 
 
 def _call(tool):
     return tool.execute(ToolInput(parameters={}))
 
 
-def test_an_outage_is_retried_by_code_and_can_recover():
+def test_the_guard_itself_does_not_retry():
+    # T4: ToolRuntime retries, so each attempt is audited; see test_tool_runtime.
     tool = _Tool(DOWN, UP)
-    guarded = GuardedTool(tool, _breaker(_Store()), sleep=lambda _s: None)
-    assert _call(guarded).success
-    assert tool.calls == 2
+    assert not _call(_guard(tool, _Store())).success
+    assert tool.calls == 1
 
 
 def test_a_bad_statement_is_not_retried_and_does_not_count_against_the_database():
     tool = _Tool(BAD_SQL)
     store = _Store()
-    guarded = GuardedTool(tool, _breaker(store), sleep=lambda _s: None)
+    guarded = _guard(tool, store)
     for _ in range(10):
         assert _call(guarded).error_code != CIRCUIT_OPEN_CODE
     assert tool.calls == 10

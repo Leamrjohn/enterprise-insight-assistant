@@ -18,6 +18,7 @@ CONTEXT_VERSION = "tool-runtime-context/v1"
 class RuntimeContext:
     task_id: int
     execution_id: str
+    logical_call_id: str  # T4: same for every retry of one call; the service logs it.
     actor_id: int
     authorized_role: str
     company_id: int
@@ -37,6 +38,7 @@ def issue(
     *,
     task_id: int,
     execution_id: str,
+    logical_call_id: str,
     actor_id: int,
     authorized_role: str,
     company_id: int,
@@ -47,6 +49,7 @@ def issue(
     return RuntimeContext(
         task_id=task_id,
         execution_id=execution_id,
+        logical_call_id=logical_call_id,
         actor_id=actor_id,
         authorized_role=authorized_role,
         company_id=company_id,

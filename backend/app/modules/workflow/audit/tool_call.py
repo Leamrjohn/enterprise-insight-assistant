@@ -1,11 +1,12 @@
 """Privacy-safe audit metadata for one governed Tool invocation."""
 
+import uuid
 from datetime import datetime
 from typing import TYPE_CHECKING
 
 from app.db.base import Base
 from sqlalchemy import DateTime, ForeignKey, Integer, String, func
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 if TYPE_CHECKING:
@@ -33,6 +34,14 @@ class ToolCallRecord(Base):
     status: Mapped[str] = mapped_column(String(32), nullable=False)
     error_code: Mapped[str | None] = mapped_column(String(128))
     duration_ms: Mapped[int | None] = mapped_column(Integer)
+    # T4: retries of one logical call share this id; one row per actual execution.
+    logical_call_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), index=True
+    )
+    attempt_no: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1, server_default="1"
+    )
+    error_class: Mapped[str | None] = mapped_column(String(16))
     metadata_json: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
