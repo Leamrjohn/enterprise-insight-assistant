@@ -1,7 +1,11 @@
 """Single execution boundary for workflow tools."""
 
+import random
+import time as clock
+from collections.abc import Callable
 from dataclasses import dataclass, field, replace
 from time import perf_counter, time
+from uuid import UUID, uuid4
 
 from app.core import tracing
 from app.core.config.snapshot import runtime_settings
@@ -12,6 +16,7 @@ from app.modules.runtime.model_governance import (
     ModelCallCancelled,
 )
 from app.modules.runtime.schemas import ToolBudget, ToolPolicy
+from app.modules.runtime.tool_guard import CIRCUIT_OPEN_CODE, is_infrastructure_failure
 from app.modules.runtime.tools import pipeline
 from app.modules.runtime.tools.authorization import (
     current_member_allowed,
@@ -32,6 +37,10 @@ from app.modules.workflow.models import AnalysisTask
 from mcp.server import MCPServer
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
+
+# T4: an outage is retried once with jittered backoff (moved here from GuardedTool).
+_RETRIES = 1
+_BACKOFF_SECONDS = 0.5
 
 # Each denial tells the caller what to change; codes stay the machine contract.
 DENY_MESSAGES = {
@@ -158,6 +167,7 @@ class ToolRuntime:
         attempt: TaskExecutionAttempt,
         context: ToolRuntimeContext,
         tool_server: str | MCPServer | None = None,
+        sleep: Callable[[float], None] = clock.sleep,
     ) -> None:
         if context.task_id != attempt.task_id:
             raise ValueError("tool runtime task scope does not match execution attempt")
@@ -166,6 +176,7 @@ class ToolRuntime:
         self._context = context
         # None calls the configured service URL; tests pass an in-process server.
         self._tool_server = tool_server
+        self._sleep = sleep
         self.gateway = ToolGateway(self)
 
     def wrap(self, tool: Tool) -> RuntimeTool:
@@ -236,6 +247,7 @@ class ToolRuntime:
                 tool_contract_version=self._tool_contract_version(tool),
                 status="denied",
                 error_code=code,
+                error_class=details["error_class"],
                 metadata_json=details,
             )
         )
@@ -283,7 +295,7 @@ class ToolRuntime:
             return self._deny(tool, "tool_current_authorization_denied", {})
         return None
 
-    def _run(self, tool: Tool, input: ToolInput) -> ToolOutput:
+    def _run(self, tool: Tool, input: ToolInput, logical_call_id: str) -> ToolOutput:
         """M2b: run the tool where the registry says; a service call never falls back."""
         definition = default_registry().get(tool.name)
         if (
@@ -292,20 +304,24 @@ class ToolRuntime:
             or not runtime_settings().tool_service_enabled
         ):
             return tool.execute(input)
-        return self._call_service(tool, input)
+        return self._call_service(tool, input, logical_call_id)
 
-    def _call_service(self, tool: Tool, input: ToolInput) -> ToolOutput:
+    def _call_service(
+        self, tool: Tool, input: ToolInput, logical_call_id: str
+    ) -> ToolOutput:
         settings = runtime_settings()
         return call_service(
             self._tool_server or settings.tool_server_url,
             tool.name,
             input.parameters,
-            self._service_context(input),
+            self._service_context(input, logical_call_id),
             key=settings.tool_context_signing_key.get_secret_value().encode(),
             timeout_seconds=settings.tool_server_timeout_seconds,
         )
 
-    def _service_context(self, input: ToolInput) -> RuntimeContext:
+    def _service_context(
+        self, input: ToolInput, logical_call_id: str
+    ) -> RuntimeContext:
         """Sign who calls, for which task and documents; the service re-checks it all.
 
         The earlier stages already checked the same facts here; signing lets the
@@ -325,6 +341,7 @@ class ToolRuntime:
         return issue(
             task_id=self._attempt.task_id,
             execution_id=self._attempt.execution_id,
+            logical_call_id=logical_call_id,
             actor_id=task.user_id,
             authorized_role=membership.role,
             company_id=self._context.company_id,
@@ -498,6 +515,26 @@ class ToolRuntime:
         return self._reserve_call(call.tool)
 
     def _stage_execute(self, call: ToolCall) -> ToolOutput:
+        """T4: one logical call; an outage is retried, each try writes one record.
+
+        The budget stage already ran, so a retry is not charged again.
+        """
+        logical_call_id = uuid4()
+        output = self._execute_once(call, logical_call_id, attempt_no=1)
+        for retry in range(_RETRIES):
+            # An open circuit is INFRA too, but trying again at once cannot help.
+            if (
+                not is_infrastructure_failure(output)
+                or output.error_code == CIRCUIT_OPEN_CODE
+            ):
+                break
+            self._sleep(_BACKOFF_SECONDS * (2**retry) * random.uniform(0.8, 1.2))
+            output = self._execute_once(call, logical_call_id, attempt_no=retry + 2)
+        return output
+
+    def _execute_once(
+        self, call: ToolCall, logical_call_id: UUID, *, attempt_no: int
+    ) -> ToolOutput:
         tool, input = call.tool, call.input
         append_workflow_event(
             self._db,
@@ -512,7 +549,7 @@ class ToolRuntime:
         started = perf_counter()
         task_stop: ModelBudgetExceeded | ModelCallCancelled | None = None
         try:
-            result = self._run(tool, input)
+            result = self._run(tool, input, str(logical_call_id))
             if not isinstance(result, ToolOutput):
                 raise TypeError("tool returned an invalid result contract")
         except (ModelBudgetExceeded, ModelCallCancelled) as stop:
@@ -536,8 +573,9 @@ class ToolRuntime:
             if isinstance(rows, list):
                 details["row_count"] = len(rows)
             details["result_status"] = result.data.get("status", "ready")
-        if not result.success:
-            details["error_class"] = classify(result.error_code).value
+        error_class = None if result.success else classify(result.error_code).value
+        if error_class is not None:
+            details["error_class"] = error_class
         append_workflow_event(
             self._db,
             attempt=self._attempt,
@@ -558,6 +596,9 @@ class ToolRuntime:
                 status="succeeded" if result.success else "failed",
                 error_code=result.error_code,
                 duration_ms=duration_ms,
+                logical_call_id=logical_call_id,
+                attempt_no=attempt_no,
+                error_class=error_class,
                 metadata_json={
                     key: value for key, value in details.items() if key != "duration_ms"
                 },

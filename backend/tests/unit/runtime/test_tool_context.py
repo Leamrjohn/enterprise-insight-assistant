@@ -19,6 +19,7 @@ def _context(**overrides) -> RuntimeContext:
     values = {
         "task_id": 7,
         "execution_id": "exec-1",
+        "logical_call_id": "call-1",
         "actor_id": 3,
         "authorized_role": "analyst",
         "company_id": 1,
